@@ -1,0 +1,110 @@
+﻿[workspace]
+resolver = "2"
+members = ["crates/shape", "."]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.94"
+
+[package]
+name = "shape-rs"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Shape solver server: synthetic Shape signals, header bundles, health/metrics HTTP API"
+
+[dependencies]
+shape = { path = "crates/shape" }
+actix-web.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "cookies", "rustls-tls", "json", "http2"] }
+# btls-sys 0.5.6 ASM_NASM/MSVC_RUNTIME_LIBRARY conflict is fixed via
+# CMAKE_TOOLCHAIN_FILE=btls-nasm-toolchain.cmake - see bandai-recon.md 'wreq saga'.
+wreq = { version = "6.0.0-rc.31", features = ["cookies", "json"] }
+wreq-util = "3.0.0-rc.14"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+urlencoding = "2"
+base64 = "0.22"
+
+[[bin]]
+name = "shapeserver"
+path = "src/bin/shapeserver.rs"
+
+[[bin]]
+name = "shapeprobe"
+path = "src/bin/shapeprobe.rs"
+
+[[bin]]
+name = "schema-dump"
+path = "tools/schema-dump.rs"
+
+[[bin]]
+name = "codec-check"
+path = "tools/codec-check.rs"
+
+[[bin]]
+name = "retry-runner"
+path = "tools/retry-runner.rs"
+
+[[bin]]
+name = "cdp-harvest"
+path = "tools/cdp_harvest.rs"
+
+[[bin]]
+name = "cdp-eval"
+path = "tools/cdp_eval.rs"
+
+[[bin]]
+name = "cookie-grab"
+path = "tools/cookie_grab.rs"
+
+[[bin]]
+name = "cookieprobe"
+path = "tools/cookieprobe.rs"
+
+[[bin]]
+name = "fullcircle"
+path = "tools/fullcircle.rs"
+
+[[bin]]
+name = "fullcircle-wreq"
+path = "tools/fullcircle_wreq.rs"
+
+[[bin]]
+name = "fullcircle-proxy"
+path = "tools/fullcircle_proxy.rs"
+
+[[bin]]
+name = "gatewatch"
+path = "tools/gatewatch.rs"
+
+[[bin]]
+name = "jar-dump"
+path = "tools/jar_dump.rs"
+
+[[bin]]
+name = "capture-login"
+path = "tools/capture_login.rs"
+
+[features]
+default = []
+# Link the vendored engine into the server: /shape emits engine-sealed headers.
+server-engine = ["shape/engine"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+sha2 = "0.10"
+sha1 = "0.10"
+actix-web = { version = "4", default-features = false, features = ["macros"] }
+
+# Vendored reference engine (BottingRocks/Shape): pin/decode authority.
+# Path-linked from the local research clone; the `engine` feature gates it so
+# the default build stays light.
+shape-engine = { path = "C:/Users/Administrator/.qwen/tmp/shape-research" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

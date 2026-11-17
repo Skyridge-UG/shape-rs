@@ -1,0 +1,20 @@
+[package]
+name = "shape"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+description = "Shape solver core: session identity, device catalog, wire codecs, signal synthesis, header encoding"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+sha1.workspace = true
+base64 = "0.22"
+shape-engine = { workspace = true, optional = true }
+
+[features]
+default = []
+# Vendored reference engine: kernel tracing + layout pinning + full encode.
+engine = ["dep:shape-engine"]
