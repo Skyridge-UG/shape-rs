@@ -7,9 +7,10 @@ ARG RUST_VERSION=1.94
 FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /src
 
-# btls-sys (wreq's TLS) builds BoringSSL via cmake; the rust image ships without it.
+# btls-sys (wreq's TLS) needs cmake+BoringSSL toolchain and bindgen needs libclang;
+# the rust image ships with neither.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends cmake \
+ && apt-get install -y --no-install-recommends cmake clang libclang-dev \
  && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml Cargo.lock ./
