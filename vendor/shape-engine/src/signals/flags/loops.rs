@@ -32,9 +32,9 @@ use oxc_ast::AstKind;
 use oxc_semantic::{NodeId, SymbolId};
 use oxc_span::{GetSpan, Span};
 
+use super::{integer, nearest_flags, PackedTerm, Scope, Updates, TERM_HOPS};
 use crate::signals::analysis::write_sites::RecordConstruction;
 use crate::signals::analysis::{FinderCtx, SlotView};
-use super::{integer, nearest_flags, PackedTerm, Scope, Updates, TERM_HOPS};
 
 /// Definitions and call sites followed while resolving a probed list.
 const LIST_HOPS: usize = 16;
@@ -66,15 +66,17 @@ impl FinderCtx<'_, '_, '_> {
                     statement.span().start >= after
                         && matches!(
                             statement,
-                            oxc_ast::ast::Statement::ReturnStatement(_) | oxc_ast::ast::Statement::ThrowStatement(_)
+                            oxc_ast::ast::Statement::ReturnStatement(_)
+                                | oxc_ast::ast::Statement::ThrowStatement(_)
                         )
                 })
             };
             match nodes.kind(parent) {
                 AstKind::BlockStatement(block) if exits(&block.body) => return true,
-                AstKind::FunctionBody(_) | AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) | AstKind::Program(_) => {
-                    return false
-                }
+                AstKind::FunctionBody(_)
+                | AstKind::Function(_)
+                | AstKind::ArrowFunctionExpression(_)
+                | AstKind::Program(_) => return false,
                 _ => {}
             }
             child = parent;
@@ -84,7 +86,12 @@ impl FinderCtx<'_, '_, '_> {
     /// When the nearest definition `definition` of `symbol` cannot reach
     /// `read` ([`Self::exits_before`]), the latest plain definition before
     /// the read in the same function that does.
-    pub(crate) fn reaching_definition(&self, symbol: SymbolId, definition: NodeId, read: NodeId) -> Option<NodeId> {
+    pub(crate) fn reaching_definition(
+        &self,
+        symbol: SymbolId,
+        definition: NodeId,
+        read: NodeId,
+    ) -> Option<NodeId> {
         if !self.exits_before(definition, read) {
             return None;
         }
@@ -99,7 +106,11 @@ impl FinderCtx<'_, '_, '_> {
             .filter_map(|reference| {
                 let parent = nodes.parent_id(reference.node_id());
                 match nodes.kind(parent) {
-                    AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => Some(parent),
+                    AstKind::AssignmentExpression(assignment)
+                        if assignment.operator.is_assign() =>
+                    {
+                        Some(parent)
+                    }
                     _ => None,
                 }
             })
@@ -145,10 +156,15 @@ impl FinderCtx<'_, '_, '_> {
             if binary.operator == BinaryOperator::BitwiseXOR {
                 // `v ^ k.call(void 0)` (the tracer's draw, `k` possibly an
                 // argument-tuple slot): `v`.
-                if super::mask_call(&binary.right) && !matches!(binary.right.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty()) {
+                if super::mask_call(&binary.right)
+                    && !matches!(binary.right.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty())
+                {
                     return self.expression_node(&binary.left).or(Some(value));
                 }
-                let (Some(left), Some(right)) = (self.expression_node(&binary.left), self.expression_node(&binary.right)) else {
+                let (Some(left), Some(right)) = (
+                    self.expression_node(&binary.left),
+                    self.expression_node(&binary.right),
+                ) else {
                     return Some(value);
                 };
                 return match (self.is_draw(left), self.is_draw(right)) {
@@ -161,8 +177,15 @@ impl FinderCtx<'_, '_, '_> {
         }
         if self.is_draw(value) {
             if let AstKind::BinaryExpression(binary) = nodes.kind(nodes.parent_id(value)) {
-                let literal = |expression: &Expression<'_>| matches!(expression.without_parentheses(), Expression::NumericLiteral(_));
-                if binary.operator == BinaryOperator::BitwiseXOR && (literal(&binary.left) || literal(&binary.right)) {
+                let literal = |expression: &Expression<'_>| {
+                    matches!(
+                        expression.without_parentheses(),
+                        Expression::NumericLiteral(_)
+                    )
+                };
+                if binary.operator == BinaryOperator::BitwiseXOR
+                    && (literal(&binary.left) || literal(&binary.right))
+                {
                     return None;
                 }
             }
@@ -187,14 +210,23 @@ impl FinderCtx<'_, '_, '_> {
                 .filter_map(|reference| {
                     let parent = nodes.parent_id(reference.node_id());
                     match nodes.kind(parent) {
-                        AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => Some(parent),
+                        AstKind::AssignmentExpression(assignment)
+                            if assignment.operator.is_assign() =>
+                        {
+                            Some(parent)
+                        }
                         _ => None,
                     }
                 })
-                .filter(|write| nodes.kind(*write).span().end <= read_at && self.enclosing_function(*write) == function)
+                .filter(|write| {
+                    nodes.kind(*write).span().end <= read_at
+                        && self.enclosing_function(*write) == function
+                })
                 .collect()
         };
-        let latest = writes(symbols[1]).into_iter().max_by_key(|write| nodes.kind(*write).span().end)?;
+        let latest = writes(symbols[1])
+            .into_iter()
+            .max_by_key(|write| nodes.kind(*write).span().end)?;
         // The `if` whose arm holds that write and not the read.
         let mut child = latest;
         let statement = loop {
@@ -210,7 +242,10 @@ impl FinderCtx<'_, '_, '_> {
             }
             child = parent;
         };
-        let arms = [statement.consequent.span(), statement.alternate.as_ref()?.span()];
+        let arms = [
+            statement.consequent.span(),
+            statement.alternate.as_ref()?.span(),
+        ];
         // Per arm: the value of each side's latest write in it.
         let mut packed = None;
         let mut constant_arms = 0;
@@ -246,16 +281,24 @@ impl FinderCtx<'_, '_, '_> {
     /// `x << (x === void 0 ? n : m)`: the shift of a defined `x` (`m`); an
     /// undefined `x` shifts to 0 whatever the amount.
     pub(super) fn guarded_shift(&self, binary: &oxc_ast::ast::BinaryExpression<'_>) -> Option<u32> {
-        let Expression::ConditionalExpression(conditional) = binary.right.without_parentheses() else { return None };
+        let Expression::ConditionalExpression(conditional) = binary.right.without_parentheses()
+        else {
+            return None;
+        };
         let shifted = self.identifier_name_symbol(&binary.left)?;
-        let Expression::BinaryExpression(test) = conditional.test.without_parentheses() else { return None };
+        let Expression::BinaryExpression(test) = conditional.test.without_parentheses() else {
+            return None;
+        };
         let undefined = |expression: &Expression<'_>| match expression.without_parentheses() {
-            Expression::UnaryExpression(unary) => unary.operator == oxc_ast::ast::UnaryOperator::Void,
+            Expression::UnaryExpression(unary) => {
+                unary.operator == oxc_ast::ast::UnaryOperator::Void
+            }
             Expression::Identifier(identifier) => identifier.name == "undefined",
             Expression::NullLiteral(_) => true,
             _ => false,
         };
-        let tested = (self.identifier_name_symbol(&test.left) == Some(shifted) && undefined(&test.right))
+        let tested = (self.identifier_name_symbol(&test.left) == Some(shifted)
+            && undefined(&test.right))
             || (self.identifier_name_symbol(&test.right) == Some(shifted) && undefined(&test.left));
         if !tested {
             return None;
@@ -284,27 +327,32 @@ impl FinderCtx<'_, '_, '_> {
         if !matches!(nodes.kind(value), AstKind::IdentifierReference(_)) {
             return value;
         }
-        let Some((definition, Updates::Or(ors))) = self.identifier_value(value) else { return value };
+        let Some((definition, Updates::Or(ors))) = self.identifier_value(value) else {
+            return value;
+        };
         if !ors.is_empty() {
             return value;
         }
-        let AstKind::BinaryExpression(binary) = nodes.kind(definition) else { return value };
+        let AstKind::BinaryExpression(binary) = nodes.kind(definition) else {
+            return value;
+        };
         match binary.operator {
             BinaryOperator::BitwiseOR => {
                 let right = self.expression_node(&binary.right);
                 if right.is_some_and(|right| self.shift_term(right).is_some())
-                    && (matches!(binary.left.without_parentheses(), Expression::Identifier(_)) || self.tuple_slot(&binary.left).is_some())
+                    && (matches!(binary.left.without_parentheses(), Expression::Identifier(_))
+                        || self.tuple_slot(&binary.left).is_some())
                 {
                     return definition;
                 }
                 value
             }
             BinaryOperator::BitwiseXOR => {
-                let call = |expression: &Expression<'_>| {
-                    matches!(expression.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty())
-                };
+                let call = |expression: &Expression<'_>| matches!(expression.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty());
                 match (&binary.left.without_parentheses(), call(&binary.right)) {
-                    (Expression::Identifier(_), true) => self.expression_node(&binary.left).unwrap_or(value),
+                    (Expression::Identifier(_), true) => {
+                        self.expression_node(&binary.left).unwrap_or(value)
+                    }
                     _ => value,
                 }
             }
@@ -313,16 +361,29 @@ impl FinderCtx<'_, '_, '_> {
     }
 
     /// `acc = t` where `t` is defined as `acc | X[j] << c`: the shift term.
-    pub(super) fn temp_update(&self, right: &Expression<'_>, accumulator: SymbolId) -> Option<NodeId> {
-        let Expression::Identifier(_) = right.without_parentheses() else { return None };
+    pub(super) fn temp_update(
+        &self,
+        right: &Expression<'_>,
+        accumulator: SymbolId,
+    ) -> Option<NodeId> {
+        let Expression::Identifier(_) = right.without_parentheses() else {
+            return None;
+        };
         let node = self.expression_node(right)?;
-        let (definition, Updates::Or(ors)) = self.identifier_value(node)? else { return None };
+        let (definition, Updates::Or(ors)) = self.identifier_value(node)? else {
+            return None;
+        };
         if !ors.is_empty() {
             return None;
         }
-        let AstKind::BinaryExpression(binary) = self.parse.nodes.kind(definition) else { return None };
+        let AstKind::BinaryExpression(binary) = self.parse.nodes.kind(definition) else {
+            return None;
+        };
         if binary.operator != BinaryOperator::BitwiseOR
-            || self.operand_symbol(&binary.left).map(|left| self.copy_root(left)) != Some(accumulator)
+            || self
+                .operand_symbol(&binary.left)
+                .map(|left| self.copy_root(left))
+                != Some(accumulator)
         {
             return None;
         }
@@ -332,7 +393,12 @@ impl FinderCtx<'_, '_, '_> {
 
     /// The accumulator is written between the end of the packing loop and a
     /// read after it (the register holds another value by then).
-    pub(super) fn reassigned_after(&self, accumulator: SymbolId, looped: Span, read: NodeId) -> bool {
+    pub(super) fn reassigned_after(
+        &self,
+        accumulator: SymbolId,
+        looped: Span,
+        read: NodeId,
+    ) -> bool {
         let nodes = self.parse.nodes;
         let read_at = nodes.kind(read).span().start;
         if looped.start <= read_at && read_at < looped.end {
@@ -360,7 +426,9 @@ impl FinderCtx<'_, '_, '_> {
     pub(super) fn flush_size_more(&self, looped: Span, counter: SymbolId) -> Option<u32> {
         let nodes = self.parse.nodes;
         let stepped = |expression: &Expression<'_>| -> bool {
-            let Expression::BinaryExpression(sum) = expression.without_parentheses() else { return false };
+            let Expression::BinaryExpression(sum) = expression.without_parentheses() else {
+                return false;
+            };
             if sum.operator != BinaryOperator::Addition || integer(&sum.right) != Some(1) {
                 return false;
             }
@@ -368,9 +436,9 @@ impl FinderCtx<'_, '_, '_> {
                 Expression::CallExpression(call) => {
                     matches!(call.callee.without_parentheses(), Expression::Identifier(callee) if callee.name == "Number")
                         && call.arguments.len() == 1
-                        && call.arguments[0]
-                            .as_expression()
-                            .is_some_and(|argument| self.identifier_name_symbol(argument) == Some(counter))
+                        && call.arguments[0].as_expression().is_some_and(|argument| {
+                            self.identifier_name_symbol(argument) == Some(counter)
+                        })
                 }
                 other => self.identifier_name_symbol(other) == Some(counter),
             }
@@ -381,15 +449,21 @@ impl FinderCtx<'_, '_, '_> {
             match nodes.kind(id) {
                 AstKind::VariableDeclarator(declarator) => {
                     if declarator.init.as_ref().is_some_and(|init| stepped(init)) {
-                        if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id {
+                        if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) =
+                            &declarator.id
+                        {
                             if let Some(symbol) = identifier.symbol_id.get() {
                                 steps.insert(symbol);
                             }
                         }
                     }
                 }
-                AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() && stepped(&assignment.right) => {
-                    if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left {
+                AstKind::AssignmentExpression(assignment)
+                    if assignment.operator.is_assign() && stepped(&assignment.right) =>
+                {
+                    if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) =
+                        &assignment.left
+                    {
                         if let Some(symbol) = self.identifier_symbol(identifier) {
                             steps.insert(symbol);
                         }
@@ -404,7 +478,10 @@ impl FinderCtx<'_, '_, '_> {
         for id in self.nodes_within(looped) {
             match nodes.kind(id) {
                 AstKind::BinaryExpression(test)
-                    if matches!(test.operator, BinaryOperator::StrictEquality | BinaryOperator::Equality) =>
+                    if matches!(
+                        test.operator,
+                        BinaryOperator::StrictEquality | BinaryOperator::Equality
+                    ) =>
                 {
                     let side = |expression: &Expression<'_>| {
                         self.identifier_name_symbol(expression)
@@ -413,7 +490,8 @@ impl FinderCtx<'_, '_, '_> {
                     if side(&test.left) || side(&test.right) {
                         any_test = true;
                     }
-                    let symbol_of = |expression: &Expression<'_>| self.identifier_name_symbol(expression);
+                    let symbol_of =
+                        |expression: &Expression<'_>| self.identifier_name_symbol(expression);
                     if symbol_of(&test.left).is_some_and(|symbol| steps.contains(&symbol)) {
                         found = found.or(integer(&test.right));
                     } else if symbol_of(&test.right).is_some_and(|symbol| steps.contains(&symbol)) {
@@ -448,24 +526,34 @@ impl FinderCtx<'_, '_, '_> {
             return false;
         }
         let nodes = self.parse.nodes;
-        let Some(mut child) = self.nodes_within(site).into_iter().next() else { return true };
+        let Some(mut child) = self.nodes_within(site).into_iter().next() else {
+            return true;
+        };
         let mut tail = false;
         loop {
             let parent = nodes.parent_id(child);
-            if parent == child || nodes.kind(parent).span() == looped || nodes.kind(parent).span().start < looped.start {
+            if parent == child
+                || nodes.kind(parent).span() == looped
+                || nodes.kind(parent).span().start < looped.start
+            {
                 break;
             }
             if let AstKind::IfStatement(statement) = nodes.kind(parent) {
                 let in_test = statement.test.span().start <= nodes.kind(child).span().start
                     && nodes.kind(child).span().end <= statement.test.span().end;
-                let in_consequent = statement.consequent.span().start <= nodes.kind(child).span().start
+                let in_consequent = statement.consequent.span().start
+                    <= nodes.kind(child).span().start
                     && nodes.kind(child).span().end <= statement.consequent.span().end;
                 if !in_test && in_consequent {
-                    if let Expression::BinaryExpression(test) = statement.test.without_parentheses() {
+                    if let Expression::BinaryExpression(test) = statement.test.without_parentheses()
+                    {
                         match test.operator {
-                            BinaryOperator::StrictEquality | BinaryOperator::Equality => return true,
+                            BinaryOperator::StrictEquality | BinaryOperator::Equality => {
+                                return true
+                            }
                             BinaryOperator::StrictInequality | BinaryOperator::Inequality
-                                if integer(&test.right) == Some(0) || integer(&test.left) == Some(0) =>
+                                if integer(&test.right) == Some(0)
+                                    || integer(&test.left) == Some(0) =>
                             {
                                 tail = true
                             }
@@ -481,12 +569,23 @@ impl FinderCtx<'_, '_, '_> {
 
     /// A loop without a flush ([`Self::flush_size_more`]) packs every item
     /// into the tail byte only when the list is shorter than a byte.
-    pub(super) fn unflushed_fits(&self, looped: Span, counter: SymbolId, items: usize) -> Result<(), String> {
+    pub(super) fn unflushed_fits(
+        &self,
+        looped: Span,
+        counter: SymbolId,
+        items: usize,
+    ) -> Result<(), String> {
         let nodes = self.parse.nodes;
-        let tested = self.nodes_within(looped).into_iter().any(|id| match nodes.kind(id) {
-            AstKind::BinaryExpression(test) => matches!(test.operator, BinaryOperator::StrictEquality | BinaryOperator::Equality),
-            _ => false,
-        });
+        let tested = self
+            .nodes_within(looped)
+            .into_iter()
+            .any(|id| match nodes.kind(id) {
+                AstKind::BinaryExpression(test) => matches!(
+                    test.operator,
+                    BinaryOperator::StrictEquality | BinaryOperator::Equality
+                ),
+                _ => false,
+            });
         let _ = counter;
         if !tested && items >= 8 {
             return Err(format!("no flush test for {items} items"));
@@ -498,7 +597,8 @@ impl FinderCtx<'_, '_, '_> {
     /// find: filled by index in a loop over a list, or a callback parameter
     /// fed with a list filled by a probe queue.
     pub(super) fn more_list_items(&self, list: SymbolId) -> Option<Vec<String>> {
-        self.indexed_fill_items(list).or_else(|| self.parameter_list_items(list, LIST_HOPS))
+        self.indexed_fill_items(list)
+            .or_else(|| self.parameter_list_items(list, LIST_HOPS))
     }
 
     /// `list = [false, …]; for (…; i++) { k = i; list[k] = test(…L[i]…) }`
@@ -506,12 +606,22 @@ impl FinderCtx<'_, '_, '_> {
     /// elsewhere: only the element stores between the reaching literal (of
     /// one boolean per item) and the read, each indexed by the ascending loop
     /// index (or a register copied from it in the loop).
-    pub(super) fn windowed_fill_items(&self, list: SymbolId, object: NodeId, read: NodeId) -> Option<Vec<String>> {
+    pub(super) fn windowed_fill_items(
+        &self,
+        list: SymbolId,
+        object: NodeId,
+        read: NodeId,
+    ) -> Option<Vec<String>> {
         let nodes = self.parse.nodes;
         let (value, _) = self.identifier_value(object)?;
-        let AstKind::ArrayExpression(array) = nodes.kind(value) else { return None };
+        let AstKind::ArrayExpression(array) = nodes.kind(value) else {
+            return None;
+        };
         let booleans = array.elements.iter().all(|element| {
-            matches!(element.as_expression().map(|e| e.without_parentheses()), Some(Expression::BooleanLiteral(_)))
+            matches!(
+                element.as_expression().map(|e| e.without_parentheses()),
+                Some(Expression::BooleanLiteral(_))
+            )
         });
         if !booleans || array.elements.is_empty() {
             return None;
@@ -532,12 +642,16 @@ impl FinderCtx<'_, '_, '_> {
                 return None;
             }
             let parent = nodes.parent_id(node);
-            let AstKind::ComputedMemberExpression(element) = nodes.kind(parent) else { continue };
+            let AstKind::ComputedMemberExpression(element) = nodes.kind(parent) else {
+                continue;
+            };
             if element.object.span() != span {
                 continue;
             }
             let store = nodes.parent_id(parent);
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else {
+                continue;
+            };
             if assignment.left.span() != element.span {
                 continue;
             }
@@ -556,25 +670,39 @@ impl FinderCtx<'_, '_, '_> {
                 }
                 let source = self.reference_symbol(copied)?;
                 let copied_at = nodes.kind(copied).span();
-                if copied_at.start < loop_span.start || copied_at.end > loop_span.end || self.step_of(source, loop_span) != Some(true) {
+                if copied_at.start < loop_span.start
+                    || copied_at.end > loop_span.end
+                    || self.step_of(source, loop_span) != Some(true)
+                {
                     return None;
                 }
                 index = source;
             }
             let mut lists: Vec<Vec<String>> = Vec::new();
             for id in self.nodes_within(loop_span) {
-                let AstKind::ComputedMemberExpression(probed) = nodes.kind(id) else { continue };
-                if self.identifier_name_symbol(&probed.expression) != Some(index) || probed.span == element.span {
+                let AstKind::ComputedMemberExpression(probed) = nodes.kind(id) else {
+                    continue;
+                };
+                if self.identifier_name_symbol(&probed.expression) != Some(index)
+                    || probed.span == element.span
+                {
                     continue;
                 }
-                let Some(probed_object) = self.expression_node(&probed.object) else { continue };
-                if let Some(items) = self.resolve_value(probed_object, LIST_HOPS).and_then(|value| self.string_list(value)) {
+                let Some(probed_object) = self.expression_node(&probed.object) else {
+                    continue;
+                };
+                if let Some(items) = self
+                    .resolve_value(probed_object, LIST_HOPS)
+                    .and_then(|value| self.string_list(value))
+                {
                     if !lists.contains(&items) {
                         lists.push(items);
                     }
                 }
             }
-            let [items] = lists.as_slice() else { return None };
+            let [items] = lists.as_slice() else {
+                return None;
+            };
             match &found {
                 None => found = Some(items.clone()),
                 Some(previous) if previous == items => {}
@@ -595,12 +723,16 @@ impl FinderCtx<'_, '_, '_> {
         for reference in self.parse.scoping.get_resolved_references(list) {
             let node = reference.node_id();
             let parent = nodes.parent_id(node);
-            let AstKind::ComputedMemberExpression(element) = nodes.kind(parent) else { continue };
+            let AstKind::ComputedMemberExpression(element) = nodes.kind(parent) else {
+                continue;
+            };
             if element.object.span() != nodes.kind(node).span() {
                 continue;
             }
             let store = nodes.parent_id(parent);
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else {
+                continue;
+            };
             if assignment.left.span() != element.span {
                 continue;
             }
@@ -613,18 +745,29 @@ impl FinderCtx<'_, '_, '_> {
             // The probed list read at the same index in the loop.
             let mut lists: Vec<Vec<String>> = Vec::new();
             for id in self.nodes_within(loop_span) {
-                let AstKind::ComputedMemberExpression(read) = nodes.kind(id) else { continue };
-                if self.identifier_name_symbol(&read.expression) != Some(index) || read.span == element.span {
+                let AstKind::ComputedMemberExpression(read) = nodes.kind(id) else {
+                    continue;
+                };
+                if self.identifier_name_symbol(&read.expression) != Some(index)
+                    || read.span == element.span
+                {
                     continue;
                 }
-                let Some(object) = self.expression_node(&read.object) else { continue };
-                if let Some(items) = self.resolve_value(object, LIST_HOPS).and_then(|value| self.string_list(value)) {
+                let Some(object) = self.expression_node(&read.object) else {
+                    continue;
+                };
+                if let Some(items) = self
+                    .resolve_value(object, LIST_HOPS)
+                    .and_then(|value| self.string_list(value))
+                {
                     if !lists.contains(&items) {
                         lists.push(items);
                     }
                 }
             }
-            let [items] = lists.as_slice() else { return None };
+            let [items] = lists.as_slice() else {
+                return None;
+            };
             match &found {
                 None => found = Some(items.clone()),
                 Some(previous) if previous == items => {}
@@ -647,7 +790,9 @@ impl FinderCtx<'_, '_, '_> {
         let mut any = false;
         let calls = self.invocations(function, hops);
         for call in calls {
-            let AstKind::CallExpression(call) = self.parse.nodes.kind(call) else { return None };
+            let AstKind::CallExpression(call) = self.parse.nodes.kind(call) else {
+                return None;
+            };
             let argument = self.expression_node(call.arguments.get(position)?.as_expression()?)?;
             let items = self.pushed_items(argument)?;
             match &found {
@@ -675,9 +820,15 @@ impl FinderCtx<'_, '_, '_> {
         for reference in self.parse.scoping.get_resolved_references(list) {
             let parent = nodes.parent_id(reference.node_id());
             if let AstKind::VariableDeclarator(declarator) = nodes.kind(parent) {
-                if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id {
+                if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id
+                {
                     if let Some(alias) = identifier.symbol_id.get() {
-                        if self.parse.scoping.get_resolved_references(alias).all(|reference| !reference.is_write()) {
+                        if self
+                            .parse
+                            .scoping
+                            .get_resolved_references(alias)
+                            .all(|reference| !reference.is_write())
+                        {
                             symbols.push(alias);
                         }
                     }
@@ -707,7 +858,9 @@ impl FinderCtx<'_, '_, '_> {
         for symbol in &symbols {
             for reference in self.parse.scoping.get_resolved_references(*symbol) {
                 let parent = nodes.parent_id(reference.node_id());
-                let AstKind::StaticMemberExpression(member) = nodes.kind(parent) else { continue };
+                let AstKind::StaticMemberExpression(member) = nodes.kind(parent) else {
+                    continue;
+                };
                 if member.object.span() != nodes.kind(reference.node_id()).span() {
                     continue;
                 }
@@ -733,25 +886,45 @@ impl FinderCtx<'_, '_, '_> {
         }
         // The callback reads its item parameter.
         let item = self.parameter_symbol(callback, 0)?;
-        if self.parse.scoping.get_resolved_references(item).next().is_none() {
+        if self
+            .parse
+            .scoping
+            .get_resolved_references(item)
+            .next()
+            .is_none()
+        {
             return None;
         }
         // `Q(C, items)`: the call the callback is a direct argument of.
         let call = nodes.parent_id(callback);
-        let AstKind::CallExpression(queue) = nodes.kind(call) else { return None };
+        let AstKind::CallExpression(queue) = nodes.kind(call) else {
+            return None;
+        };
         let callback_span = nodes.kind(callback).span();
         if queue.arguments.first().map(|argument| argument.span()) != Some(callback_span) {
             return None;
         }
         let mut lists = Vec::new();
         for argument in queue.arguments.iter().skip(1) {
-            let Some(argument) = argument.as_expression().and_then(|argument| self.expression_node(argument)) else { continue };
-            if let Some(items) = self.resolve_value(argument, LIST_HOPS).and_then(|value| self.string_list(value)) {
+            let Some(argument) = argument
+                .as_expression()
+                .and_then(|argument| self.expression_node(argument))
+            else {
+                continue;
+            };
+            if let Some(items) = self
+                .resolve_value(argument, LIST_HOPS)
+                .and_then(|value| self.string_list(value))
+            {
                 lists.push(items);
             }
         }
-        let [items] = lists.as_slice() else { return None };
-        let helper = self.expression_node(&queue.callee).and_then(|callee| self.resolve_value(callee, LIST_HOPS))?;
+        let [items] = lists.as_slice() else {
+            return None;
+        };
+        let helper = self
+            .expression_node(&queue.callee)
+            .and_then(|callee| self.resolve_value(callee, LIST_HOPS))?;
         self.in_order_queue(helper).then(|| items.clone())
     }
 
@@ -768,7 +941,10 @@ impl FinderCtx<'_, '_, '_> {
                 (push.arguments.len() == 1).then(|| vec![parent])
             }
             AstKind::VariableDeclarator(declarator) => {
-                let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id else { return None };
+                let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id
+                else {
+                    return None;
+                };
                 let method = identifier.symbol_id.get()?;
                 let mut calls = Vec::new();
                 for reference in self.parse.scoping.get_resolved_references(method) {
@@ -776,11 +952,15 @@ impl FinderCtx<'_, '_, '_> {
                         return None;
                     }
                     let read = nodes.parent_id(reference.node_id());
-                    let AstKind::StaticMemberExpression(call_member) = nodes.kind(read) else { return None };
+                    let AstKind::StaticMemberExpression(call_member) = nodes.kind(read) else {
+                        return None;
+                    };
                     let call = nodes.parent_id(read);
                     match nodes.kind(call) {
                         AstKind::CallExpression(invoke)
-                            if call_member.property.name == "call" && invoke.callee.span() == call_member.span && invoke.arguments.len() == 2 =>
+                            if call_member.property.name == "call"
+                                && invoke.callee.span() == call_member.span
+                                && invoke.arguments.len() == 2 =>
                         {
                             calls.push(call)
                         }
@@ -790,14 +970,22 @@ impl FinderCtx<'_, '_, '_> {
                 Some(calls)
             }
             AstKind::ArrayExpression(pair) => {
-                let [Some(first), Some(second)] = [pair.elements.first(), pair.elements.get(1)] else { return None };
+                let [Some(first), Some(second)] = [pair.elements.first(), pair.elements.get(1)]
+                else {
+                    return None;
+                };
                 if pair.elements.len() != 2 || second.span() != member_span {
                     return None;
                 }
                 let _ = first;
                 let declarator = nodes.parent_id(parent);
-                let AstKind::VariableDeclarator(declarator) = nodes.kind(declarator) else { return None };
-                let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id else { return None };
+                let AstKind::VariableDeclarator(declarator) = nodes.kind(declarator) else {
+                    return None;
+                };
+                let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id
+                else {
+                    return None;
+                };
                 let pair_symbol = identifier.symbol_id.get()?;
                 let mut calls = Vec::new();
                 for reference in self.parse.scoping.get_resolved_references(pair_symbol) {
@@ -805,18 +993,25 @@ impl FinderCtx<'_, '_, '_> {
                         return None;
                     }
                     let element = nodes.parent_id(reference.node_id());
-                    let AstKind::ComputedMemberExpression(element_member) = nodes.kind(element) else { return None };
+                    let AstKind::ComputedMemberExpression(element_member) = nodes.kind(element)
+                    else {
+                        return None;
+                    };
                     match element_member.expression.without_parentheses() {
                         Expression::NumericLiteral(index) if index.value == 0.0 => continue,
                         Expression::NumericLiteral(index) if index.value == 1.0 => {}
                         _ => return None,
                     }
                     let read = nodes.parent_id(element);
-                    let AstKind::StaticMemberExpression(call_member) = nodes.kind(read) else { return None };
+                    let AstKind::StaticMemberExpression(call_member) = nodes.kind(read) else {
+                        return None;
+                    };
                     let call = nodes.parent_id(read);
                     match nodes.kind(call) {
                         AstKind::CallExpression(invoke)
-                            if call_member.property.name == "call" && invoke.callee.span() == call_member.span && invoke.arguments.len() == 2 =>
+                            if call_member.property.name == "call"
+                                && invoke.callee.span() == call_member.span
+                                && invoke.arguments.len() == 2 =>
                         {
                             calls.push(call)
                         }
@@ -833,7 +1028,10 @@ impl FinderCtx<'_, '_, '_> {
     /// (`.shift()`) and never reorders it.
     fn in_order_queue(&self, function: NodeId) -> bool {
         let nodes = self.parse.nodes;
-        if !matches!(nodes.kind(function), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+        if !matches!(
+            nodes.kind(function),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+        ) {
             return false;
         }
         let mut shift = false;
@@ -856,7 +1054,9 @@ impl FinderCtx<'_, '_, '_> {
         for _ in 0..4 {
             if let AstKind::FormalParameter(_) = nodes.kind(node) {
                 let parameters = nodes.parent_id(node);
-                let AstKind::FormalParameters(list) = nodes.kind(parameters) else { return None };
+                let AstKind::FormalParameters(list) = nodes.kind(parameters) else {
+                    return None;
+                };
                 let span = nodes.kind(node).span();
                 let position = list.items.iter().position(|item| item.span == span)?;
                 return Some((nodes.parent_id(parameters), position));
@@ -877,7 +1077,9 @@ impl FinderCtx<'_, '_, '_> {
             AstKind::ArrowFunctionExpression(arrow) => &arrow.params,
             _ => return None,
         };
-        let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &params.items.get(position)?.pattern else {
+        let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) =
+            &params.items.get(position)?.pattern
+        else {
             return None;
         };
         identifier.symbol_id.get()
@@ -900,28 +1102,53 @@ impl FinderCtx<'_, '_, '_> {
                 let alias = match nodes.kind(parent) {
                     // `let a = b`, never reassigned.
                     AstKind::VariableDeclarator(declarator) => {
-                        let Some(init) = &declarator.init else { continue };
+                        let Some(init) = &declarator.init else {
+                            continue;
+                        };
                         if init.without_parentheses().span() != span {
                             continue;
                         }
-                        let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id else { continue };
-                        let Some(alias) = identifier.symbol_id.get() else { continue };
-                        if self.parse.scoping.get_resolved_references(alias).any(|reference| reference.is_write()) {
+                        let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) =
+                            &declarator.id
+                        else {
+                            continue;
+                        };
+                        let Some(alias) = identifier.symbol_id.get() else {
+                            continue;
+                        };
+                        if self
+                            .parse
+                            .scoping
+                            .get_resolved_references(alias)
+                            .any(|reference| reference.is_write())
+                        {
                             continue;
                         }
                         alias
                     }
                     // `a = b`, the only write of a binding declared without a value.
-                    AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => {
+                    AstKind::AssignmentExpression(assignment)
+                        if assignment.operator.is_assign() =>
+                    {
                         if assignment.right.without_parentheses().span() != span {
                             continue;
                         }
-                        let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left else { continue };
-                        let Some(alias) = self.identifier_symbol(identifier) else { continue };
+                        let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) =
+                            &assignment.left
+                        else {
+                            continue;
+                        };
+                        let Some(alias) = self.identifier_symbol(identifier) else {
+                            continue;
+                        };
                         let declaration = self.parse.scoping.symbol_declaration(alias);
-                        let declared_empty =
-                            matches!(nodes.kind(declaration), AstKind::VariableDeclarator(declarator) if declarator.init.is_none());
-                        let writes = self.parse.scoping.get_resolved_references(alias).filter(|reference| reference.is_write()).count();
+                        let declared_empty = matches!(nodes.kind(declaration), AstKind::VariableDeclarator(declarator) if declarator.init.is_none());
+                        let writes = self
+                            .parse
+                            .scoping
+                            .get_resolved_references(alias)
+                            .filter(|reference| reference.is_write())
+                            .count();
                         if !declared_empty || writes != 1 {
                             continue;
                         }
@@ -948,29 +1175,46 @@ impl FinderCtx<'_, '_, '_> {
                 }
                 let parent = nodes.parent_id(reference.node_id());
                 if let AstKind::CallExpression(call) = nodes.kind(parent) {
-                    if call.callee.without_parentheses().span() == nodes.kind(reference.node_id()).span() {
+                    if call.callee.without_parentheses().span()
+                        == nodes.kind(reference.node_id()).span()
+                    {
                         out.push(parent);
                     }
                 }
                 // `r = f` into a register written more than once: the
                 // calls of `r` this store reaches (`r = f; … r(…)`).
                 if let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) {
-                    if !assignment.operator.is_assign() || assignment.right.without_parentheses().span() != nodes.kind(reference.node_id()).span() {
+                    if !assignment.operator.is_assign()
+                        || assignment.right.without_parentheses().span()
+                            != nodes.kind(reference.node_id()).span()
+                    {
                         continue;
                     }
-                    let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left else { continue };
-                    let Some(register) = self.identifier_symbol(identifier) else { continue };
+                    let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) =
+                        &assignment.left
+                    else {
+                        continue;
+                    };
+                    let Some(register) = self.identifier_symbol(identifier) else {
+                        continue;
+                    };
                     for read in self.parse.scoping.get_resolved_references(register) {
                         if !read.is_read() {
                             continue;
                         }
                         let call = nodes.parent_id(read.node_id());
-                        let AstKind::CallExpression(invoke) = nodes.kind(call) else { continue };
-                        if invoke.callee.without_parentheses().span() != nodes.kind(read.node_id()).span() {
+                        let AstKind::CallExpression(invoke) = nodes.kind(call) else {
+                            continue;
+                        };
+                        if invoke.callee.without_parentheses().span()
+                            != nodes.kind(read.node_id()).span()
+                        {
                             continue;
                         }
                         match self.identifier_value(read.node_id()) {
-                            Some((value, Updates::Or(ors))) if ors.is_empty() && value == reference.node_id() => {
+                            Some((value, Updates::Or(ors)))
+                                if ors.is_empty() && value == reference.node_id() =>
+                            {
                                 if !out.contains(&call) {
                                     out.push(call);
                                 }
@@ -994,7 +1238,9 @@ impl FinderCtx<'_, '_, '_> {
         }
         match nodes.kind(nodes.parent_id(function)) {
             AstKind::VariableDeclarator(declarator) => match &declarator.id {
-                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => identifier.symbol_id.get(),
+                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => {
+                    identifier.symbol_id.get()
+                }
                 _ => None,
             },
             _ => None,
@@ -1013,10 +1259,21 @@ impl FinderCtx<'_, '_, '_> {
             return self.calls_through(symbol);
         }
         let call = nodes.parent_id(function);
-        let AstKind::CallExpression(outer) = nodes.kind(call) else { return Vec::new() };
+        let AstKind::CallExpression(outer) = nodes.kind(call) else {
+            return Vec::new();
+        };
         let span = nodes.kind(function).span();
-        let Some(position) = outer.arguments.iter().position(|argument| argument.span() == span) else { return Vec::new() };
-        let Some(helper) = self.expression_node(&outer.callee).and_then(|callee| self.resolve_value(callee, hops - 1)) else {
+        let Some(position) = outer
+            .arguments
+            .iter()
+            .position(|argument| argument.span() == span)
+        else {
+            return Vec::new();
+        };
+        let Some(helper) = self
+            .expression_node(&outer.callee)
+            .and_then(|callee| self.resolve_value(callee, hops - 1))
+        else {
             return Vec::new();
         };
         match self.parameter_symbol(helper, position) {
@@ -1035,7 +1292,9 @@ impl FinderCtx<'_, '_, '_> {
         }
         let nodes = self.parse.nodes;
         match nodes.kind(node) {
-            AstKind::ParenthesizedExpression(inner) => self.resolve_value(self.expression_node(&inner.expression)?, hops - 1),
+            AstKind::ParenthesizedExpression(inner) => {
+                self.resolve_value(self.expression_node(&inner.expression)?, hops - 1)
+            }
             AstKind::IdentifierReference(_) => {
                 let symbol = self.reference_symbol(node)?;
                 if let Some((function, position)) = self.parameter_of(symbol) {
@@ -1045,8 +1304,11 @@ impl FinderCtx<'_, '_, '_> {
                     let calls = self.invocations(function, hops - 1);
                     let mut resolved: Option<NodeId> = None;
                     for call in &calls {
-                        let AstKind::CallExpression(call) = nodes.kind(*call) else { return None };
-                        let argument = self.expression_node(call.arguments.get(position)?.as_expression()?)?;
+                        let AstKind::CallExpression(call) = nodes.kind(*call) else {
+                            return None;
+                        };
+                        let argument =
+                            self.expression_node(call.arguments.get(position)?.as_expression()?)?;
                         let value = self.resolve_value(argument, hops - 1)?;
                         match resolved {
                             None => resolved = Some(value),
@@ -1068,11 +1330,18 @@ impl FinderCtx<'_, '_, '_> {
                             .map(|reference| reference.node_id())
                             .collect();
                         match (&declarator.init, writes.as_slice()) {
-                            (Some(init), []) => return self.resolve_value(self.expression_node(init)?, hops - 1),
+                            (Some(init), []) => {
+                                return self.resolve_value(self.expression_node(init)?, hops - 1)
+                            }
                             (None, [write]) => {
-                                if let AstKind::AssignmentExpression(assignment) = nodes.kind(nodes.parent_id(*write)) {
+                                if let AstKind::AssignmentExpression(assignment) =
+                                    nodes.kind(nodes.parent_id(*write))
+                                {
                                     if assignment.operator.is_assign() {
-                                        return self.resolve_value(self.expression_node(&assignment.right)?, hops - 1);
+                                        return self.resolve_value(
+                                            self.expression_node(&assignment.right)?,
+                                            hops - 1,
+                                        );
                                     }
                                 }
                                 return None;
@@ -1083,34 +1352,47 @@ impl FinderCtx<'_, '_, '_> {
                     _ => {}
                 }
                 match self.identifier_value(node)? {
-                    (value, Updates::Or(ors)) if ors.is_empty() => self.resolve_value(value, hops - 1),
+                    (value, Updates::Or(ors)) if ors.is_empty() => {
+                        self.resolve_value(value, hops - 1)
+                    }
                     _ => None,
                 }
             }
             AstKind::StaticMemberExpression(member) => {
                 let object = self.resolve_value(self.expression_node(&member.object)?, hops - 1)?;
-                let AstKind::ObjectExpression(literal) = nodes.kind(object) else { return None };
-                let value = literal.properties.iter().find_map(|property| match property {
-                    oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property)
-                        if property.key.static_name().as_deref() == Some(member.property.name.as_str()) =>
-                    {
-                        Some(&property.value)
-                    }
-                    _ => None,
-                });
+                let AstKind::ObjectExpression(literal) = nodes.kind(object) else {
+                    return None;
+                };
+                let value = literal
+                    .properties
+                    .iter()
+                    .find_map(|property| match property {
+                        oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property)
+                            if property.key.static_name().as_deref()
+                                == Some(member.property.name.as_str()) =>
+                        {
+                            Some(&property.value)
+                        }
+                        _ => None,
+                    });
                 match value {
                     Some(value) => self.resolve_value(self.expression_node(value)?, hops - 1),
                     // `o = {…}; o.k = v`: the store joins the record.
                     None => {
                         let record = self.record_at(object)?;
-                        self.resolve_value(*record.values.get(member.property.name.as_str())?, hops - 1)
+                        self.resolve_value(
+                            *record.values.get(member.property.name.as_str())?,
+                            hops - 1,
+                        )
                     }
                 }
             }
             AstKind::ComputedMemberExpression(member) => {
                 let index = integer(&member.expression)?;
                 let object = self.resolve_value(self.expression_node(&member.object)?, hops - 1)?;
-                let AstKind::ArrayExpression(array) = nodes.kind(object) else { return None };
+                let AstKind::ArrayExpression(array) = nodes.kind(object) else {
+                    return None;
+                };
                 let element = array.elements.get(index as usize)?.as_expression()?;
                 self.resolve_value(self.expression_node(element)?, hops - 1)
             }
@@ -1133,7 +1415,11 @@ impl FinderCtx<'_, '_, '_> {
                     (value, Updates::Or(ors)) if ors.is_empty() => node = value,
                     _ => return None,
                 },
-                AstKind::ComputedMemberExpression(_) | AstKind::StaticMemberExpression(_) if node != base => return Some(node),
+                AstKind::ComputedMemberExpression(_) | AstKind::StaticMemberExpression(_)
+                    if node != base =>
+                {
+                    return Some(node)
+                }
                 _ => return None,
             }
         }
@@ -1149,7 +1435,8 @@ impl FinderCtx<'_, '_, '_> {
             return false;
         }
         let nodes = self.parse.nodes;
-        let primitive = |expression: &Expression<'_>| -> Option<NodeId> { self.expression_node(expression) };
+        let primitive =
+            |expression: &Expression<'_>| -> Option<NodeId> { self.expression_node(expression) };
         match nodes.kind(value) {
             AstKind::NumericLiteral(_)
             | AstKind::StringLiteral(_)
@@ -1159,15 +1446,20 @@ impl FinderCtx<'_, '_, '_> {
             | AstKind::UnaryExpression(_)
             | AstKind::BinaryExpression(_)
             | AstKind::UpdateExpression(_) => true,
-            AstKind::ParenthesizedExpression(inner) => primitive(&inner.expression).is_some_and(|inner| self.never_list(inner, label, hops - 1)),
+            AstKind::ParenthesizedExpression(inner) => primitive(&inner.expression)
+                .is_some_and(|inner| self.never_list(inner, label, hops - 1)),
             AstKind::ConditionalExpression(conditional) => {
                 [&conditional.consequent, &conditional.alternate]
                     .into_iter()
-                    .all(|arm| primitive(arm).is_some_and(|arm| self.never_list(arm, label, hops - 1)))
+                    .all(|arm| {
+                        primitive(arm).is_some_and(|arm| self.never_list(arm, label, hops - 1))
+                    })
             }
-            AstKind::LogicalExpression(logical) => [&logical.left, &logical.right]
-                .into_iter()
-                .all(|side| primitive(side).is_some_and(|side| self.never_list(side, label, hops - 1))),
+            AstKind::LogicalExpression(logical) => {
+                [&logical.left, &logical.right].into_iter().all(|side| {
+                    primitive(side).is_some_and(|side| self.never_list(side, label, hops - 1))
+                })
+            }
             AstKind::CallExpression(call) => match call.callee.without_parentheses() {
                 Expression::StaticMemberExpression(member) => {
                     matches!(member.object.without_parentheses(), Expression::Identifier(object) if object.name == "Math")
@@ -1178,7 +1470,9 @@ impl FinderCtx<'_, '_, '_> {
                 self.read_key(value).as_deref() == Some(label)
             }
             AstKind::IdentifierReference(_) => match self.identifier_value(value) {
-                Some((next, Updates::Or(ors))) if ors.is_empty() => self.never_list(next, label, hops - 1),
+                Some((next, Updates::Or(ors))) if ors.is_empty() => {
+                    self.never_list(next, label, hops - 1)
+                }
                 _ => false,
             },
             _ => false,
@@ -1189,17 +1483,24 @@ impl FinderCtx<'_, '_, '_> {
     /// no label the slot reads as a list (`rec.k[i]`) holds a value that is
     /// never a list there.
     pub(super) fn record_fits(&self, record: &RecordConstruction, scope: &Scope) -> bool {
-        scope.indexed.iter().all(|label| match record.values.get(label) {
-            Some(value) => !self.never_list(*value, label, TERM_HOPS),
-            None => true,
-        })
+        scope
+            .indexed
+            .iter()
+            .all(|label| match record.values.get(label) {
+                Some(value) => !self.never_list(*value, label, TERM_HOPS),
+                None => true,
+            })
     }
 }
 
 /// The slot-wide naming scope: the record labels every term of every write
 /// site of the slot's packed fields reads (directly or through a copied
 /// element), and the labels read as lists.
-pub(super) fn slot_scope<'a>(ctx: &FinderCtx, view: &SlotView, terms: impl Iterator<Item = &'a PackedTerm>) -> Scope {
+pub(super) fn slot_scope<'a>(
+    ctx: &FinderCtx,
+    view: &SlotView,
+    terms: impl Iterator<Item = &'a PackedTerm>,
+) -> Scope {
     let mut labels = BTreeSet::new();
     let mut indexed = BTreeSet::new();
     for term in terms {

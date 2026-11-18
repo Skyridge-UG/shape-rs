@@ -99,14 +99,18 @@ use crate::analysis;
 
 mod annotate;
 mod anonymous_names;
+mod apply_semantic_names;
 mod identified;
 mod local_names;
 mod rename;
-mod apply_semantic_names;
 
 pub use anonymous_names::{
     apply_anonymous_names, apply_anonymous_names_mapped, AnonymousNameAction, AnonymousNameOptions,
     AnonymousNameOutcome, AnonymousNamesResult, NameSkip,
+};
+pub use apply_semantic_names::{
+    rename_semantic_names, rename_semantic_names_with, rename_semantic_names_with_options,
+    SemanticRenameError, SemanticRenameOptions, SemanticRenameOutcome, SemanticRenameResult,
 };
 pub use identified::{
     identify_and_transform, identify_and_transform_with_local_names, signal_annotations,
@@ -118,10 +122,6 @@ pub use local_names::{
 };
 pub(crate) use rename::{planned_binding_facts_for, planned_bindings_collide, PlannedBindingFacts};
 pub use rename::{RenameOutcome, RenameSkipReason};
-pub use apply_semantic_names::{
-    rename_semantic_names, rename_semantic_names_with, rename_semantic_names_with_options,
-    SemanticRenameError, SemanticRenameOptions, SemanticRenameOutcome, SemanticRenameResult,
-};
 
 /// A source region as `(start, end)` byte offsets.
 pub type SpanRange = (u32, u32);

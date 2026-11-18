@@ -1,15 +1,19 @@
 //! `EmojiChannelSampleHalves`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafView, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `EmojiChannelSampleHalves`. Card: [`CARD`].
 ///
 /// Shape: `count, R{N}, count, R{N}`. Evidence: `getImageData`.
-pub(crate) fn recognize_emoji_channel_sample_halves(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_emoji_channel_sample_halves(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     claim_for(view, ctx, "EmojiChannelSampleHalves")
 }
 
@@ -26,21 +30,35 @@ pub(crate) fn bind_emoji_channel_sample_halves(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let pairs = count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
+        let pairs =
+            count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
         if fields.len() != 4 || pairs != [(0, 1), (2, 3)] {
-            return Err(refuse(SIGNAL, format!("message {message}: expected two `count, repeat` halves")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected two `count, repeat` halves"),
+            ));
         }
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
         let mut halves = Vec::new();
         for (count, values) in pairs {
             let mut pair_leaves = leaves[count].clone();
             pair_leaves.extend(leaves[values].iter().copied());
-            let half = sliced_half(&pair_leaves, ctx)
-                .ok_or_else(|| refuse(SIGNAL, format!("message {message}: fields {count}, {values} not read from one half slice")))?;
+            let half = sliced_half(&pair_leaves, ctx).ok_or_else(|| {
+                refuse(
+                    SIGNAL,
+                    format!(
+                        "message {message}: fields {count}, {values} not read from one half slice"
+                    ),
+                )
+            })?;
             halves.push((count, values, half));
         }
         if halves[0].2 == halves[1].2 {
-            return Err(refuse(SIGNAL, format!("message {message}: both pairs read the same half")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: both pairs read the same half"),
+            ));
         }
         for (count, values, half) in halves {
             let (count_name, values_name) = match half {
@@ -75,14 +93,20 @@ fn sliced_half(leaves: &[&LeafView], ctx: &FinderCtx) -> Option<Half> {
     let mut found = None;
     for leaf in leaves {
         let slice = ctx.value_slice(leaf, 4)?;
-        let calls: Vec<_> = slice.call_sites.iter().filter(|(method, _, _)| method == "slice").collect();
+        let calls: Vec<_> = slice
+            .call_sites
+            .iter()
+            .filter(|(method, _, _)| method == "slice")
+            .collect();
         let nearest = calls.iter().map(|(_, _, depth)| *depth).min()?;
         for (_, node, _) in calls.iter().filter(|(_, _, depth)| *depth == nearest) {
             let oxc_ast::AstKind::CallExpression(call) = ctx.parse.nodes.kind(*node) else {
                 return None;
             };
             let half = match call.arguments.as_slice() {
-                [Argument::NumericLiteral(zero), end] if zero.value == 0.0 && halving(end) => Half::First,
+                [Argument::NumericLiteral(zero), end] if zero.value == 0.0 && halving(end) => {
+                    Half::First
+                }
                 [start] if halving(start) => Half::Second,
                 _ => return None,
             };

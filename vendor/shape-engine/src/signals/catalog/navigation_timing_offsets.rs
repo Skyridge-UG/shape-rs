@@ -1,12 +1,13 @@
 //! `NavigationTimingOffsets`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use std::collections::BTreeSet;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use value_facts::{slot_facts, Desc};
-use crate::signals::analysis::{value_facts, described_fields::*};
+use crate::signals::analysis::{described_fields::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use std::collections::BTreeSet;
+use value_facts::{slot_facts, Desc};
 
 // ===========================================================================
 // Shared recognizer helpers
@@ -54,13 +55,20 @@ const NAVIGATION_TIMING: &[&str] = &[
 /// The navigation milestone a value reads (an offset reads it and
 /// `navigationStart`).
 fn milestone(desc: &Desc) -> Option<&'static str> {
-    let read: Vec<&'static str> = NAVIGATION_TIMING.iter().copied().filter(|name| desc.has_member(name)).collect();
+    let read: Vec<&'static str> = NAVIGATION_TIMING
+        .iter()
+        .copied()
+        .filter(|name| desc.has_member(name))
+        .collect();
     match read.as_slice() {
         ["navigationStart"] => Some("navigationStart"),
         [one, "navigationStart"] | ["navigationStart", one] => Some(one),
         [one] if *one != "navigationStart" => Some(one),
         _ => {
-            let others: Vec<&&str> = read.iter().filter(|name| **name != "navigationStart").collect();
+            let others: Vec<&&str> = read
+                .iter()
+                .filter(|name| **name != "navigationStart")
+                .collect();
             match others.as_slice() {
                 [one] => Some(one),
                 _ => None,
@@ -70,9 +78,15 @@ fn milestone(desc: &Desc) -> Option<&'static str> {
 }
 
 /// `NavigationTimingOffsets`. Card: [`CARD`].
-pub(crate) fn recognize_navigation_timing_offsets(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_navigation_timing_offsets(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let tops = emission_tops(view);
-    if tops.is_empty() || tops.iter().any(|ops| ops.len() < 15) || view.leaves().any(|leaf| leaf.op != LeafOp::Number) {
+    if tops.is_empty()
+        || tops.iter().any(|ops| ops.len() < 15)
+        || view.leaves().any(|leaf| leaf.op != LeafOp::Number)
+    {
         return None;
     }
     let facts = slot_facts(view, ctx);

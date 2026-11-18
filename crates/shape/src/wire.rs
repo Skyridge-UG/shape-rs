@@ -1,4 +1,4 @@
-﻿//! Wire codecs: the value-level encodings the sensors emit into per-signal
+//! Wire codecs: the value-level encodings the sensors emit into per-signal
 //! buffers. Exact inverses verified against the reference vectors.
 
 use crate::error::{Error, Result};
@@ -88,12 +88,7 @@ impl StringWriter {
         self.write_inner(buf, &mut state, value)
     }
 
-    fn write_inner(
-        &mut self,
-        buf: &mut Vec<u8>,
-        mask_state: &mut u8,
-        value: &str,
-    ) -> Result<()> {
+    fn write_inner(&mut self, buf: &mut Vec<u8>, mask_state: &mut u8, value: &str) -> Result<()> {
         if self.table.iter().any(|e| e == value) {
             buf.push(0x81 ^ *mask_state);
             return Ok(());
@@ -197,9 +192,7 @@ impl Stream {
         // a' = rotl13(x)
         let sum = self.a.wrapping_add(self.b);
         let x = self.a ^ self.b;
-        self.b = x
-            ^ self.b.rotate_left(26)
-            ^ x.wrapping_shl(9);
+        self.b = x ^ self.b.rotate_left(26) ^ x.wrapping_shl(9);
         self.a = x.rotate_left(13);
         self.current = sum;
         self.phase = 0;

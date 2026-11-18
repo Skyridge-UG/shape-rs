@@ -2,13 +2,13 @@
 //! guards. Loose == null checks need a value proved not to be HTMLDDA;
 //! otherwise retain their wider browser semantics.
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use std::collections::BTreeSet;
-use crate::transforms::emitted_js::support::unwrap;
 
 fn undefined(e: &Expression<'_>) -> bool {
     matches!(unwrap(e),Expression::UnaryExpression(u) if u.operator==UnaryOperator::Void&&super::super::purity::expression_is_pure(&u.argument))

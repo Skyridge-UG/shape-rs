@@ -1,28 +1,42 @@
 //! `VmSourceIntegrity`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView,
+};
+use crate::signals::catalog::card::{Card, CardBody, CardField};
 use crate::signals::extract::contracts::SourceClass;
 use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, flag_bytes::*};
-use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `VmSourceIntegrity`. Card: [`CARD`].
 pub(crate) fn recognize_vm_source_integrity(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let shaped = view.emissions().iter().all(|emission| {
-        let strings: Vec<&LeafView> = emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::String).collect();
-        let numbers = emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::Number).count();
+        let strings: Vec<&LeafView> = emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.op == LeafOp::String)
+            .collect();
+        let numbers = emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.op == LeafOp::Number)
+            .count();
         strings.len() == 1
             && strings[0].classes == [SourceClass::Literal]
             && numbers >= 3
             && emission.leaves.len() == numbers + 1
-            && emission.leaves.iter().all(|leaf| leaf.repeat_depth == 0 && leaf.choice_depth == 0)
+            && emission
+                .leaves
+                .iter()
+                .all(|leaf| leaf.repeat_depth == 0 && leaf.choice_depth == 0)
     });
     if view.emissions().is_empty() || !shaped {
         return None;
     }
-    let measured = view.leaves().any(|leaf| has_transform(leaf, ".lastIndexOf()"))
+    let measured = view
+        .leaves()
+        .any(|leaf| has_transform(leaf, ".lastIndexOf()"))
         && view.leaves().any(|leaf| has_transform(leaf, ".match()"));
     // The binder names fields from the slot-local write slices; they also
     // prove the measurement when the provenance stops at shared state.
@@ -30,14 +44,19 @@ pub(crate) fn recognize_vm_source_integrity(view: &SlotView, ctx: &FinderCtx) ->
     let sliced = info.facts.call("lastIndexOf") && info.facts.call("match");
     // Builds whose measurement the tracer folded to literals: every emission
     // has three padded values bound to literals (see `vm_source_folded`).
-    let folded = info
-        .emissions
-        .iter()
-        .all(|candidates| !candidates.is_empty() && candidates.iter().all(|emission| vm_source_folded(emission).is_some()));
+    let folded = info.emissions.iter().all(|candidates| {
+        !candidates.is_empty()
+            && candidates
+                .iter()
+                .all(|emission| vm_source_folded(emission).is_some())
+    });
     if !(measured || sliced || folded) {
         return None;
     }
-    claim(&["build marker string", "padded body length / whitespace / punctuation counts of a function source"])
+    claim(&[
+        "build marker string",
+        "padded body length / whitespace / punctuation counts of a function source",
+    ])
 }
 
 fn vm_source_name(write: &buffer_writes::WriteInfo, leaf: &LeafView) -> Option<Hint> {
@@ -51,7 +70,14 @@ fn vm_source_name(write: &buffer_writes::WriteInfo, leaf: &LeafView) -> Option<H
     if padded.call("match") {
         let patterns = padded.regex.iter().chain(padded.strings.iter());
         let whitespace = patterns.clone().any(|p| p.contains("\\s"));
-        return Some(Hint::Name(if whitespace { "whitespaceCount" } else { "punctuationCount" }.into()));
+        return Some(Hint::Name(
+            if whitespace {
+                "whitespaceCount"
+            } else {
+                "punctuationCount"
+            }
+            .into(),
+        ));
     }
     (padded.call("substring") || padded.member("length")).then(|| Hint::Name("bodyLength".into()))
 }
@@ -85,7 +111,11 @@ fn vm_source_folded(emission: &buffer_writes::EmissionInfo) -> Option<Vec<Option
         return None;
     }
     let mut names = vec![None; emission.writes.len()];
-    for ((index, _), name) in ordered.iter().zip(["bodyLength", "whitespaceCount", "punctuationCount"]) {
+    for ((index, _), name) in
+        ordered
+            .iter()
+            .zip(["bodyLength", "whitespaceCount", "punctuationCount"])
+    {
         names[*index] = Some(name);
     }
     Some(names)
@@ -100,9 +130,15 @@ pub(crate) fn bind_vm_source_integrity(
     let mut hints = emission_hints(&info, view, vm_source_name);
     // Folded measurements: the padded fields take their names from the fold
     // order; candidates must agree.
-    for (index, (candidates, view_emission)) in info.emissions.iter().zip(view.emissions()).enumerate() {
-        let folded: Vec<Vec<Option<&'static str>>> = candidates.iter().filter_map(vm_source_folded).collect();
-        if folded.is_empty() || folded.len() != candidates.len() || folded.iter().any(|names| *names != folded[0]) {
+    for (index, (candidates, view_emission)) in
+        info.emissions.iter().zip(view.emissions()).enumerate()
+    {
+        let folded: Vec<Vec<Option<&'static str>>> =
+            candidates.iter().filter_map(vm_source_folded).collect();
+        if folded.is_empty()
+            || folded.len() != candidates.len()
+            || folded.iter().any(|names| *names != folded[0])
+        {
             continue;
         }
         let names = &folded[0];
@@ -127,7 +163,9 @@ pub(crate) fn bind_vm_source_integrity(
         names.sort_by_key(|hint| format!("{hint:?}"));
         names.dedup();
         if names.len() != total {
-            return Err(BindRefusal::new(format!("message {index}: two fields resolve to one card field")));
+            return Err(BindRefusal::new(format!(
+                "message {index}: two fields resolve to one card field"
+            )));
         }
     }
     bind_named(layout, &fields)

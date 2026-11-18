@@ -24,8 +24,8 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn merge_loop_counter_copies(source: &str) -> Result<(String, usize), String> {
     if !source.contains("for (;; ") {
@@ -34,7 +34,13 @@ pub(crate) fn merge_loop_counter_copies(source: &str) -> Result<(String, usize),
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new(), count: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+        count: 0,
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.count == 0 {
         return Ok((source.into(), 0));
@@ -45,7 +51,8 @@ pub(crate) fn merge_loop_counter_copies(source: &str) -> Result<(String, usize),
         return Ok((source.into(), 0));
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("loop counter copy output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("loop counter copy output: {error}"))?;
     Ok((applied.output, scan.count))
 }
 
@@ -83,7 +90,8 @@ impl Scan<'_, '_> {
             return None;
         }
         let copy = match &sum.left {
-            Expression::CallExpression(call) if matches!(&call.callee, Expression::Identifier(callee) if callee.name == "Number" && analysis::identifier_symbol(callee, self.scoping).is_none()) => {
+            Expression::CallExpression(call) if matches!(&call.callee, Expression::Identifier(callee) if callee.name == "Number" && analysis::identifier_symbol(callee, self.scoping).is_none()) =>
+            {
                 let [argument] = call.arguments.as_slice() else {
                     return None;
                 };
@@ -98,7 +106,11 @@ impl Scan<'_, '_> {
         self.nodes.get_node(reference.node_id()).span()
     }
 
-    fn inside_function(&self, reference: &oxc_semantic::Reference, loop_scope: oxc_semantic::ScopeId) -> bool {
+    fn inside_function(
+        &self,
+        reference: &oxc_semantic::Reference,
+        loop_scope: oxc_semantic::ScopeId,
+    ) -> bool {
         // The reference's scope chain reaches the loop's scope only through
         // block scopes.
         let mut scope = self.nodes.get_node(reference.node_id()).scope_id();
@@ -122,7 +134,8 @@ impl Scan<'_, '_> {
             if loop_.test.is_some() || loop_.init.is_some() {
                 continue;
             }
-            let Some((counter, copy)) = loop_.update.as_ref().and_then(|update| self.step(update)) else {
+            let Some((counter, copy)) = loop_.update.as_ref().and_then(|update| self.step(update))
+            else {
                 continue;
             };
             if counter == copy {
@@ -158,15 +171,19 @@ impl Scan<'_, '_> {
                     && (!reference.is_write() || span == copied.left.span())
             });
             // Only the step writes j.
-            let counter_ok = self.scoping.get_resolved_references(counter).all(|reference| {
-                !reference.is_write() || {
-                    let span = self.span_of(reference);
-                    !within(span) || loop_.update.as_ref().is_some_and(|update| match update {
-                        Expression::AssignmentExpression(step) => span == step.left.span(),
-                        _ => false,
-                    })
-                }
-            });
+            let counter_ok = self
+                .scoping
+                .get_resolved_references(counter)
+                .all(|reference| {
+                    !reference.is_write() || {
+                        let span = self.span_of(reference);
+                        !within(span)
+                            || loop_.update.as_ref().is_some_and(|update| match update {
+                                Expression::AssignmentExpression(step) => span == step.left.span(),
+                                _ => false,
+                            })
+                    }
+                });
             if !copy_ok || !counter_ok {
                 continue;
             }
@@ -182,16 +199,22 @@ impl Scan<'_, '_> {
             let counter_name = self.scoping.symbol_name(counter).to_string();
             for reference in &copy_references {
                 if !reference.is_write() {
-                    self.edits.push(analysis::Edit::replace(self.span_of(reference), counter_name.clone()));
+                    self.edits.push(analysis::Edit::replace(
+                        self.span_of(reference),
+                        counter_name.clone(),
+                    ));
                 }
             }
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, first.span)));
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, declared.span)));
+            self.edits
+                .push(analysis::Edit::delete(whole_line(self.source, first.span)));
+            self.edits.push(analysis::Edit::delete(whole_line(
+                self.source,
+                declared.span,
+            )));
             self.count += 1;
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

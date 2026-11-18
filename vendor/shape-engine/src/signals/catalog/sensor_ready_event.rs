@@ -7,8 +7,10 @@ use oxc_ast::AstKind;
 use oxc_span::GetSpan;
 use serde_json::{json, Map, Value};
 
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::leaf_checks::*;
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody};
 
 /// `SensorReadyEvent`. Card: [`CARD`].
@@ -37,7 +39,10 @@ pub(crate) fn bind_sensor_ready_event(
 }
 
 /// The page-visible effect: `{windowFlag, event}`, read from this build.
-pub(crate) fn effect_sensor_ready_event(view: &SlotView, ctx: &FinderCtx) -> Option<Map<String, Value>> {
+pub(crate) fn effect_sensor_ready_event(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Map<String, Value>> {
     let (flag, event) = ready_effect(view, ctx)?;
     let mut effect = Map::new();
     effect.insert("windowFlag".into(), json!(flag));
@@ -68,7 +73,8 @@ fn ready_effect(view: &SlotView, ctx: &FinderCtx) -> Option<(String, String)> {
         if span.start < producer.start || span.end > producer.end {
             continue;
         }
-        if !matches!(assignment.right.without_parentheses(), Expression::BooleanLiteral(value) if value.value) {
+        if !matches!(assignment.right.without_parentheses(), Expression::BooleanLiteral(value) if value.value)
+        {
             continue;
         }
         let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else {

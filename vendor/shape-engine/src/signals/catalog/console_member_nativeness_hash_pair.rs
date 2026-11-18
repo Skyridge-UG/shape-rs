@@ -1,25 +1,39 @@
 //! `ConsoleMemberNativenessHashPair`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `ConsoleMemberNativenessHashPair`. Card: [`CARD`].
-pub(crate) fn recognize_console_member_nativeness_hash_pair(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_console_member_nativeness_hash_pair(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     // A first-char-code sum reduced `% m` (the built-in probe checksum, whose
     // probe table also lists `console` members) is not a names hash.
     let char_code_modulus = view.leaves().any(|leaf| {
-        leaf.transforms.iter().any(|t| t == "%") && leaf.transforms.iter().any(|t| t == ".charCodeAt()" || t == ".charCodeAt")
+        leaf.transforms.iter().any(|t| t == "%")
+            && leaf
+                .transforms
+                .iter()
+                .any(|t| t == ".charCodeAt()" || t == ".charCodeAt")
     });
     (plain_ops(view, &[LeafOp::Number, LeafOp::Number])
         && !char_code_modulus
         && probes(view, &census, "console")
         && census.calls("getOwnPropertyDescriptor")
         && census.list_native.len() >= 2)
-        .then(|| Claim::new(["console member descriptors", "native-code test splits two lists", "two hashes"]))
+        .then(|| {
+            Claim::new([
+                "console member descriptors",
+                "native-code test splits two lists",
+                "two hashes",
+            ])
+        })
 }
 
 pub(crate) fn bind_console_member_nativeness_hash_pair(
@@ -36,11 +50,17 @@ pub(crate) fn bind_console_member_nativeness_hash_pair(
             .list_native
             .get(list)
             .ok_or_else(|| BindRefusal::new("hashed list is not one of the classified lists"))?;
-        Ok(Some(match native.iter().copied().collect::<Vec<bool>>().as_slice() {
-            [true] => "nativeNamesHash",
-            [false] => "nonNativeNamesHash",
-            _ => return Err(BindRefusal::new("hashed list is pushed under both native-test polarities")),
-        }))
+        Ok(Some(
+            match native.iter().copied().collect::<Vec<bool>>().as_slice() {
+                [true] => "nativeNamesHash",
+                [false] => "nonNativeNamesHash",
+                _ => {
+                    return Err(BindRefusal::new(
+                        "hashed list is pushed under both native-test polarities",
+                    ))
+                }
+            },
+        ))
     })?;
     bind_in_order(layout, &names)
 }

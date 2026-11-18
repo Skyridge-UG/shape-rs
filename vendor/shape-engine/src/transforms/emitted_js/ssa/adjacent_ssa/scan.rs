@@ -77,7 +77,10 @@ impl Scan<'_> {
 
     /// The cell a single-binding declaration or plain assignment stores, and
     /// the value it stores there.
-    fn stored_cell<'a, 'b>(&self, first: &'b Statement<'a>) -> Option<(SymbolId, &'b Expression<'a>)> {
+    fn stored_cell<'a, 'b>(
+        &self,
+        first: &'b Statement<'a>,
+    ) -> Option<(SymbolId, &'b Expression<'a>)> {
         match first {
             Statement::VariableDeclaration(d) if d.declarations.len() == 1 => {
                 let (BindingPattern::BindingIdentifier(id), Some(init)) =
@@ -137,9 +140,7 @@ impl Scan<'_> {
                 && self
                     .observed_names
                     .get(name.name.as_str())
-                    .is_none_or(|symbols| {
-                        symbols.iter().all(|symbol| *symbol == function_symbol)
-                    }))
+                    .is_none_or(|symbols| symbols.iter().all(|symbol| *symbol == function_symbol)))
         {
             return true;
         }
@@ -199,7 +200,11 @@ impl Scan<'_> {
         }
     }
 
-    pub(super) fn independent_declaration(&self, first: &Statement<'_>, next: &Statement<'_>) -> bool {
+    pub(super) fn independent_declaration(
+        &self,
+        first: &Statement<'_>,
+        next: &Statement<'_>,
+    ) -> bool {
         let Some((target, init)) = self.stored_cell(first) else {
             return false;
         };
@@ -564,9 +569,7 @@ impl Scan<'_> {
                 .argument
                 .as_ref()
                 .and_then(first_evaluated_identifier),
-            Statement::ThrowStatement(statement) => {
-                first_evaluated_identifier(&statement.argument)
-            }
+            Statement::ThrowStatement(statement) => first_evaluated_identifier(&statement.argument),
             Statement::IfStatement(statement) => first_evaluated_identifier(&statement.test),
             Statement::ExpressionStatement(statement) => prefix_read(
                 &statement.expression,
@@ -630,10 +633,7 @@ impl Scan<'_> {
                 }
                 Statement::VariableDeclaration(d)
                     if d.declarations.len() == 1
-                        && matches!(
-                            d.declarations[0].id,
-                            BindingPattern::BindingIdentifier(_)
-                        ) =>
+                        && matches!(d.declarations[0].id, BindingPattern::BindingIdentifier(_)) =>
                 {
                     d.declarations[0].init.as_ref()
                 }

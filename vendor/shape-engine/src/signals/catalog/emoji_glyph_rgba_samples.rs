@@ -1,16 +1,20 @@
 //! `EmojiGlyphRgbaSamples`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `EmojiGlyphRgbaSamples`. Card: [`CARD`].
 ///
 /// Shape: `count, R{count R{N}}` (no terminator, unlike the scene samples).
 /// Evidence: `fillText` and `getImageData` in the slot's sampling helper.
-pub(crate) fn recognize_emoji_glyph_rgba_samples(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_emoji_glyph_rgba_samples(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     claim_for(view, ctx, "EmojiGlyphRgbaSamples")
 }
 
@@ -23,7 +27,10 @@ pub(crate) fn bind_emoji_glyph_rgba_samples(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let [count, rows] = layout_message.fields.as_slice() else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected `rowCount, rows`")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected `rowCount, rows`"),
+            ));
         };
         let LayoutNode::Array { item } = &rows.node else {
             return Err(refuse(SIGNAL, "rows is not a repeat"));

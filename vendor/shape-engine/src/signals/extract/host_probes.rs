@@ -24,9 +24,9 @@ use oxc_ast::AstKind;
 use oxc_span::Span;
 use serde::{Deserialize, Serialize};
 
+use super::bindings::Model;
 use crate::signals::extract::layout::span_serde;
 use crate::signals::schema::{FunctionRef, WaveRegistry};
-use super::bindings::Model;
 
 /// What a host probe does besides completing its observer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -126,8 +126,7 @@ pub(crate) fn detect(model: &Model<'_, '_>, waves: Option<&WaveRegistry>) -> Vec
                 .iter()
                 .find(|slot| {
                     slot.callback.as_ref().is_some_and(|callback| {
-                        callback.span.start <= site.span.start
-                            && site.span.end <= callback.span.end
+                        callback.span.start <= site.span.start && site.span.end <= callback.span.end
                     })
                 })
                 .map(|slot| slot.signal as u32)
@@ -144,7 +143,10 @@ pub(crate) fn detect(model: &Model<'_, '_>, waves: Option<&WaveRegistry>) -> Vec
     probes
 }
 
-fn reference_symbol(identifier: &IdentifierReference<'_>, model: &Model<'_, '_>) -> Option<oxc_semantic::SymbolId> {
+fn reference_symbol(
+    identifier: &IdentifierReference<'_>,
+    model: &Model<'_, '_>,
+) -> Option<oxc_semantic::SymbolId> {
     identifier
         .reference_id
         .get()

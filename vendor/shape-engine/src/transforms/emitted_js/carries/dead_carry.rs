@@ -111,15 +111,18 @@ impl Pruning<'_, '_> {
     }
     /// Whether `value` reads a binding declared before `at` in its function.
     fn stable_before(&self, value: ReferenceId, at: Span) -> bool {
-        self.scoping.get_reference(value).symbol_id().is_some_and(|symbol| {
-            self.declaration_spans
-                .get(&symbol)
-                .is_some_and(|source_declaration| {
-                    source_declaration.end < at.start
-                        && self.scan.enclosing_function(*source_declaration)
-                            == self.scan.enclosing_function(at)
-                })
-        })
+        self.scoping
+            .get_reference(value)
+            .symbol_id()
+            .is_some_and(|symbol| {
+                self.declaration_spans
+                    .get(&symbol)
+                    .is_some_and(|source_declaration| {
+                        source_declaration.end < at.start
+                            && self.scan.enclosing_function(*source_declaration)
+                                == self.scan.enclosing_function(at)
+                    })
+            })
     }
     /// The dead carries and the edits to their stores.
     ///
@@ -137,8 +140,7 @@ impl Pruning<'_, '_> {
                     continue;
                 }
                 for binding in &declaration.bindings {
-                    if !binding.name.starts_with("$CARRY_") || selected.contains(&binding.symbol)
-                    {
+                    if !binding.name.starts_with("$CARRY_") || selected.contains(&binding.symbol) {
                         continue;
                     }
                     let Some((changes, dropped)) =
@@ -189,13 +191,21 @@ impl Pruning<'_, '_> {
             let dropped: BTreeSet<ReferenceId> = dropped_reads
                 .iter()
                 .copied()
-                .chain(assumed.iter().flat_map(|(_, _, dropped)| dropped.iter().copied()))
+                .chain(
+                    assumed
+                        .iter()
+                        .flat_map(|(_, _, dropped)| dropped.iter().copied()),
+                )
                 .collect();
             let before = assumed.len();
             assumed.retain(|(symbol, _, _)| {
-                self.scoping.get_resolved_reference_ids(*symbol).iter().all(|reference| {
-                    self.scoping.get_reference(*reference).is_write() || dropped.contains(reference)
-                })
+                self.scoping
+                    .get_resolved_reference_ids(*symbol)
+                    .iter()
+                    .all(|reference| {
+                        self.scoping.get_reference(*reference).is_write()
+                            || dropped.contains(reference)
+                    })
             });
             if assumed.len() == before {
                 break;
@@ -214,7 +224,9 @@ impl Pruning<'_, '_> {
         binding: &Binding,
         dropped_reads: &BTreeSet<ReferenceId>,
     ) -> Option<(Vec<analysis::Edit>, Vec<ReferenceId>)> {
-        self.stores_of(declaration, binding, &|reference| dropped_reads.contains(&reference))
+        self.stores_of(declaration, binding, &|reference| {
+            dropped_reads.contains(&reference)
+        })
     }
     /// [`Self::dead_stores`] with `dropped` telling which reads go.
     fn stores_of(
@@ -283,11 +295,15 @@ impl Pruning<'_, '_> {
             let Some(symbol) = self.scoping.get_reference(bare.reference).symbol_id() else {
                 continue;
             };
-            if !self.declaration_spans.get(&symbol).is_some_and(|declaration| {
-                declaration.end < bare.statement.start
-                    && self.scan.enclosing_function(*declaration)
-                        == self.scan.enclosing_function(bare.statement)
-            }) {
+            if !self
+                .declaration_spans
+                .get(&symbol)
+                .is_some_and(|declaration| {
+                    declaration.end < bare.statement.start
+                        && self.scan.enclosing_function(*declaration)
+                            == self.scan.enclosing_function(bare.statement)
+                })
+            {
                 continue;
             }
             if self.commented(bare.statement) {
@@ -521,7 +537,11 @@ mod tests {
         let source = "function f(x, buf) {\n  let $CARRY_a = x;\n  let $CARRY_k = 0;\n  for (let i = 0; i < 3; i++) {\n    let $CARRY_b;\n    if (x) {\n      $CARRY_b = $CARRY_k + 1;\n    } else {\n      $CARRY_b = $CARRY_a;\n    }\n    if (i) {\n      $CARRY_a = buf;\n    } else {\n      $CARRY_a = $CARRY_b;\n    }\n    $CARRY_k = $CARRY_k + 1;\n  }\n  return $CARRY_k;\n}";
         let result = remove_dead_carries(source).unwrap();
         assert_eq!(result.removed_carries, 2, "{}", result.code);
-        assert!(!result.code.contains("$CARRY_a") && !result.code.contains("$CARRY_b"), "{}", result.code);
+        assert!(
+            !result.code.contains("$CARRY_a") && !result.code.contains("$CARRY_b"),
+            "{}",
+            result.code
+        );
         assert!(result.code.contains("return $CARRY_k;"), "{}", result.code);
     }
     #[test]

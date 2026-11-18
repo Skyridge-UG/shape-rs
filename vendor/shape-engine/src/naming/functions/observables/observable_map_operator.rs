@@ -223,7 +223,11 @@ pub(in crate::naming) fn native_origin(
         .map(|_| ())
         .or_else(|| {
             (depth > 0)
-                .then(|| crate::naming::functions::observables::joined_observables::constructor_epochs(m, e, factory))
+                .then(|| {
+                    crate::naming::functions::observables::joined_observables::constructor_epochs(
+                        m, e, factory,
+                    )
+                })
                 .flatten()
         })
 }
@@ -242,15 +246,27 @@ fn native_origin_witness(
 }
 
 pub(in crate::naming) fn ordinary_origin(
-    m: &Model<'_, '_>, e: &Expression<'_>, factory: Sym, depth: usize,
+    m: &Model<'_, '_>,
+    e: &Expression<'_>,
+    factory: Sym,
+    depth: usize,
 ) -> Option<()> {
-    crate::naming::functions::observables::subscription_operators::closed_constructor(m, id(m, e)?, &mut BTreeSet::new(), 32)?;
+    crate::naming::functions::observables::subscription_operators::closed_constructor(
+        m,
+        id(m, e)?,
+        &mut BTreeSet::new(),
+        32,
+    )?;
     origin_witness(m, e, factory, depth, false, true).map(|_| ())
 }
 
 fn origin_witness(
-    m: &Model<'_, '_>, e: &Expression<'_>, factory: Sym, depth: usize,
-    canonical: bool, ordinary: bool,
+    m: &Model<'_, '_>,
+    e: &Expression<'_>,
+    factory: Sym,
+    depth: usize,
+    canonical: bool,
+    ordinary: bool,
 ) -> Option<Span> {
     if depth == 0 {
         return None;
@@ -308,7 +324,10 @@ fn prove(
 }
 
 fn prove_with_origin(
-    m: &Model<'_, '_>, f: &Function<'_>, canonical: bool, ordinary: bool,
+    m: &Model<'_, '_>,
+    f: &Function<'_>,
+    canonical: bool,
+    ordinary: bool,
 ) -> Option<(Vec<(Span, &'static str)>, Span)> {
     // A named expression's private self symbol is not its external callable binding.
     if f.r#type != FunctionType::FunctionDeclaration {
@@ -551,7 +570,10 @@ pub(in crate::naming) fn evaluate(
 #[cfg(test)]
 mod ordinary_subscriber_tests {
     use super::*;
-    const SOURCE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/program/observable-setup-order/ordinary-parent.js"));
+    const SOURCE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/program/observable-setup-order/ordinary-parent.js"
+    ));
 
     fn check(source: &str, expected: bool) {
         let allocator = oxc_allocator::Allocator::default();
@@ -559,32 +581,93 @@ mod ordinary_subscriber_tests {
         assert!(parsed.errors.is_empty());
         let built = oxc_semantic::SemanticBuilder::new().build(&parsed.program);
         assert!(built.errors.is_empty());
-        let model = Model::new(source, &parsed.program, built.semantic.scoping(), built.semantic.nodes(), ProgramPropertiesLimits::default()).unwrap();
-        let site = model.all_sites().iter().find(|site| site.binding_symbol.is_some_and(|symbol| model.scoping.symbol_name(symbol) == "$THREAD_0_97602")).unwrap();
-        let AstKind::Function(f) = model.nodes.kind(site.node_id) else { panic!() };
-        assert!(prove(&model, f, false).is_none(), "ordinary API cannot become a native class");
-        assert_eq!(prove_with_origin(&model, f, false, true).is_some(), expected);
+        let model = Model::new(
+            source,
+            &parsed.program,
+            built.semantic.scoping(),
+            built.semantic.nodes(),
+            ProgramPropertiesLimits::default(),
+        )
+        .unwrap();
+        let site = model
+            .all_sites()
+            .iter()
+            .find(|site| {
+                site.binding_symbol
+                    .is_some_and(|symbol| model.scoping.symbol_name(symbol) == "$THREAD_0_97602")
+            })
+            .unwrap();
+        let AstKind::Function(f) = model.nodes.kind(site.node_id) else {
+            panic!()
+        };
+        assert!(
+            prove(&model, f, false).is_none(),
+            "ordinary API cannot become a native class"
+        );
+        assert_eq!(
+            prove_with_origin(&model, f, false, true).is_some(),
+            expected
+        );
     }
 
     #[test]
     fn ordinary_subscriber_all_pending_owned_protocols() {
         let result = crate::naming::name_threads(SOURCE, true).unwrap();
-        for original in ["$THREAD_5_71287", "$THREAD_2_93791", "$THREAD_5_48376", "$THREAD_6_88619", "$THREAD_2_114334", "$THREAD_0_97602", "$THREAD_4_146881", "$THREAD_0_29295", "$THREAD_4_47451", "$THREAD_6_110189", "$THREAD_7_121548", "$THREAD_7_91130", "$THREAD_0_93824", "$THREAD_1_11284", "$THREAD_4_4533", "$THREAD_7_82402", "$THREAD_6_34813", "$THREAD_5_100991"] {
-            let outcome = result.report.outcomes.iter().find(|o| o.binding.name == original).unwrap();
-            assert!(outcome.applied, "unresolved ordinary protocol {original}: {:?}", outcome.reason);
+        for original in [
+            "$THREAD_5_71287",
+            "$THREAD_2_93791",
+            "$THREAD_5_48376",
+            "$THREAD_6_88619",
+            "$THREAD_2_114334",
+            "$THREAD_0_97602",
+            "$THREAD_4_146881",
+            "$THREAD_0_29295",
+            "$THREAD_4_47451",
+            "$THREAD_6_110189",
+            "$THREAD_7_121548",
+            "$THREAD_7_91130",
+            "$THREAD_0_93824",
+            "$THREAD_1_11284",
+            "$THREAD_4_4533",
+            "$THREAD_7_82402",
+            "$THREAD_6_34813",
+            "$THREAD_5_100991",
+        ] {
+            let outcome = result
+                .report
+                .outcomes
+                .iter()
+                .find(|o| o.binding.name == original)
+                .unwrap();
+            assert!(
+                outcome.applied,
+                "unresolved ordinary protocol {original}: {:?}",
+                outcome.reason
+            );
         }
     }
 
     #[test]
     fn ordinary_subscriber_map_whole_protocol_and_near_misses() {
         check(SOURCE, true);
-        check(&SOURCE.replace("$KEY_203", "streamConstructor").replace("$BQ", "inputValue"), true);
+        check(
+            &SOURCE
+                .replace("$KEY_203", "streamConstructor")
+                .replace("$BQ", "inputValue"),
+            true,
+        );
         for (from, to) in [
             ("$KEY_2.next($KEY_0($BQ))", "$KEY_2.next($KEY_0($BQ, $BQ))"),
             ("$KEY_7 ? $BO : $KEY_203", "unknown ? $BO : $KEY_203"),
-            ("$BN($KEY_7, $KEY_7 ? $BO : $KEY_203", r#"eval("sideEffect()"); $BN($KEY_7, $KEY_7 ? $BO : $KEY_203"#),
+            (
+                "$BN($KEY_7, $KEY_7 ? $BO : $KEY_203",
+                r#"eval("sideEffect()"); $BN($KEY_7, $KEY_7 ? $BO : $KEY_203"#,
+            ),
             ("typeof $BM !== \"function\"", "typeof $BM === \"function\""),
-            ("$KEY_203 = $THREAD_2_101607();", "$KEY_203 = $THREAD_2_101607(); $KEY_203.prototype.subscribe = other;"),
+            (
+                "$KEY_203 = $THREAD_2_101607();",
+                "$KEY_203 = $THREAD_2_101607(); $KEY_203.prototype.subscribe = other;",
+            ),
         ] {
             assert!(SOURCE.contains(from), "missing mutation anchor {from}");
             check(&SOURCE.replacen(from, to, 1), false);

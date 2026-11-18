@@ -5,13 +5,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{Scoping, SymbolId};
 use oxc_span::GetSpan;
 use oxc_syntax::scope::ScopeFlags;
-use crate::transforms::emitted_js::support::unwrap;
 
 pub(crate) fn simplify_branch_facts(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();

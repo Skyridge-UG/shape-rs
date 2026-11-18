@@ -13,18 +13,19 @@ use super::super::{
     inline_constant_slots, inline_literal_ssa, inline_path_temporaries, inline_remaining_helpers,
     inline_single_use_carry_joins, inline_single_use_literals, inline_small_helpers,
     inline_tuple_helpers, inline_vm_sub_wrappers, join_let_runs, lift_loop_counters,
-    merge_derived_values, merge_loop_counter_copies, move_store_declarations, name_bindings_by_position,
-    name_generated_roles, name_loop_and_catch_bindings, name_prototype_methods,
-    name_vm_sub_parameters, native_for_in_loops, nest_literals, optional_chains,
-    place_key_declarations, rebuild_classes, reconstruct_loops, remove_carry_self_assignments,
-    remove_dead_carries, remove_dead_ssa, remove_discarded_argument_reads, remove_empty_else_blocks,
-    remove_needless_loop_labels, remove_noop_local_reads, remove_redundant_initializers,
-    remove_unread_key_stores, remove_unused_keys, replace_vm_values, resugar_expressions,
-    scalarize_literal_tuples, share_vm_sub_helpers, shorten_generated_names,
-    simplify_readable_program_property_writes, simplify_vm_sub_bodies, split_loop_tests,
-    split_single_reads, step_copied_counters, thread_parameters, tidy_empty_starts,
-    tidy_expressions, tidy_final_expressions, unpack_fresh_helper_tuples, unwrap_host_globals,
-    unwrap_single_pass_loops, split_block_key_webs,
+    merge_derived_values, merge_loop_counter_copies, move_store_declarations,
+    name_bindings_by_position, name_generated_roles, name_loop_and_catch_bindings,
+    name_prototype_methods, name_vm_sub_parameters, native_for_in_loops, nest_literals,
+    optional_chains, place_key_declarations, rebuild_classes, reconstruct_loops,
+    remove_carry_self_assignments, remove_dead_carries, remove_dead_ssa,
+    remove_discarded_argument_reads, remove_empty_else_blocks, remove_needless_loop_labels,
+    remove_noop_local_reads, remove_redundant_initializers, remove_unread_key_stores,
+    remove_unused_keys, replace_vm_values, resugar_expressions, scalarize_literal_tuples,
+    share_vm_sub_helpers, shorten_generated_names, simplify_readable_program_property_writes,
+    simplify_vm_sub_bodies, split_block_key_webs, split_loop_tests, split_single_reads,
+    step_copied_counters, thread_parameters, tidy_empty_starts, tidy_expressions,
+    tidy_final_expressions, unpack_fresh_helper_tuples, unwrap_host_globals,
+    unwrap_single_pass_loops,
 };
 
 /// Writes a stage's code under its file name when stage dumping is on.
@@ -78,13 +79,22 @@ code_field!(
 );
 
 /// The code a stage wrote, or its error after `context`.
-fn stage<O: PassOutput, E: std::fmt::Display>(context: &str, result: Result<O, E>) -> Result<String, String> {
-    result.map(PassOutput::into_code).map_err(|error| format!("{context}: {error}"))
+fn stage<O: PassOutput, E: std::fmt::Display>(
+    context: &str,
+    result: Result<O, E>,
+) -> Result<String, String> {
+    result
+        .map(PassOutput::into_code)
+        .map_err(|error| format!("{context}: {error}"))
 }
 
 /// The cleanup stages one function goes through (`01-…13b-`): `fold_strings`
 /// folds VM string-decoder calls whose arguments became literals.
-pub fn clean_function(code: String, fold_strings: &dyn Fn(String) -> String, dump_stage: Dump) -> Result<String, String> {
+pub fn clean_function(
+    code: String,
+    fold_strings: &dyn Fn(String) -> String,
+    dump_stage: Dump,
+) -> Result<String, String> {
     let code = ssa_and_carries(code, dump_stage)?;
     let code = vm_helpers(code, dump_stage)?;
     let code = dead_code_and_loops(code, dump_stage)?;
@@ -130,9 +140,15 @@ fn ssa_and_carries(code: String, dump_stage: Dump) -> Result<String, String> {
     dump_stage("03-literal-branch-joins.js", &code)?;
     let code = stage("literal SSA", inline_literal_ssa(&code))?;
     dump_stage("04-literal-ssa.js", &code)?;
-    let code = stage("readable property writes", simplify_readable_program_property_writes(&code))?;
+    let code = stage(
+        "readable property writes",
+        simplify_readable_program_property_writes(&code),
+    )?;
     dump_stage("06-readable-property-writes.js", &code)?;
-    let code = stage("cannot inline carry joins", inline_single_use_carry_joins(&code))?;
+    let code = stage(
+        "cannot inline carry joins",
+        inline_single_use_carry_joins(&code),
+    )?;
     dump_stage("07-carry-joins.js", &code)?;
     let mut code = code;
     // Coalescing one branch join exposes the copy immediately above it. The
@@ -147,7 +163,10 @@ fn ssa_and_carries(code: String, dump_stage: Dump) -> Result<String, String> {
         }
     }
     dump_stage("07b-carry-coalesced.js", &code)?;
-    let code = stage("cannot remove carry self-assignments", remove_carry_self_assignments(&code))?;
+    let code = stage(
+        "cannot remove carry self-assignments",
+        remove_carry_self_assignments(&code),
+    )?;
     dump_stage("07b2-carry-self-assignments.js", &code)?;
     let mut code = code;
     for _ in 0..4 {
@@ -218,7 +237,10 @@ fn vm_helpers(code: String, dump_stage: Dump) -> Result<String, String> {
     debug_assert!(wrapper_inlined == 0 || scalarized.code.len() < before_wrapper_bytes);
     let code = scalarized.code;
     dump_stage("11b3-scalar-tuples.js", &code)?;
-    let mut code = stage("cannot inline scalarized SSA aliases", inline_alias_ssa(&code))?;
+    let mut code = stage(
+        "cannot inline scalarized SSA aliases",
+        inline_alias_ssa(&code),
+    )?;
     for _ in 0..4 {
         let cleaned = inline_adjacent_ssa(&code)
             .map_err(|error| format!("cannot inline scalarized adjacent SSA: {error}"))?;
@@ -272,21 +294,36 @@ fn dead_code_and_loops(code: String, dump_stage: Dump) -> Result<String, String>
         }
     }
     dump_stage("11c4-dead-after-keys.js", &code)?;
-    let code = stage("cannot remove unused argument reads", remove_discarded_argument_reads(&code))?;
+    let code = stage(
+        "cannot remove unused argument reads",
+        remove_discarded_argument_reads(&code),
+    )?;
     dump_stage("11c5-argument-reads.js", &code)?;
-    let code = stage("cannot remove exposed carry self-assignments", remove_carry_self_assignments(&code))?;
-    let code = stage("cannot remove empty else blocks", remove_empty_else_blocks(&code))?;
+    let code = stage(
+        "cannot remove exposed carry self-assignments",
+        remove_carry_self_assignments(&code),
+    )?;
+    let code = stage(
+        "cannot remove empty else blocks",
+        remove_empty_else_blocks(&code),
+    )?;
     dump_stage("11d-empty-else.js", &code)?;
     // A loop nothing jumps back to runs its body once: it goes, so the
     // loop around it shows its shape.
-    let code = stage("cannot unwrap single-pass loops", unwrap_single_pass_loops(&code))?;
+    let code = stage(
+        "cannot unwrap single-pass loops",
+        unwrap_single_pass_loops(&code),
+    )?;
     let protected_keys = collect_key_names(&code);
-    let code = stage("cannot reconstruct loops", reconstruct_loops(&code, &protected_keys))?;
+    let code = stage(
+        "cannot reconstruct loops",
+        reconstruct_loops(&code, &protected_keys),
+    )?;
     dump_stage("11d2-reconstructed-loops.js", &code)?;
     let code = stage("cannot lift loop counters", lift_loop_counters(&code))?;
     dump_stage("11d3-lifted-loop-counters.js", &code)?;
-    let fills = fold_literal_fills(&code)
-        .map_err(|error| format!("cannot fold literal fills: {error}"))?;
+    let fills =
+        fold_literal_fills(&code).map_err(|error| format!("cannot fold literal fills: {error}"))?;
     let code = fills.code;
     dump_stage("11e2-fold-literal-fills.js", &code)?;
     // Loop tests computed in steps become statements while their
@@ -311,12 +348,16 @@ fn dead_code_and_loops(code: String, dump_stage: Dump) -> Result<String, String>
 }
 
 /// 11h0-…11h5-: helper bodies tidied, small and tuple helpers expanded.
-fn helper_expansion(code: String, fold_strings: &dyn Fn(String) -> String, dump_stage: Dump) -> Result<String, String> {
+fn helper_expansion(
+    code: String,
+    fold_strings: &dyn Fn(String) -> String,
+    dump_stage: Dump,
+) -> Result<String, String> {
     // Helper bodies still hold their own temporaries and spell method
     // calls as `o[k].call(o, …)`; forward and fold them first so the
     // helpers are one line and can expand.
-    let forwarded = forward_values(&code)
-        .map_err(|error| format!("cannot forward helper bodies: {error}"))?;
+    let forwarded =
+        forward_values(&code).map_err(|error| format!("cannot forward helper bodies: {error}"))?;
     let resugared = resugar_expressions(&forwarded.code)
         .map_err(|error| format!("cannot resugar helper bodies: {error}"))?;
     let code = resugared.code;
@@ -352,12 +393,21 @@ fn helper_expansion(code: String, fold_strings: &dyn Fn(String) -> String, dump_
     dump_stage("11h3-expanded-literal-fills.js", &code)?;
     // Helper expansion turns a counter's update into plain arithmetic, so a
     // second lifting round sees counters the first one could not.
-    let code = stage("cannot lift expanded loop counters", lift_loop_counters(&code))?;
-    let code = stage("cannot name expanded loop bindings", name_loop_and_catch_bindings(&code))?;
+    let code = stage(
+        "cannot lift expanded loop counters",
+        lift_loop_counters(&code),
+    )?;
+    let code = stage(
+        "cannot name expanded loop bindings",
+        name_loop_and_catch_bindings(&code),
+    )?;
     dump_stage("11h4-lifted-loop-counters.js", &code)?;
     // Forwarding reads through `(0, e)` wrappers as opaque: drop the
     // meaningless ones first.
-    let code = stage("cannot tidy expressions before forwarding", tidy_expressions(&code))?;
+    let code = stage(
+        "cannot tidy expressions before forwarding",
+        tidy_expressions(&code),
+    )?;
     dump_stage("11h5-tidied.js", &code)?;
     expanded_loops(code, dump_stage)
 }
@@ -435,8 +485,8 @@ fn forwarded_round(code: &str) -> Result<(String, bool), String> {
     // where forwarding can see them.
     let (diamonds, tails) = hoist_branch_tails(&diamonds)
         .map_err(|error| format!("cannot hoist branch tails: {error}"))?;
-    let flat = flatten_exits(&diamonds)
-        .map_err(|error| format!("cannot flatten exits: {error}"))?;
+    let flat =
+        flatten_exits(&diamonds).map_err(|error| format!("cannot flatten exits: {error}"))?;
     // Forwarded store values can now join the literal they fill.
     let fills = fold_literal_fills(&flat.code)
         .map_err(|error| format!("cannot fold forwarded literal fills: {error}"))?;
@@ -467,7 +517,10 @@ fn dead_after_forwarding(code: &str) -> Result<(String, usize), String> {
     // A dropped `$KEY = arguments[n]` store leaves its read behind.
     let (cleaned, removed_reads) = remove_discarded_argument_reads(&keys.code)
         .map_err(|error| format!("cannot remove argument reads left by forwarding: {error}"))?;
-    Ok((cleaned, dead.removed + carries.removed_carries + keys.removed_stores + removed_reads))
+    Ok((
+        cleaned,
+        dead.removed + carries.removed_carries + keys.removed_stores + removed_reads,
+    ))
 }
 
 /// 11l2-…11o-: local vars, then derived values merged and single reads split
@@ -571,7 +624,10 @@ fn expanded_loops(code: String, dump_stage: Dump) -> Result<String, String> {
     if !code.contains("vm_loop_") {
         return Ok(code);
     }
-    let code = stage("cannot unwrap late single-pass loops", unwrap_single_pass_loops(&code))?;
+    let code = stage(
+        "cannot unwrap late single-pass loops",
+        unwrap_single_pass_loops(&code),
+    )?;
     let protected_keys = collect_key_names(&code);
     let (code, rebuilt) = reconstruct_loops(&code, &protected_keys)
         .map_err(|error| format!("cannot reconstruct late loops: {error}"))?;
@@ -599,8 +655,11 @@ fn merge_until_settled(mut code: String, context: &str) -> Result<String, String
 }
 
 /// 13b-: the final tidy, loop restructuring and declaration placement.
-fn final_tidy(code: String, fold_strings: &dyn Fn(String) -> String, dump_stage: Dump) -> Result<String, String> {
-
+fn final_tidy(
+    code: String,
+    fold_strings: &dyn Fn(String) -> String,
+    dump_stage: Dump,
+) -> Result<String, String> {
     let code = fold_strings(code);
     // Forwarding leaves slots whose reads all moved: their stores go.
     let code = stage("cannot clean late local vars", clean_local_vars(&code))?;
@@ -610,17 +669,23 @@ fn final_tidy(code: String, fold_strings: &dyn Fn(String) -> String, dump_stage:
     let code = stage("cannot resugar late values", resugar_expressions(&code))?;
     // A split comma test's counter copy reads as the counter, so the tidy
     // rebuilds the counted loop.
-    let code = stage("cannot merge loop counter copies", merge_loop_counter_copies(&code))?;
+    let code = stage(
+        "cannot merge loop counter copies",
+        merge_loop_counter_copies(&code),
+    )?;
     // Lowered `?.` chains go back to `?.`; the tidy drops the parentheses
     // the conditionals needed.
     let code = stage("cannot restore optional chains", optional_chains(&code))?;
     // The final tidy is per function: it runs here, on each thread.
     let code = stage("cannot tidy expressions", tidy_final_expressions(&code))?;
     // The tidy writes each arm's counter steps alike: shared tails move out.
-    let (code, hoisted) = hoist_branch_tails(&code).map_err(|error| format!("cannot hoist tidied branch tails: {error}"))?;
+    let (code, hoisted) = hoist_branch_tails(&code)
+        .map_err(|error| format!("cannot hoist tidied branch tails: {error}"))?;
     // A moved step folds into the store after it.
     let code = if hoisted > 0 {
-        tidy_final_expressions(&code).map_err(|error| format!("cannot tidy hoisted tails: {error}"))?.code
+        tidy_final_expressions(&code)
+            .map_err(|error| format!("cannot tidy hoisted tails: {error}"))?
+            .code
     } else {
         code
     };
@@ -630,9 +695,15 @@ fn final_tidy(code: String, fold_strings: &dyn Fn(String) -> String, dump_stage:
     // its own: its own binding of the slot's name.
     let code = stage("cannot split key webs", split_block_key_webs(&code))?;
     // Each slot variable is declared once, where its uses are.
-    let code = stage("cannot place key declarations", place_key_declarations(&code))?;
+    let code = stage(
+        "cannot place key declarations",
+        place_key_declarations(&code),
+    )?;
     // Loop labels the restructured jumps no longer need go.
-    let code = stage("cannot drop loop labels", remove_needless_loop_labels(&code))?;
+    let code = stage(
+        "cannot drop loop labels",
+        remove_needless_loop_labels(&code),
+    )?;
     // A body's closing `return void 0;` is implicit.
     let code = stage("cannot drop trailing returns", drop_trailing_returns(&code))?;
     dump_stage("13b-tidy-expressions.js", &code)?;
@@ -670,19 +741,31 @@ pub fn finish_program(
     dump_stage("13c4-parameters.js", &code)?;
     // The VM values the program still names: the native catalogue and
     // the root's empty result.
-    let code = stage("cannot replace vm values", replace_vm_values(&code, native_functions, source))?;
+    let code = stage(
+        "cannot replace vm values",
+        replace_vm_values(&code, native_functions, source),
+    )?;
     // A slot that only holds a global's value (`Array.prototype.push`,
     // `window`, a `RegExp`) is read as that value.
     let code = stage("cannot inline constant slots", inline_constant_slots(&code))?;
     // Slots nothing reads or writes anywhere go.
     let code = stage("cannot remove unused keys", remove_unused_keys(&code))?;
-    let code = stage("cannot name bindings by position", name_bindings_by_position(&code))?;
+    let code = stage(
+        "cannot name bindings by position",
+        name_bindings_by_position(&code),
+    )?;
     dump_stage("13d-positional-names.js", &code)?;
     // `[].push` is `Array.prototype.push`, `{}.hasOwnProperty`
     // `Object.prototype.hasOwnProperty`.
-    let code = stage("cannot name prototype methods", name_prototype_methods(&code))?;
+    let code = stage(
+        "cannot name prototype methods",
+        name_prototype_methods(&code),
+    )?;
     // A property read held for the next statement is read there.
-    let code = stage("cannot inline path temporaries", inline_path_temporaries(&code))?;
+    let code = stage(
+        "cannot inline path temporaries",
+        inline_path_temporaries(&code),
+    )?;
     // `let q = [x, void 0]; q[1] = y;` → `let q = [x, y];`.
     let code = stage("cannot fold array fills", fold_array_fills(&code))?;
     // `let a = x | 0; a = a | y << 1; … use(a)`: one expression at the use.
@@ -691,11 +774,17 @@ pub fn finish_program(
     let code = stage("cannot step copied counters", step_copied_counters(&code))?;
     // `!(a === b)` → `a !== b`; `!(i < n)` → `i >= n` over numbers that
     // are never NaN.
-    let code = stage("cannot flip negated comparisons", flip_negated_comparisons(&code))?;
+    let code = stage(
+        "cannot flip negated comparisons",
+        flip_negated_comparisons(&code),
+    )?;
     // `let x = void 0;` → `let x;`, and `let x; x = e;` → `let x = e;`.
     let code = stage("cannot tidy empty starts", tidy_empty_starts(&code))?;
     // A literal read once by the next statement is built there.
-    let code = stage("cannot inline adjacent literals", inline_adjacent_literals(&code))?;
+    let code = stage(
+        "cannot inline adjacent literals",
+        inline_adjacent_literals(&code),
+    )?;
     // `let a;\nlet b;` → `let a, b;`, once nothing else merges a `let`.
     let code = stage("cannot join let runs", join_let_runs(&code))?;
     // Last: `o["k"]` → `o.k`, `{ ["k"]: v }` → `{ k: v }`. Earlier passes
@@ -704,7 +793,10 @@ pub fn finish_program(
     let code = stage("cannot dot property names", dotted_properties(&code))?;
     // A function declaration (and its alias) between two property stores to
     // the same object moves after the run, so the stores read together.
-    let code = stage("cannot move declarations out of store runs", move_store_declarations(&code))?;
+    let code = stage(
+        "cannot move declarations out of store runs",
+        move_store_declarations(&code),
+    )?;
     dump_stage("13f-store-declarations.js", &code)?;
     Ok(code)
 }

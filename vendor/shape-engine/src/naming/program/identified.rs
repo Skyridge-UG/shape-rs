@@ -27,10 +27,12 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_span::GetSpan;
 
 use crate::analysis;
+use crate::naming::semantic_names::{
+    plan_semantic_names_with_properties, SemanticNamesError, SemanticNamingPlan,
+};
 use crate::signals::extract::layout::{LeafKind, WireOp};
 use crate::signals::extract::scanner::extract_program_properties;
 use crate::signals::schema::{ProgramProperties, ProgramPropertiesError, SignalRecord};
-use crate::naming::semantic_names::{plan_semantic_names_with_properties, SemanticNamesError, SemanticNamingPlan};
 
 use super::local_names::{apply_local_names, LocalNameOptions, LocalNamesResult};
 use super::{
@@ -192,10 +194,7 @@ pub fn identify_and_transform_with_local_names(
     let local_names = if options.rename {
         apply_local_names(&transform.transformed_source, local_names)?
     } else {
-        apply_local_names(
-            &transform.transformed_source,
-            LocalNameOptions::disabled(),
-        )?
+        apply_local_names(&transform.transformed_source, LocalNameOptions::disabled())?
     };
     let transformed_source = local_names.transformed_source.clone();
 

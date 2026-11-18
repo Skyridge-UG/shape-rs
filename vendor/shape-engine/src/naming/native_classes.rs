@@ -1,7 +1,7 @@
 //! Explicit native binding route. A class label requires a whole owned family
 //! contract; nearby method/property bags are not class identity evidence.
-use crate::signals::analysis::roles::FinderClaim;
 use super::*;
+use crate::signals::analysis::roles::FinderClaim;
 
 pub(super) fn plan(
     program: &Program,
@@ -60,7 +60,8 @@ pub(super) fn plan(
                 outcome.reason = None;
             }
             Err(evidence) => {
-                outcome.reason = Some("conflicting canonical class names for the same class span".into());
+                outcome.reason =
+                    Some("conflicting canonical class names for the same class span".into());
                 outcome.explanation = evidence;
             }
             Ok(None) => {}
@@ -119,13 +120,24 @@ pub(super) fn plan(
 }
 
 // Group complete family proofs at the exact class span, never first-wins.
-fn class_claim(claims: &[FinderClaim], span: oxc_span::Span)
-    -> Result<Option<(&'static str, &'static str, Confidence, Vec<String>)>, Vec<String>>
-{
+fn class_claim(
+    claims: &[FinderClaim],
+    span: oxc_span::Span,
+) -> Result<Option<(&'static str, &'static str, Confidence, Vec<String>)>, Vec<String>> {
     let mut grouped = BTreeMap::<&str, (&str, Confidence, BTreeSet<String>)>::new();
     for claim in claims {
-        let FinderClaim::ClassBinding { role, class_span, confidence, evidence } = claim else { continue };
-        if *class_span != span { continue; }
+        let FinderClaim::ClassBinding {
+            role,
+            class_span,
+            confidence,
+            evidence,
+        } = claim
+        else {
+            continue;
+        };
+        if *class_span != span {
+            continue;
+        }
         let name = match *role {
             "owned_observable_class" => "Observable",
             "owned_value_encoder_class" => "ValueEncoder",
@@ -139,27 +151,48 @@ fn class_claim(claims: &[FinderClaim], span: oxc_span::Span)
             "subscription_observer_class" => "SubscriptionObserver",
             _ => continue,
         };
-        let entry = grouped.entry(name).or_insert((*role, *confidence, BTreeSet::new()));
+        let entry = grouped
+            .entry(name)
+            .or_insert((*role, *confidence, BTreeSet::new()));
         entry.2.extend(evidence.iter().cloned());
     }
     // A definition description never competes with an accepted042 family
     // claim (or repairs an existing conflict). It is a naming fallback only.
     if grouped.is_empty() {
         for claim in claims {
-            let FinderClaim::ClassBinding { role, class_span, confidence, evidence } = claim else { continue };
+            let FinderClaim::ClassBinding {
+                role,
+                class_span,
+                confidence,
+                evidence,
+            } = claim
+            else {
+                continue;
+            };
             if *class_span == span && *role == "owned_reverse_snapshot_notifier_definition" {
-                let entry = grouped.entry("ReverseSnapshotNotifier")
-                    .or_insert((*role, *confidence, BTreeSet::new()));
+                let entry = grouped.entry("ReverseSnapshotNotifier").or_insert((
+                    *role,
+                    *confidence,
+                    BTreeSet::new(),
+                ));
                 entry.2.extend(evidence.iter().cloned());
             }
         }
     }
     if grouped.len() > 1 {
-        return Err(grouped.into_iter().flat_map(|(name, (_, _, evidence))|
-            std::iter::once(format!("conflicting complete proof: {name}")).chain(evidence)).collect());
+        return Err(grouped
+            .into_iter()
+            .flat_map(|(name, (_, _, evidence))| {
+                std::iter::once(format!("conflicting complete proof: {name}")).chain(evidence)
+            })
+            .collect());
     }
-    Ok(grouped.into_iter().next().map(|(name, (role, confidence, evidence))|
-        (name, role, confidence, evidence.into_iter().collect())))
+    Ok(grouped
+        .into_iter()
+        .next()
+        .map(|(name, (role, confidence, evidence))| {
+            (name, role, confidence, evidence.into_iter().collect())
+        }))
 }
 
 #[cfg(test)]
@@ -168,35 +201,78 @@ mod tests {
     #[test]
     fn native_claims_deduplicate_agreement_and_refuse_conflict_in_either_order() {
         let span = oxc_span::Span::new(10, 20);
-        let proof = |role, text: &str| FinderClaim::ClassBinding { role, class_span: span,
-            confidence: Confidence::High, evidence: vec![text.into()] };
+        let proof = |role, text: &str| FinderClaim::ClassBinding {
+            role,
+            class_span: span,
+            confidence: Confidence::High,
+            evidence: vec![text.into()],
+        };
         let a = proof("owned_observable_class", "owned");
         let b = proof("owned_observable_class", "owned");
-        assert_eq!(class_claim(&[a.clone(), b], span).unwrap().unwrap().3, vec!["owned"]);
+        assert_eq!(
+            class_claim(&[a.clone(), b], span).unwrap().unwrap().3,
+            vec!["owned"]
+        );
         let encoder = proof("owned_value_encoder_class", "returned encoder");
-        assert_eq!(class_claim(&[encoder.clone()], span).unwrap().unwrap().0, "ValueEncoder");
+        assert_eq!(
+            class_claim(&[encoder.clone()], span).unwrap().unwrap().0,
+            "ValueEncoder"
+        );
         assert!(class_claim(&[a.clone(), encoder], span).is_err());
         let c = proof("subscription_class", "lifecycle");
         assert!(class_claim(&[a.clone(), c.clone()], span).is_err());
         assert!(class_claim(&[c, a], span).is_err());
-        assert!(class_claim(&[proof("weak_finder_class", "bag")], span).unwrap().is_none());
-        assert!(class_claim(&[proof("subscription_class", "other span")], oxc_span::Span::new(21, 30)).unwrap().is_none());
+        assert!(class_claim(&[proof("weak_finder_class", "bag")], span)
+            .unwrap()
+            .is_none());
+        assert!(class_claim(
+            &[proof("subscription_class", "other span")],
+            oxc_span::Span::new(21, 30)
+        )
+        .unwrap()
+        .is_none());
     }
     #[test]
     fn definition_name_is_only_a_fallback_and_never_repairs_old_conflicts() {
         let span = oxc_span::Span::new(10, 20);
         let make = |role, text: &str| FinderClaim::ClassBinding {
-            role, class_span: span, confidence: Confidence::High, evidence: vec![text.into()],
+            role,
+            class_span: span,
+            confidence: Confidence::High,
+            evidence: vec![text.into()],
         };
-        let definition = make("owned_reverse_snapshot_notifier_definition", "definition only");
-        assert_eq!(class_claim(&[definition.clone()], span).unwrap().unwrap().0, "ReverseSnapshotNotifier");
-        for role in ["owned_callback_notifier_reverse_class", "owned_callback_notifier_forward_class", "owned_observable_class"] {
+        let definition = make(
+            "owned_reverse_snapshot_notifier_definition",
+            "definition only",
+        );
+        assert_eq!(
+            class_claim(&[definition.clone()], span).unwrap().unwrap().0,
+            "ReverseSnapshotNotifier"
+        );
+        for role in [
+            "owned_callback_notifier_reverse_class",
+            "owned_callback_notifier_forward_class",
+            "owned_observable_class",
+        ] {
             let old = make(role, "accepted042 evidence");
             let before = class_claim(&[old.clone()], span).unwrap();
-            assert_eq!(class_claim(&[old.clone(), definition.clone()], span).unwrap(), before);
-            assert_eq!(class_claim(&[definition.clone(), old], span).unwrap(), before);
+            assert_eq!(
+                class_claim(&[old.clone(), definition.clone()], span).unwrap(),
+                before
+            );
+            assert_eq!(
+                class_claim(&[definition.clone(), old], span).unwrap(),
+                before
+            );
         }
-        assert!(class_claim(&[make("owned_observable_class", "old"), definition, make("owned_value_encoder_class", "old")], span).is_err());
+        assert!(class_claim(
+            &[
+                make("owned_observable_class", "old"),
+                definition,
+                make("owned_value_encoder_class", "old")
+            ],
+            span
+        )
+        .is_err());
     }
-
 }

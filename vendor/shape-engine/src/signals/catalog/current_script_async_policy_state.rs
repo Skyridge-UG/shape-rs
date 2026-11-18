@@ -1,23 +1,33 @@
 //! `CurrentScriptAsyncPolicyState`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use std::collections::BTreeSet;
-use oxc_semantic::SymbolId;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use oxc_semantic::SymbolId;
+use std::collections::BTreeSet;
+use value_facts::slot_facts;
 
 /// `CurrentScriptAsyncPolicyState`. Card: [`CARD`].
-pub(crate) fn recognize_current_script_async_policy_state(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
-    if !per_emission_counts(view, 1, 0..=0) || view.has_repeat() || !leaf_transform(view, ".policyHash") {
+pub(crate) fn recognize_current_script_async_policy_state(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
+    if !per_emission_counts(view, 1, 0..=0)
+        || view.has_repeat()
+        || !leaf_transform(view, ".policyHash")
+    {
         return None;
     }
     let facts = slot_facts(view, ctx);
-    facts
-        .any_member("policyHash")
-        .then(|| Claim::new(["script policy record policyHash", "currentScript.async packed byte"]))
+    facts.any_member("policyHash").then(|| {
+        Claim::new([
+            "script policy record policyHash",
+            "currentScript.async packed byte",
+        ])
+    })
 }
 
 pub(crate) fn bind_current_script_async_policy_state(
@@ -28,7 +38,9 @@ pub(crate) fn bind_current_script_async_policy_state(
     let mut binder = Binder::new(view, layout, ctx)?;
     let fields = binder.top_count();
     if fields.iter().any(|count| !(5..=6).contains(count)) {
-        return Err(BindRefusal::new(format!("layout has {fields:?} top-level fields; the card names 5 or 6")));
+        return Err(BindRefusal::new(format!(
+            "layout has {fields:?} top-level fields; the card names 5 or 6"
+        )));
     }
     // Optional tags (choices of literal bytes) are told apart by their
     // guard: the async-absent tag tests the `async` read; the policy-absent
@@ -51,9 +63,13 @@ pub(crate) fn bind_current_script_async_policy_state(
     // the other arm's byte are `scriptFlags`.
     let mut async_groups: Vec<(usize, String, Vec<(String, &'static str)>)> = Vec::new();
     for (message, fields) in binder.messages.iter().enumerate() {
-        for field in fields.iter().filter(|field| field.shape == Shape::Choice && !field.arms.is_empty()) {
+        for field in fields
+            .iter()
+            .filter(|field| field.shape == Shape::Choice && !field.arms.is_empty())
+        {
             let guard = field.guard_slice(ctx, 4);
-            let script = guard.members.contains_key("async") || guard.members.contains_key("currentScript");
+            let script =
+                guard.members.contains_key("async") || guard.members.contains_key("currentScript");
             let mut arm_names = Vec::new();
             for arm in &field.arms {
                 match arm.as_slice() {
@@ -81,10 +97,17 @@ pub(crate) fn bind_current_script_async_policy_state(
     }
     let mut tag_choices = Vec::new();
     for (message, fields) in binder.messages.iter().enumerate() {
-        for field in fields.iter().filter(|field| field.shape == Shape::Choice && field.is_tag()) {
+        for field in fields
+            .iter()
+            .filter(|field| field.shape == Shape::Choice && field.is_tag())
+        {
             let guard = field.guard_slice(ctx, 4);
-            let policy = guard.symbols.iter().any(|(symbol, _)| hash_symbols[message].contains(symbol));
-            let script = guard.members.contains_key("async") || guard.members.contains_key("currentScript");
+            let policy = guard
+                .symbols
+                .iter()
+                .any(|(symbol, _)| hash_symbols[message].contains(symbol));
+            let script =
+                guard.members.contains_key("async") || guard.members.contains_key("currentScript");
             // The async read is direct evidence; a shared register can put
             // the record's binding into the async guard's slice too.
             let name = match (script, policy) {
@@ -106,12 +129,18 @@ pub(crate) fn bind_current_script_async_policy_state(
         if index == 0 {
             unconditional = 0;
         }
-        if async_groups.iter().any(|(m, key, _)| *m == message && *key == field.key) {
+        if async_groups
+            .iter()
+            .any(|(m, key, _)| *m == message && *key == field.key)
+        {
             Some("asyncState")
         } else if field.leaf_kinds().contains(&LeafKind::String) {
             Some("policyHash")
         } else if field.shape == Shape::Choice {
-            tag_choices.iter().find(|(m, key, _)| *m == message && *key == field.key).map(|(_, _, name)| *name)
+            tag_choices
+                .iter()
+                .find(|(m, key, _)| *m == message && *key == field.key)
+                .map(|(_, _, name)| *name)
         } else if !field.is_tag() {
             Some("scriptFlags")
         } else {

@@ -1,11 +1,12 @@
 //! `AnimationFrameTimings`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 // ===========================================================================
 // Recognizers and binders
@@ -22,10 +23,12 @@ pub(crate) fn recognize_animation_frame_timings(view: &SlotView, ctx: &FinderCtx
         return None;
     }
     let facts = slot_facts(view, ctx);
-    facts
-        .timers
-        .contains("requestAnimationFrame")
-        .then(|| Claim::new(["requestAnimationFrame callback fills the sampled list", "RAW4 NUMBER NUMBER REPEAT{NUMBER}"]))
+    facts.timers.contains("requestAnimationFrame").then(|| {
+        Claim::new([
+            "requestAnimationFrame callback fills the sampled list",
+            "RAW4 NUMBER NUMBER REPEAT{NUMBER}",
+        ])
+    })
 }
 
 pub(crate) fn bind_animation_frame_timings(

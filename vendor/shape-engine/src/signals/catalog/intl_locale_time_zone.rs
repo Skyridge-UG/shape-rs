@@ -1,10 +1,11 @@
 //! `IntlLocaleTimeZone`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView, ValueSlice};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView, ValueSlice,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `IntlLocaleTimeZone`. Card: [`CARD`].
 pub(crate) fn recognize_intl_locale_time_zone(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -15,10 +16,15 @@ pub(crate) fn recognize_intl_locale_time_zone(view: &SlotView, ctx: &FinderCtx) 
         .count();
     let offset = any_transform(&leaves, ".getTimezoneOffset()");
     let locale = leaves.iter().any(|leaf| {
-        has_transform(leaf, ".resolvedOptions()") && leaf.apis.iter().any(|api| api.starts_with("new Intl."))
+        has_transform(leaf, ".resolvedOptions()")
+            && leaf.apis.iter().any(|api| api.starts_with("new Intl."))
     });
     if supported >= 3 && offset && locale && max_top_count(&view.shapes()) >= 10 {
-        return claim(&["3+ Intl.supportedValuesOf counts", "Intl resolvedOptions locales", "getTimezoneOffset"]);
+        return claim(&[
+            "3+ Intl.supportedValuesOf counts",
+            "Intl resolvedOptions locales",
+            "getTimezoneOffset",
+        ]);
     }
     None
 }
@@ -32,7 +38,14 @@ pub(crate) fn bind_intl_locale_time_zone(
     // their string argument and the four locale strings in the constructed
     // `Intl` service; both are read from the value at each field's own write
     // site (leaf provenance shares registers with companion slots).
-    const KINDS: &[&str] = &["calendar", "collation", "currency", "numberingSystem", "timeZone", "unit"];
+    const KINDS: &[&str] = &[
+        "calendar",
+        "collation",
+        "currency",
+        "numberingSystem",
+        "timeZone",
+        "unit",
+    ];
     const SERVICES: &[&str] = &["Segmenter", "DisplayNames", "DateTimeFormat", "Collator"];
     fn kinds(slice: &ValueSlice) -> Vec<&str> {
         let mut out: Vec<&str> = slice
@@ -45,14 +58,22 @@ pub(crate) fn bind_intl_locale_time_zone(
         out
     }
     fn services(slice: &ValueSlice) -> Vec<&'static str> {
-        SERVICES.iter().copied().filter(|service| slice.constructs(service)).collect()
+        SERVICES
+            .iter()
+            .copied()
+            .filter(|service| slice.constructs(service))
+            .collect()
     }
     let count = |kind: &'static str| {
-        move |field: &Field, slice: &ValueSlice| field.writes(LeafKind::Number) && kinds(slice) == [kind]
+        move |field: &Field, slice: &ValueSlice| {
+            field.writes(LeafKind::Number) && kinds(slice) == [kind]
+        }
     };
     let locale = |service: &'static str| {
         move |field: &Field, slice: &ValueSlice| {
-            field.writes(LeafKind::String) && kinds(slice).is_empty() && services(slice) == [service]
+            field.writes(LeafKind::String)
+                && kinds(slice).is_empty()
+                && services(slice) == [service]
         }
     };
     let calendar = count("calendar");
@@ -72,7 +93,9 @@ pub(crate) fn bind_intl_locale_time_zone(
             && services(slice) == ["DateTimeFormat"]
     };
     let offset = |field: &Field, slice: &ValueSlice| {
-        field.writes(LeafKind::Number) && kinds(slice).is_empty() && slice.calls_method("getTimezoneOffset")
+        field.writes(LeafKind::Number)
+            && kinds(slice).is_empty()
+            && slice.calls_method("getTimezoneOffset")
     };
     // Five hops: fresh traces reach a locale through reused registers
     // (`a = k; k = r; r = "" + o.locale; o = new Intl.X(…)`).

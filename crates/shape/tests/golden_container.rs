@@ -6,8 +6,11 @@ const ALPHA: &str = include_str!("../../../tools/bandai-alphabet.txt");
 
 /// Custom-b64 decode per the engine's symbol-table semantics.
 fn decode(text: &str, alphabet: &str) -> Vec<u8> {
-    let symbols: std::collections::HashMap<char, u8> =
-        alphabet.chars().enumerate().map(|(i, c)| (c, i as u8)).collect();
+    let symbols: std::collections::HashMap<char, u8> = alphabet
+        .chars()
+        .enumerate()
+        .map(|(i, c)| (c, i as u8))
+        .collect();
     let mut out = Vec::new();
     let mut acc: u32 = 0;
     let mut bits = 0u32;

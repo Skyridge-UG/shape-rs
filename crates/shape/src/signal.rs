@@ -1,4 +1,4 @@
-﻿//! Typed signal values and the four-channel report the encoders consume.
+//! Typed signal values and the four-channel report the encoders consume.
 //!
 //! Mirrors the reference `Report` shape (errors / positional / signals /
 //! keyed) without exposing its serde serialization details; the wire layer
@@ -191,7 +191,10 @@ impl NamedSignals {
         Self::validate_pairs_static(&pairs, catalog)
     }
 
-    fn validate_pairs_static(pairs: &[(&'static str, &Value)], catalog: &[SignalDef]) -> Result<()> {
+    fn validate_pairs_static(
+        pairs: &[(&'static str, &Value)],
+        catalog: &[SignalDef],
+    ) -> Result<()> {
         for (name, value) in pairs {
             let def = catalog
                 .iter()

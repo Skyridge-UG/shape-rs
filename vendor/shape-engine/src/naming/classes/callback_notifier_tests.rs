@@ -1,5 +1,5 @@
-use crate::signals::schema::ProgramPropertiesLimits;
 use super::*;
+use crate::signals::schema::ProgramPropertiesLimits;
 
 const REVERSE_FIXTURE: &str =
     include_str!("../../../tests/fixtures/program/callback-notifier/native-reverse.js");
@@ -311,32 +311,42 @@ fn real_returned_subclass_effects_invalidate_native_claim_and_base_dependency() 
     }
 }
 
-const LOWERED_NATIVE_FIXTURE: &str = include_str!(
-    "../../../tests/fixtures/program/callback-notifier/ordinary-callback-base.js"
-);
-const ORDINARY_REVERSE_FIXTURE: &str = include_str!(
-    "../../../tests/fixtures/program/callback-notifier/ordinary-reverse-base.js"
-);
-const ORDINARY_FORWARD_FIXTURE: &str = include_str!(
-    "../../../tests/fixtures/program/callback-notifier/ordinary-forward-base.js"
-);
+const LOWERED_NATIVE_FIXTURE: &str =
+    include_str!("../../../tests/fixtures/program/callback-notifier/ordinary-callback-base.js");
+const ORDINARY_REVERSE_FIXTURE: &str =
+    include_str!("../../../tests/fixtures/program/callback-notifier/ordinary-reverse-base.js");
+const ORDINARY_FORWARD_FIXTURE: &str =
+    include_str!("../../../tests/fixtures/program/callback-notifier/ordinary-forward-base.js");
 
 fn ordinary_contract(source: &str, expected: bool) {
     inspect(source, |model| {
-        let symbol = model.nodes.iter().find_map(|n| match n.kind() {
-            AstKind::Function(f) if f.params.items.is_empty()
-                && f.body.as_ref().is_some_and(|b| b.statements.len() == 1) =>
-                f.id.as_ref().and_then(|id| id.symbol_id.get()),
-            _ => None,
-        }).expect("retained ordinary constructor");
+        let symbol = model
+            .nodes
+            .iter()
+            .find_map(|n| match n.kind() {
+                AstKind::Function(f)
+                    if f.params.items.is_empty()
+                        && f.body.as_ref().is_some_and(|b| b.statements.len() == 1) =>
+                {
+                    f.id.as_ref().and_then(|id| id.symbol_id.get())
+                }
+                _ => None,
+            })
+            .expect("retained ordinary constructor");
         assert_eq!(proves_base(model, symbol), expected, "{source}");
-        assert!(claims(model).is_empty(), "ordinary dependency is not a native/function gain");
+        assert!(
+            claims(model).is_empty(),
+            "ordinary dependency is not a native/function gain"
+        );
     });
 }
 
 #[test]
 fn current_lowered_native_reverse_preserves_complete_protocol() {
-    native_base_contract(LOWERED_NATIVE_FIXTURE, Some("owned_callback_notifier_reverse_class"));
+    native_base_contract(
+        LOWERED_NATIVE_FIXTURE,
+        Some("owned_callback_notifier_reverse_class"),
+    );
     for (from, to) in [
         ("i = Number($AM)", "i = Number($AM) + 1"),
         ("$AM = i - 1", "$AM = i + 1"),
@@ -350,7 +360,10 @@ fn current_lowered_native_reverse_preserves_complete_protocol() {
         assert!(LOWERED_NATIVE_FIXTURE.contains(from));
         native_base_contract(&LOWERED_NATIVE_FIXTURE.replace(from, to), None);
     }
-    native_base_contract(&format!("let Number = foreign; {LOWERED_NATIVE_FIXTURE}"), None);
+    native_base_contract(
+        &format!("let Number = foreign; {LOWERED_NATIVE_FIXTURE}"),
+        None,
+    );
 }
 
 #[test]
@@ -358,13 +371,27 @@ fn ordinary_reverse_and_live_forward_are_complete_owned_base_dependencies() {
     ordinary_contract(ORDINARY_REVERSE_FIXTURE, true);
     ordinary_contract(ORDINARY_FORWARD_FIXTURE, true);
     for source in [ORDINARY_REVERSE_FIXTURE, ORDINARY_FORWARD_FIXTURE] {
-        ordinary_contract(&with_subclass_element(source,
-            "static { super.prototype.notify = foreign; }"), false);
-        ordinary_contract(&source.replace("this.callbacks = [];", "this.callbacks = null;"), false);
+        ordinary_contract(
+            &with_subclass_element(source, "static { super.prototype.notify = foreign; }"),
+            false,
+        );
+        ordinary_contract(
+            &source.replace("this.callbacks = [];", "this.callbacks = null;"),
+            false,
+        );
         ordinary_contract(&source.replace(".call(void 0,", ".call(this,"), false);
-        ordinary_contract(&source.replace("catch (e) {}", "catch (e) { throw e; }"), false);
-        ordinary_contract(&source.replace(".prototype.notify =", ".prototype.other ="), false);
-        ordinary_contract(&source.replace(".prototype.clear =", ".prototype.register ="), false);
+        ordinary_contract(
+            &source.replace("catch (e) {}", "catch (e) { throw e; }"),
+            false,
+        );
+        ordinary_contract(
+            &source.replace(".prototype.notify =", ".prototype.other ="),
+            false,
+        );
+        ordinary_contract(
+            &source.replace(".prototype.clear =", ".prototype.register ="),
+            false,
+        );
         ordinary_contract(&format!("return; {source}"), false);
     }
     // Origin aliases are scoped, stable and traversed at every hop.
@@ -375,21 +402,34 @@ fn ordinary_reverse_and_live_forward_are_complete_owned_base_dependencies() {
     ordinary_contract(&aliased, true);
     inspect(&aliased, |model| {
         for name in ["first", "second"] {
-            let symbol = model.scoping.symbol_ids().find(|s| model.scoping.symbol_name(*s) == name).unwrap();
+            let symbol = model
+                .scoping
+                .symbol_ids()
+                .find(|s| model.scoping.symbol_name(*s) == name)
+                .unwrap();
             assert!(proves_base(model, symbol));
         }
     });
     ordinary_contract(&format!("{aliased} first = foreign;"), false);
     ordinary_contract(&format!("{aliased} escape(second);"), false);
-    ordinary_contract(&format!("{aliased} second.prototype.notify = foreign;"), false);
-    ordinary_contract(&ORDINARY_REVERSE_FIXTURE.replace(
-        "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
-        "if (false) { $THREAD_5_99971.prototype.notify = $THREAD_2_99666; }",
-    ), false);
-    ordinary_contract(&ORDINARY_REVERSE_FIXTURE.replace(
-        "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
-        "let dead = $THREAD_5_99971.prototype.notify;",
-    ), false);
+    ordinary_contract(
+        &format!("{aliased} second.prototype.notify = foreign;"),
+        false,
+    );
+    ordinary_contract(
+        &ORDINARY_REVERSE_FIXTURE.replace(
+            "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
+            "if (false) { $THREAD_5_99971.prototype.notify = $THREAD_2_99666; }",
+        ),
+        false,
+    );
+    ordinary_contract(
+        &ORDINARY_REVERSE_FIXTURE.replace(
+            "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
+            "let dead = $THREAD_5_99971.prototype.notify;",
+        ),
+        false,
+    );
     ordinary_contract(&ORDINARY_REVERSE_FIXTURE.replace(
         "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
         "let premature = new $THREAD_5_99971(); $THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
@@ -399,7 +439,11 @@ fn ordinary_reverse_and_live_forward_are_complete_owned_base_dependencies() {
 fn descriptors(source: &str) -> String {
     let mut result = String::new();
     for line in source.lines() {
-        if let Some((left, right)) = line.trim().strip_suffix(';').and_then(|s| s.split_once(" = ")) {
+        if let Some((left, right)) = line
+            .trim()
+            .strip_suffix(';')
+            .and_then(|s| s.split_once(" = "))
+        {
             if let Some((base, method)) = left.split_once(".prototype.") {
                 result.push_str(&format!("Object.defineProperty({base}.prototype, '{method}', {{value:{right}, writable:true, configurable:true, enumerable:false}});\n"));
                 continue;
@@ -430,26 +474,42 @@ fn ordinary_descriptors_are_exact_owned_installations_and_never_donor_bags() {
         ordinary_contract(&format!("let Object = foreign; {complete}"), false);
         ordinary_contract(&with_subclass_element(&complete, "[foreign()]() {}"), false);
     }
-    ordinary_contract(&ORDINARY_REVERSE_FIXTURE.replace(
-        "let $BR = $THREAD_3_76512($THREAD_5_99971);",
-        "return; let $BR = $THREAD_3_76512($THREAD_5_99971);",
-    ), false);
-    let unused = ORDINARY_REVERSE_FIXTURE.lines().filter(|line| !line.contains("new $BR()"))
-        .collect::<Vec<_>>().join("\n");
+    ordinary_contract(
+        &ORDINARY_REVERSE_FIXTURE.replace(
+            "let $BR = $THREAD_3_76512($THREAD_5_99971);",
+            "return; let $BR = $THREAD_3_76512($THREAD_5_99971);",
+        ),
+        false,
+    );
+    let unused = ORDINARY_REVERSE_FIXTURE
+        .lines()
+        .filter(|line| !line.contains("new $BR()"))
+        .collect::<Vec<_>>()
+        .join("\n");
     ordinary_contract(&unused, false);
     ordinary_contract(&format!("{unused} let unusedAlias = $BR;"), false);
-    ordinary_contract(&format!("{ORDINARY_REVERSE_FIXTURE} escape($THREAD_2_99666);"), false);
-    ordinary_contract(&ORDINARY_REVERSE_FIXTURE.replace(
-        "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
-        "function donorInstaller() { $THREAD_5_99971.prototype.notify = $THREAD_2_99666; }",
-    ), false);
+    ordinary_contract(
+        &format!("{ORDINARY_REVERSE_FIXTURE} escape($THREAD_2_99666);"),
+        false,
+    );
+    ordinary_contract(
+        &ORDINARY_REVERSE_FIXTURE.replace(
+            "$THREAD_5_99971.prototype.notify = $THREAD_2_99666;",
+            "function donorInstaller() { $THREAD_5_99971.prototype.notify = $THREAD_2_99666; }",
+        ),
+        false,
+    );
 }
 
 // The definition label is useful on actual indexed declarations without
 // becoming a base-protocol proof for this module's downstream consumers.
 #[test]
 fn indexed_definition_cannot_authorize_base_or_lazy_registry_proofs() {
-    let definition = format!("{}{}\n}}", REVERSE.split("notify(payload)").next().unwrap(), INDEXED_DEFINITION_NOTIFY);
+    let definition = format!(
+        "{}{}\n}}",
+        REVERSE.split("notify(payload)").next().unwrap(),
+        INDEXED_DEFINITION_NOTIFY
+    );
     for result_use in [
         "let instance = new Derived(); instance.constructor.__proto__.prototype.notify = foreign;",
         "let instance = new Derived(); let alias = instance; alias.constructor.__proto__.prototype.notify = foreign;",
@@ -483,25 +543,55 @@ fn real_lazy_consumer_positive_loses_only_strong_proof_when_base_becomes_indexed
     let accepted = include_str!("../../../tests/fixtures/program/lazy-registry/native-reverse.js");
     let mut changed = accepted.to_string();
     inspect(accepted, |model| {
-        let base = model.nodes.iter().find_map(|n| match n.kind() {
-            AstKind::Class(c) if c.super_class.is_none() => Some(c), _ => None,
-        }).unwrap();
+        let base = model
+            .nodes
+            .iter()
+            .find_map(|n| match n.kind() {
+                AstKind::Class(c) if c.super_class.is_none() => Some(c),
+                _ => None,
+            })
+            .unwrap();
         let symbol = base.id.as_ref().unwrap().symbol_id.get().unwrap();
-        assert!(proves_base(model, symbol), "real supported legacy base positive control");
-        assert!(crate::naming::classes::lazy_registry::claims(model).iter().any(|c| c.role() == "owned_lazy_hook_registry_class"), "real complete installer positive control");
-        let replacement = format!("{}{}\n}}", REVERSE.split("notify(payload)").next().unwrap(), INDEXED_DEFINITION_NOTIFY)
-            .replacen("Notifier", base.id.as_ref().unwrap().name.as_str(), 1);
+        assert!(
+            proves_base(model, symbol),
+            "real supported legacy base positive control"
+        );
+        assert!(
+            crate::naming::classes::lazy_registry::claims(model)
+                .iter()
+                .any(|c| c.role() == "owned_lazy_hook_registry_class"),
+            "real complete installer positive control"
+        );
+        let replacement = format!(
+            "{}{}\n}}",
+            REVERSE.split("notify(payload)").next().unwrap(),
+            INDEXED_DEFINITION_NOTIFY
+        )
+        .replacen("Notifier", base.id.as_ref().unwrap().name.as_str(), 1);
         // This is a test mutation of the actual own declaration, preserving the
         // operational installer and caller, not borrowed evidence for the base.
         let prefix = "function bootstrap() {\n".len();
-        changed.replace_range(base.span.start as usize - prefix..base.span.end as usize - prefix, &replacement);
+        changed.replace_range(
+            base.span.start as usize - prefix..base.span.end as usize - prefix,
+            &replacement,
+        );
     });
     inspect(&changed, |model| {
-        let base = model.nodes.iter().find_map(|n| match n.kind() {
-            AstKind::Class(c) if c.super_class.is_none() => Some(c), _ => None,
-        }).unwrap();
+        let base = model
+            .nodes
+            .iter()
+            .find_map(|n| match n.kind() {
+                AstKind::Class(c) if c.super_class.is_none() => Some(c),
+                _ => None,
+            })
+            .unwrap();
         assert!(definition_claim(model, base).is_some());
-        assert!(!proves_base(model, base.id.as_ref().unwrap().symbol_id.get().unwrap()));
-        assert!(crate::naming::classes::lazy_registry::claims(model).iter().all(|c| c.role() != "owned_lazy_hook_registry_class"));
+        assert!(!proves_base(
+            model,
+            base.id.as_ref().unwrap().symbol_id.get().unwrap()
+        ));
+        assert!(crate::naming::classes::lazy_registry::claims(model)
+            .iter()
+            .all(|c| c.role() != "owned_lazy_hook_registry_class"));
     });
 }

@@ -14,10 +14,13 @@
 //! `ShuffledDateString`, `UserAgentData`, `WebRtcIceCandidateAddresses`,
 //! `WorkerRealmProfile`.
 
-use crate::signals::extract::contracts::SourceClass;
 use super::layout_nodes::{kind_matches, node_kinds, node_leaf_count, writes_value};
 use super::leaf_checks::{has_api, has_class, has_transform, literal_only};
-use super::{BindRefusal, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafView, SignalLayout, SlotView, ValueSlice};
+use super::{
+    BindRefusal, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafView,
+    SignalLayout, SlotView, ValueSlice,
+};
+use crate::signals::extract::contracts::SourceClass;
 
 /// One projected field together with the value leaves it covers.
 pub(crate) struct Field<'a> {
@@ -27,7 +30,10 @@ pub(crate) struct Field<'a> {
 }
 
 /// Pair each field with its run of `leaves` (by leaf count).
-pub(crate) fn split_fields<'a>(fields: &'a [LayoutField], leaves: &'a [LeafView]) -> Vec<Field<'a>> {
+pub(crate) fn split_fields<'a>(
+    fields: &'a [LayoutField],
+    leaves: &'a [LeafView],
+) -> Vec<Field<'a>> {
     let mut out = Vec::new();
     let mut at = 0usize;
     for field in fields {
@@ -70,16 +76,25 @@ pub(crate) fn message_fields<'a>(
                 // Fields borrow a run of leaves: a part must cover one.
                 let indices = emission.part_leaves(index);
                 let (first, count) = (indices.first().copied().unwrap_or(0), indices.len());
-                if indices.iter().enumerate().any(|(at, leaf)| *leaf != first + at) {
+                if indices
+                    .iter()
+                    .enumerate()
+                    .any(|(at, leaf)| *leaf != first + at)
+                {
                     return Err(BindRefusal::new(format!(
                         "message {message}: the part's leaves are not one run of the emission"
                     )));
                 }
                 let part_leaves = &leaves[first..first + count];
                 let mut kinds = Vec::new();
-                part.fields.iter().for_each(|field| node_kinds(&field.node, &mut kinds));
+                part.fields
+                    .iter()
+                    .for_each(|field| node_kinds(&field.node, &mut kinds));
                 if kinds.len() != part_leaves.len()
-                    || kinds.iter().zip(part_leaves).any(|(kind, leaf)| !kind_matches(*kind, leaf.op))
+                    || kinds
+                        .iter()
+                        .zip(part_leaves)
+                        .any(|(kind, leaf)| !kind_matches(*kind, leaf.op))
                 {
                     return Err(BindRefusal::new(format!(
                         "message {message}: layout leaf kinds differ from the emission leaves"
@@ -89,13 +104,17 @@ pub(crate) fn message_fields<'a>(
             }
         }
     }
-    Err(BindRefusal::new(format!("message {message}: no emission projects to it")))
+    Err(BindRefusal::new(format!(
+        "message {message}: no emission projects to it"
+    )))
 }
 
 impl<'a> Field<'a> {
     /// Some leaf has provenance transform `transform`.
     pub(crate) fn tr(&self, transform: &str) -> bool {
-        self.leaves.iter().any(|leaf| has_transform(leaf, transform))
+        self.leaves
+            .iter()
+            .any(|leaf| has_transform(leaf, transform))
     }
 
     /// Some leaf reads an API path matching `suffix`.
@@ -162,12 +181,12 @@ pub(crate) fn field_slice(ctx: &FinderCtx, field: &Field, hops: usize) -> ValueS
 /// The test of the innermost `CHOICE` guard shared by every leaf of `field`.
 pub(crate) fn guard_test_of(ctx: &FinderCtx, field: &Field) -> Option<oxc_semantic::NodeId> {
     let first = field.leaves.first()?;
-    let guard = first
-        .write
-        .guards
-        .iter()
-        .rev()
-        .find(|guard| field.leaves.iter().all(|leaf| leaf.write.guards.contains(guard)))?;
+    let guard = first.write.guards.iter().rev().find(|guard| {
+        field
+            .leaves
+            .iter()
+            .all(|leaf| leaf.write.guards.contains(guard))
+    })?;
     ctx.guard_test(*guard)
 }
 
@@ -186,15 +205,24 @@ pub(crate) fn solve_by_slices(
     let mut binding = FieldBinding::new();
     for message in 0..layout.messages.len() {
         let fields = message_fields(view, layout, message)?;
-        let slices: Vec<ValueSlice> = fields.iter().map(|field| field_slice(ctx, field, hops)).collect();
-        let by_key: std::collections::HashMap<&str, &ValueSlice> =
-            fields.iter().map(|field| field.key.as_str()).zip(slices.iter()).collect();
+        let slices: Vec<ValueSlice> = fields
+            .iter()
+            .map(|field| field_slice(ctx, field, hops))
+            .collect();
+        let by_key: std::collections::HashMap<&str, &ValueSlice> = fields
+            .iter()
+            .map(|field| field.key.as_str())
+            .zip(slices.iter())
+            .collect();
         let adapted: Vec<Box<dyn Fn(&Field) -> bool + '_>> = rules
             .iter()
             .map(|(_, rule)| {
                 let by_key = &by_key;
-                Box::new(move |field: &Field| by_key.get(field.key.as_str()).is_some_and(|slice| rule(field, slice)))
-                    as Box<dyn Fn(&Field) -> bool>
+                Box::new(move |field: &Field| {
+                    by_key
+                        .get(field.key.as_str())
+                        .is_some_and(|slice| rule(field, slice))
+                }) as Box<dyn Fn(&Field) -> bool>
             })
             .collect();
         let named: Vec<Rule> = rules
@@ -277,7 +305,11 @@ pub(crate) fn solve(
 }
 
 /// Bind every message of `layout` with the same rules.
-pub(crate) fn solve_all_messages(view: &SlotView, layout: &SignalLayout, rules: &[Rule]) -> Result<FieldBinding, BindRefusal> {
+pub(crate) fn solve_all_messages(
+    view: &SlotView,
+    layout: &SignalLayout,
+    rules: &[Rule],
+) -> Result<FieldBinding, BindRefusal> {
     let mut binding = FieldBinding::new();
     for message in 0..layout.messages.len() {
         let fields = message_fields(view, layout, message)?;

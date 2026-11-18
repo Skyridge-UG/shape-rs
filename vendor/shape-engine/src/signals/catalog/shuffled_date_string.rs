@@ -1,16 +1,23 @@
 //! `ShuffledDateString`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `ShuffledDateString` evidence: NUMBER, NUMBER and the shuffled rendering
 /// (per emission), one of the numbers a bare literal (the constant zero).
 pub(crate) fn is_shuffled_date(shapes: &[&str], leaves: &[&LeafView]) -> bool {
-    let strings = leaves.iter().filter(|leaf| leaf.op == LeafOp::String).count();
-    let numbers = leaves.iter().filter(|leaf| leaf.op == LeafOp::Number).count();
+    let strings = leaves
+        .iter()
+        .filter(|leaf| leaf.op == LeafOp::String)
+        .count();
+    let numbers = leaves
+        .iter()
+        .filter(|leaf| leaf.op == LeafOp::Number)
+        .count();
     top_count_is(shapes, 3)
         && strings > 0
         && numbers == 2 * strings
@@ -19,15 +26,19 @@ pub(crate) fn is_shuffled_date(shapes: &[&str], leaves: &[&LeafView]) -> bool {
             .iter()
             .filter(|leaf| leaf.op == LeafOp::String)
             .all(|leaf| date_to_string(leaf) && shuffled(leaf))
-        && leaves
-            .iter()
-            .any(|leaf| leaf.op == LeafOp::Number && literal_only(leaf) && leaf.transforms.is_empty())
+        && leaves.iter().any(|leaf| {
+            leaf.op == LeafOp::Number && literal_only(leaf) && leaf.transforms.is_empty()
+        })
 }
 
 /// `ShuffledDateString`. Card: [`CARD`].
 pub(crate) fn recognize_shuffled_date_string(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     if is_shuffled_date(&view.shapes(), &leaves_of(view)) {
-        return claim(&["NUMBER NUMBER STRING", "Array.from(new Date(K).toString()) shuffled", "literal zero"]);
+        return claim(&[
+            "NUMBER NUMBER STRING",
+            "Array.from(new Date(K).toString()) shuffled",
+            "literal zero",
+        ]);
     }
     None
 }
@@ -38,14 +49,20 @@ pub(crate) fn bind_shuffled_date_string(
     ctx: &FinderCtx,
 ) -> Result<FieldBinding, BindRefusal> {
     let zero = |f: &Field| {
-        f.is_plain(LeafKind::Number) && f.literal_only() && f.leaves.iter().all(|leaf| leaf.transforms.is_empty())
+        f.is_plain(LeafKind::Number)
+            && f.literal_only()
+            && f.leaves.iter().all(|leaf| leaf.transforms.is_empty())
     };
     let seed = |f: &Field| f.is_plain(LeafKind::Number) && !f.literal_only();
     let string = |f: &Field| f.is_plain(LeafKind::String) && f.tr(".toString()");
     solve_all_messages(
         view,
         layout,
-        &[("zero", &zero), ("shuffleSeed", &seed), ("shuffledDateString", &string)],
+        &[
+            ("zero", &zero),
+            ("shuffleSeed", &seed),
+            ("shuffledDateString", &string),
+        ],
     )
 }
 

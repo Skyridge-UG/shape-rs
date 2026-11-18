@@ -38,12 +38,12 @@ use oxc_semantic::{NodeId, SymbolId};
 use oxc_span::Span;
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::analysis;
 use crate::signals::extract::bindings::{
     call_arguments, numeric_index, object_members_of, ParameterSlots,
 };
 use crate::signals::schema::Confidence;
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 const TAGS: &str = "serializer_encoding_tags";
 const UINT: &str = "serializer_write_unsigned_int";
@@ -92,15 +92,27 @@ const IS_DEPTH_ENTRY: &str = "serializer_encoder_is_depth_extension_entry";
 const REGISTER_OPTION: &str = "serializer_encoder_register_option_extension";
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn main_binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -154,18 +166,40 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
 
 /// The member names that identify the encoding tag table.
 const TAG_TABLE_MEMBERS: &[&str] = &[
-    "UINT14_BASE", "UINT16", "UINT24", "UINT32", "UINT64", "NINT4_BASE", "FLOAT32", "DOUBLE64",
-    "STR5_BASE", "STRREF", "STRLUT", "ARRAY8", "BARRAY8", "MAP_", "BMAP_", "EXTENSION",
+    "UINT14_BASE",
+    "UINT16",
+    "UINT24",
+    "UINT32",
+    "UINT64",
+    "NINT4_BASE",
+    "FLOAT32",
+    "DOUBLE64",
+    "STR5_BASE",
+    "STRREF",
+    "STRLUT",
+    "ARRAY8",
+    "BARRAY8",
+    "MAP_",
+    "BMAP_",
+    "EXTENSION",
 ];
 
 /// What the encoder constructor writes.
-const ENCODER_STATE: &[&str] =
-    &["keysets", "stringHist", "stringPlaceholders", "remainingDepth", "depthBoundExtensionPoint"];
+const ENCODER_STATE: &[&str] = &[
+    "keysets",
+    "stringHist",
+    "stringPlaceholders",
+    "remainingDepth",
+    "depthBoundExtensionPoint",
+];
 
 /// Structural claims of this package.
 pub(crate) fn find(ctx: &FinderCtx) -> Vec<FinderClaim> {
     let index = Index::new(ctx);
-    let mut run = Run { index: &index, claims: Vec::new() };
+    let mut run = Run {
+        index: &index,
+        claims: Vec::new(),
+    };
     let tags = run.tag_tables();
     if tags.is_empty() {
         return run.claims;
@@ -200,9 +234,10 @@ struct FnEntry<'a> {
 impl<'a> FnEntry<'a> {
     fn statements(&self) -> Option<&'a [Statement<'a>]> {
         match self.func {
-            FnNode::Function(function) => {
-                function.body.as_ref().map(|body| body.statements.as_slice())
-            }
+            FnNode::Function(function) => function
+                .body
+                .as_ref()
+                .map(|body| body.statements.as_slice()),
             FnNode::Arrow(arrow) => Some(arrow.body.statements.as_slice()),
         }
     }
@@ -293,7 +328,12 @@ impl<'c, 'a> Index<'c, 'a> {
             };
             if let Some((span, func)) = func {
                 let entry = index.fns.len();
-                index.fns.push(FnEntry { node: id, span, func, parent: owner });
+                index.fns.push(FnEntry {
+                    node: id,
+                    span,
+                    func,
+                    parent: owner,
+                });
                 index.own.push(Own::default());
                 index.fn_of_node[at] = Some(entry);
                 if let Some(owner) = owner {
@@ -314,7 +354,8 @@ impl<'c, 'a> Index<'c, 'a> {
     fn record(&mut self, kind: AstKind<'a>, owner: Option<usize>) {
         match kind {
             AstKind::StaticMemberExpression(member) => {
-                self.members.push((&member.object, member.property.name.as_str()));
+                self.members
+                    .push((&member.object, member.property.name.as_str()));
             }
             AstKind::ComputedMemberExpression(member) => {
                 if let Expression::StringLiteral(literal) = &member.expression {
@@ -337,7 +378,10 @@ impl<'c, 'a> Index<'c, 'a> {
                         if let Some(symbol) =
                             analysis::identifier_symbol(identifier, self.ctx.scoping)
                         {
-                            self.writes.entry(symbol).or_default().push(&assignment.right);
+                            self.writes
+                                .entry(symbol)
+                                .or_default()
+                                .push(&assignment.right);
                         }
                     }
                 }
@@ -361,7 +405,8 @@ impl<'c, 'a> Index<'c, 'a> {
                 }
             }
             AstKind::StaticMemberExpression(member) => {
-                own.members.push((&member.object, member.property.name.as_str()));
+                own.members
+                    .push((&member.object, member.property.name.as_str()));
             }
             AstKind::ComputedMemberExpression(member) => {
                 own.computed.push(member);
@@ -533,7 +578,10 @@ impl<'c, 'a> Index<'c, 'a> {
         if let (Some(left), Some(right)) = (self.symbol(left), self.symbol(right)) {
             return left == right;
         }
-        match (self.slots.parameter_slot(left), self.slots.parameter_slot(right)) {
+        match (
+            self.slots.parameter_slot(left),
+            self.slots.parameter_slot(right),
+        ) {
             (Some(left), Some(right)) => left == right,
             _ => false,
         }
@@ -554,7 +602,11 @@ impl<'c, 'a> Index<'c, 'a> {
                 }
             }
         }
-        Some(MethodCall { receiver: object, name, args })
+        Some(MethodCall {
+            receiver: object,
+            name,
+            args,
+        })
     }
 
     fn method_calls(&self, at: usize, name: &str) -> Vec<MethodCall<'a>> {
@@ -567,11 +619,16 @@ impl<'c, 'a> Index<'c, 'a> {
     }
 
     fn calls_on_this(&self, at: usize, name: &str) -> bool {
-        self.method_calls(at, name).iter().any(|call| is_this(call.receiver))
+        self.method_calls(at, name)
+            .iter()
+            .any(|call| is_this(call.receiver))
     }
 
     fn reads_this_member(&self, at: usize, name: &str) -> bool {
-        self.own[at].members.iter().any(|(object, member)| *member == name && is_this(object))
+        self.own[at]
+            .members
+            .iter()
+            .any(|(object, member)| *member == name && is_this(object))
     }
 
     /// The functions passed as the first argument of `.name(...)` in `at`.
@@ -607,7 +664,10 @@ impl<'c, 'a> Index<'c, 'a> {
         self.own[at]
             .members
             .iter()
-            .filter(|(object, _)| self.symbol(object).is_some_and(|symbol| tags.contains(&symbol)))
+            .filter(|(object, _)| {
+                self.symbol(object)
+                    .is_some_and(|symbol| tags.contains(&symbol))
+            })
             .map(|(_, name)| *name)
             .collect()
     }
@@ -747,7 +807,13 @@ struct Run<'r, 'c, 'a> {
 }
 
 impl<'a> Run<'_, '_, 'a> {
-    fn claim(&mut self, role: &'static str, at: usize, alias_role: Option<&'static str>, why: &str) {
+    fn claim(
+        &mut self,
+        role: &'static str,
+        at: usize,
+        alias_role: Option<&'static str>,
+        why: &str,
+    ) {
         self.claims.push(FinderClaim::Function {
             role,
             function_span: self.index.fns[at].span,
@@ -779,7 +845,11 @@ impl<'a> Run<'_, '_, 'a> {
                 .all(|tag| members.iter().any(|member| member.name == *tag));
             if complete {
                 tables.insert(*symbol);
-                self.claim_main(TAGS, *symbol, "single-value object with the full encoding tag member set");
+                self.claim_main(
+                    TAGS,
+                    *symbol,
+                    "single-value object with the full encoding tag member set",
+                );
             }
         }
         tables
@@ -792,21 +862,28 @@ impl<'a> Run<'_, '_, 'a> {
                 continue;
             }
             let pushes = index.pushes_onto(at, 1);
-            let raw = pushes.iter().any(|call| {
-                matches!(call.args.as_slice(), [only] if index.slot_of(only, at) == Some(0))
-            });
+            let raw = pushes.iter().any(
+                |call| matches!(call.args.as_slice(), [only] if index.slot_of(only, at) == Some(0)),
+            );
             let tagged = ["UINT16", "UINT24", "UINT32", "UINT64"].iter().all(|tag| {
                 pushes.iter().any(|call| {
                     call.args.iter().any(|arg| {
                         member_parts(arg).is_some_and(|(object, name)| {
                             name == *tag
-                                && index.symbol(object).is_some_and(|symbol| tags.contains(&symbol))
+                                && index
+                                    .symbol(object)
+                                    .is_some_and(|symbol| tags.contains(&symbol))
                         })
                     })
                 })
             });
             if raw && tagged {
-                self.claim(UINT, at, Some(UINT_ALIAS), "pushes slot 0 raw or behind the UINT16/24/32/64 tags onto slot 1");
+                self.claim(
+                    UINT,
+                    at,
+                    Some(UINT_ALIAS),
+                    "pushes slot 0 raw or behind the UINT16/24/32/64 tags onto slot 1",
+                );
             }
         }
     }
@@ -828,10 +905,20 @@ impl<'a> Run<'_, '_, 'a> {
                 && own.members.iter().any(|(_, name)| *name == "log");
             if uses_typed {
                 typed.insert(at);
-                self.claim(FLOAT_TYPED, at, None, "pushes the FLOAT32/DOUBLE64 tag and typed-array bytes onto slot 1");
+                self.claim(
+                    FLOAT_TYPED,
+                    at,
+                    None,
+                    "pushes the FLOAT32/DOUBLE64 tag and typed-array bytes onto slot 1",
+                );
             } else if uses_log && !own.globals.contains("Float32Array") {
                 fallback.insert(at);
-                self.claim(FLOAT_FALLBACK, at, None, "pushes the FLOAT32/DOUBLE64 tag and bytes assembled with Math.log onto slot 1");
+                self.claim(
+                    FLOAT_FALLBACK,
+                    at,
+                    None,
+                    "pushes the FLOAT32/DOUBLE64 tag and bytes assembled with Math.log onto slot 1",
+                );
             }
         }
         for (symbol, values) in &index.writes {
@@ -846,7 +933,11 @@ impl<'a> Run<'_, '_, 'a> {
                 && held.iter().any(|at| typed.contains(at))
                 && held.iter().any(|at| fallback.contains(at));
             if both {
-                self.claim_main(FLOAT_HOLDER, *symbol, "written only with the typed-array and the fallback float writer");
+                self.claim_main(
+                    FLOAT_HOLDER,
+                    *symbol,
+                    "written only with the typed-array and the fallback float writer",
+                );
             }
         }
     }
@@ -857,7 +948,10 @@ impl<'a> Run<'_, '_, 'a> {
             let [statement] = index.own[at].returns.as_slice() else {
                 continue;
             };
-            let Some(chain) = statement.argument.as_ref().and_then(|value| key_chain(index, value, at))
+            let Some(chain) = statement
+                .argument
+                .as_ref()
+                .and_then(|value| key_chain(index, value, at))
             else {
                 continue;
             };
@@ -884,10 +978,30 @@ impl<'a> Run<'_, '_, 'a> {
             }
             let why = "returns Object.keys(slot 0) filtered, scored, sorted descending, sliced and mapped back to the key";
             self.claim(SELECT, at, Some(SELECT_ALIAS), why);
-            self.claim(SELECT_KEEP, keep, None, "filter step of the string-table selector, reads the key's count");
-            self.claim(SELECT_SCORE, score, None, "map step of the string-table selector, pairs the key with its saving");
-            self.claim(SELECT_SORT, sort, None, "sort step of the string-table selector, descending on the pair's second item");
-            self.claim(SELECT_TAKE, take, None, "last map of the string-table selector, returns the pair's first item");
+            self.claim(
+                SELECT_KEEP,
+                keep,
+                None,
+                "filter step of the string-table selector, reads the key's count",
+            );
+            self.claim(
+                SELECT_SCORE,
+                score,
+                None,
+                "map step of the string-table selector, pairs the key with its saving",
+            );
+            self.claim(
+                SELECT_SORT,
+                sort,
+                None,
+                "sort step of the string-table selector, descending on the pair's second item",
+            );
+            self.claim(
+                SELECT_TAKE,
+                take,
+                None,
+                "last map of the string-table selector, returns the pair's first item",
+            );
         }
     }
 
@@ -920,8 +1034,18 @@ impl<'a> Run<'_, '_, 'a> {
                 };
                 if element_matches(index, callback, at) {
                     found.insert(at);
-                    self.claim(EQUAL, at, Some(EQUAL_ALIAS), "equal length and every slot 0 element strictly equals slot 1 at its index");
-                    self.claim(EQUAL_ELEMENT, callback, None, "every callback comparing an element with the other array at its index");
+                    self.claim(
+                        EQUAL,
+                        at,
+                        Some(EQUAL_ALIAS),
+                        "equal length and every slot 0 element strictly equals slot 1 at its index",
+                    );
+                    self.claim(
+                        EQUAL_ELEMENT,
+                        callback,
+                        None,
+                        "every callback comparing an element with the other array at its index",
+                    );
                 }
             }
         }
@@ -933,8 +1057,11 @@ impl<'a> Run<'_, '_, 'a> {
         let mut found = Vec::new();
         for factory in 0..index.fns.len() {
             let nested = &index.own[factory].nested;
-            let constructors: Vec<usize> =
-                nested.iter().copied().filter(|at| is_registry_constructor(index, *at)).collect();
+            let constructors: Vec<usize> = nested
+                .iter()
+                .copied()
+                .filter(|at| is_registry_constructor(index, *at))
+                .collect();
             let extends: Vec<(usize, bool)> = nested
                 .iter()
                 .copied()
@@ -943,16 +1070,34 @@ impl<'a> Run<'_, '_, 'a> {
             let [statement] = index.own[factory].returns.as_slice() else {
                 continue;
             };
-            let returned = statement.argument.as_ref().and_then(|value| index.fn_value(value));
+            let returned = statement
+                .argument
+                .as_ref()
+                .and_then(|value| index.fn_value(value));
             let (Some(returned), [(extend, hoisted)]) = (returned, extends.as_slice()) else {
                 continue;
             };
             if !constructors.contains(&returned) {
                 continue;
             }
-            self.claim(REGISTRY_FACTORY, factory, None, "returns the class holding extensions and defines its extend record writer");
-            self.claim(REGISTRY_CTOR, returned, None, "this-instanceof guard and this.extensions = Object.create(null)");
-            self.claim(REGISTRY_EXTEND, *extend, None, "stores {detector, serialiser, deserialiser} from slots 1-3 under slot 0");
+            self.claim(
+                REGISTRY_FACTORY,
+                factory,
+                None,
+                "returns the class holding extensions and defines its extend record writer",
+            );
+            self.claim(
+                REGISTRY_CTOR,
+                returned,
+                None,
+                "this-instanceof guard and this.extensions = Object.create(null)",
+            );
+            self.claim(
+                REGISTRY_EXTEND,
+                *extend,
+                None,
+                "stores {detector, serialiser, deserialiser} from slots 1-3 under slot 0",
+            );
             let holders = holders_of_call(index, factory);
             found.push(Registry {
                 factory,
@@ -975,7 +1120,8 @@ impl<'a> Run<'_, '_, 'a> {
             let own = &index.own[factory];
             let returns_installer = matches!(own.returns.as_slice(), [statement]
                 if statement.argument.as_ref().and_then(|value| index.fn_value(value)) == Some(installer));
-            if !returns_installer || own.nested.len() != 1 || index.fns[factory].formal_count() != 0 {
+            if !returns_installer || own.nested.len() != 1 || index.fns[factory].formal_count() != 0
+            {
                 continue;
             }
             let consumed: Vec<SymbolId> = holders_of_call(index, factory)
@@ -993,7 +1139,12 @@ impl<'a> Run<'_, '_, 'a> {
             if consumed.is_empty() {
                 continue;
             }
-            self.claim(INSTALLER_FACTORY, factory, None, "returns the member installer, whose result the extension registry factory calls");
+            self.claim(
+                INSTALLER_FACTORY,
+                factory,
+                None,
+                "returns the member installer, whose result the extension registry factory calls",
+            );
             self.claim(INSTALLER, installer, None, "defines slot 1 descriptors on slot 0's prototype and slot 2 descriptors on slot 0, returns slot 0");
             for holder in consumed {
                 self.claim_main(INSTALLER_HOLDER, holder, "single-value holder of the member installer, called by the extension registry factory");
@@ -1055,22 +1206,39 @@ impl<'a> Run<'_, '_, 'a> {
             let Some(sentinel) = index.symbol(extension.deserialised) else {
                 continue;
             };
-            let detects = index.single_return(extension.detector).is_some_and(|value| {
-                let Expression::BinaryExpression(binary) = value else {
-                    return false;
-                };
-                binary.operator == BinaryOperator::StrictEquality
-                    && index.slot_of(&binary.left, extension.detector) == Some(0)
-                    && index.symbol(&binary.right) == Some(sentinel)
-            });
+            let detects = index
+                .single_return(extension.detector)
+                .is_some_and(|value| {
+                    let Expression::BinaryExpression(binary) = value else {
+                        return false;
+                    };
+                    binary.operator == BinaryOperator::StrictEquality
+                        && index.slot_of(&binary.left, extension.detector) == Some(0)
+                        && index.symbol(&binary.right) == Some(sentinel)
+                });
             if detects && index.returns_nothing(extension.serialiser) {
-                self.claim(SENTINEL_DETECT, extension.detector, None, "extension detector testing slot 0 against the value its deserialiser returns");
-                self.claim(SENTINEL_SERIALISE, extension.serialiser, None, "extension serialiser of the sentinel, returns undefined");
+                self.claim(
+                    SENTINEL_DETECT,
+                    extension.detector,
+                    None,
+                    "extension detector testing slot 0 against the value its deserialiser returns",
+                );
+                self.claim(
+                    SENTINEL_SERIALISE,
+                    extension.serialiser,
+                    None,
+                    "extension serialiser of the sentinel, returns undefined",
+                );
                 // A serialiser filled in after the literal is the new proof
                 // shape: the deserialiser still proves the sentinel identity,
                 // but its independently proven captured-state name is kept.
                 if extension.serialiser_from_literal {
-                    self.claim(SENTINEL_DESERIALISE, extension.deserialiser, None, "extension deserialiser returning the value its detector tests");
+                    self.claim(
+                        SENTINEL_DESERIALISE,
+                        extension.deserialiser,
+                        None,
+                        "extension deserialiser returning the value its detector tests",
+                    );
                 }
             }
         }
@@ -1082,7 +1250,10 @@ impl<'a> Run<'_, '_, 'a> {
         let index = self.index;
         let mut symbol = compared;
         for _ in 0..4 {
-            if let Some(extension) = extensions.iter().find(|extension| extension.holder == symbol) {
+            if let Some(extension) = extensions
+                .iter()
+                .find(|extension| extension.holder == symbol)
+            {
                 let never = index.single_return(extension.detector).is_some_and(
                     |value| matches!(value, Expression::BooleanLiteral(literal) if !literal.value),
                 );
@@ -1094,9 +1265,18 @@ impl<'a> Run<'_, '_, 'a> {
                 if let (true, true, Some(placeholder)) = (never, rejects, placeholder) {
                     if extension.serialiser_from_literal {
                         self.claim(DEPTH_DETECT, extension.detector, None, "detector of the extension static encode requires for depthBound, always false");
-                        self.claim(DEPTH_SERIALISE, extension.serialiser, None, "serialiser of the depth-bound extension, only throws");
+                        self.claim(
+                            DEPTH_SERIALISE,
+                            extension.serialiser,
+                            None,
+                            "serialiser of the depth-bound extension, only throws",
+                        );
                         self.claim(DEPTH_DESERIALISE, extension.deserialiser, None, "deserialiser of the depth-bound extension, returns its placeholder object");
-                        self.claim_main(DEPTH_PLACEHOLDER, placeholder, "empty object returned by the depth-bound extension's deserialiser");
+                        self.claim_main(
+                            DEPTH_PLACEHOLDER,
+                            placeholder,
+                            "empty object returned by the depth-bound extension's deserialiser",
+                        );
                     }
                 }
                 return;
@@ -1125,7 +1305,9 @@ impl<'a> Run<'_, '_, 'a> {
                 nested.iter().copied().filter(|at| test(*at)).collect()
             };
             let constructors = pick(&|at| {
-                ENCODER_STATE.iter().all(|key| index.own[at].written_keys.contains(key))
+                ENCODER_STATE
+                    .iter()
+                    .all(|key| index.own[at].written_keys.contains(key))
             });
             if constructors.is_empty() || !encoder_factory_consumed(index, factory, registries) {
                 continue;
@@ -1135,7 +1317,10 @@ impl<'a> Run<'_, '_, 'a> {
             let finds = pick(&|at| is_find_keyset(index, at, equal));
             let pushes = pick(&|at| is_push_elements(index, at).is_some());
             let statics = pick(&|at| is_static_encode(index, at));
-            if [&encodes, &values, &finds, &pushes, &statics].iter().any(|found| found.is_empty()) {
+            if [&encodes, &values, &finds, &pushes, &statics]
+                .iter()
+                .any(|found| found.is_empty())
+            {
                 continue;
             }
             self.claim(ENCODER_FACTORY, factory, None, "defines the encoder methods and is called with the extension registry class, its encode member read");
@@ -1159,9 +1344,19 @@ impl<'a> Run<'_, '_, 'a> {
                 }
             }
             for at in pushes {
-                self.claim(PUSH_ELEMENTS, at, None, "forEach over slot 0 calling encodeValue with slot 1 as the output");
+                self.claim(
+                    PUSH_ELEMENTS,
+                    at,
+                    None,
+                    "forEach over slot 0 calling encodeValue with slot 1 as the output",
+                );
                 if let Some(callback) = is_push_elements(index, at) {
-                    self.claim(PUSH_ELEMENT, callback, None, "forEach callback encoding one element into the output");
+                    self.claim(
+                        PUSH_ELEMENT,
+                        callback,
+                        None,
+                        "forEach callback encoding one element into the output",
+                    );
                 }
             }
             for at in values {
@@ -1183,28 +1378,51 @@ impl<'a> Run<'_, '_, 'a> {
                     if member_parts(&call.callee).is_some_and(|(_, name)| name == "detector"))
             });
             if accepts {
-                self.claim(DETECTOR_ACCEPTS, nested, None, "local predicate calling the extension's detector on the value");
+                self.claim(
+                    DETECTOR_ACCEPTS,
+                    nested,
+                    None,
+                    "local predicate calling the extension's detector on the value",
+                );
             }
         }
         for callback in index.callbacks(at, "every") {
             let tested = index.single_return(callback).and_then(typeof_boolean);
             if tested.is_some_and(|operand| index.slot_of(operand, callback) == Some(0)) {
-                self.claim(BOOLEAN_ELEMENT, callback, None, "every callback, typeof element === \"boolean\"");
+                self.claim(
+                    BOOLEAN_ELEMENT,
+                    callback,
+                    None,
+                    "every callback, typeof element === \"boolean\"",
+                );
             } else if tested.is_some_and(|operand| {
                 matches!(strip(operand), Expression::ComputedMemberExpression(member)
                     if index.slot_of(&member.expression, callback) == Some(0))
             }) {
-                self.claim(BOOLEAN_ENTRY, callback, None, "every callback, typeof value[key] === \"boolean\"");
+                self.claim(
+                    BOOLEAN_ENTRY,
+                    callback,
+                    None,
+                    "every callback, typeof value[key] === \"boolean\"",
+                );
             }
         }
         for callback in index.callbacks(at, "forEach") {
-            let encodes = index.method_calls(callback, "encodeValue").iter().any(|call| {
-                matches!(call.args.first().map(|arg| strip(arg)),
+            let encodes = index
+                .method_calls(callback, "encodeValue")
+                .iter()
+                .any(|call| {
+                    matches!(call.args.first().map(|arg| strip(arg)),
                     Some(Expression::ComputedMemberExpression(member))
                         if index.slot_of(&member.expression, callback) == Some(0))
-            });
+                });
             if encodes {
-                self.claim(ENCODE_ENTRY, callback, None, "forEach callback encoding value[key] into the output");
+                self.claim(
+                    ENCODE_ENTRY,
+                    callback,
+                    None,
+                    "forEach callback encoding value[key] into the output",
+                );
             }
         }
     }
@@ -1212,16 +1430,24 @@ impl<'a> Run<'_, '_, 'a> {
     fn static_encode_callbacks(&mut self, at: usize, extensions: &[Extension<'a>]) {
         let index = self.index;
         let compared = |callback: usize| {
-            index.own[callback].strict_equalities.iter().find_map(|binary| {
-                matches!(strip(&binary.left), Expression::ComputedMemberExpression(_))
-                    .then(|| index.symbol(&binary.right))
-                    .flatten()
-            })
+            index.own[callback]
+                .strict_equalities
+                .iter()
+                .find_map(|binary| {
+                    matches!(strip(&binary.left), Expression::ComputedMemberExpression(_))
+                        .then(|| index.symbol(&binary.right))
+                        .flatten()
+                })
         };
         let mut depth = BTreeSet::new();
         for callback in index.callbacks(at, "forEach") {
             if !index.method_calls(callback, "extend").is_empty() {
-                self.claim(REGISTER_OPTION, callback, None, "forEach callback registering one option extension on the instance");
+                self.claim(
+                    REGISTER_OPTION,
+                    callback,
+                    None,
+                    "forEach callback registering one option extension on the instance",
+                );
             } else if let Some(symbol) = compared(callback) {
                 depth.insert(symbol);
                 self.claim(RECORD_DEPTH_ID, callback, None, "forEach callback recording the id of the extension equal to the depth-bound one");
@@ -1230,7 +1456,12 @@ impl<'a> Run<'_, '_, 'a> {
         for callback in index.callbacks(at, "some") {
             if let Some(symbol) = compared(callback) {
                 depth.insert(symbol);
-                self.claim(IS_DEPTH_ENTRY, callback, None, "some callback testing an entry against the depth-bound extension");
+                self.claim(
+                    IS_DEPTH_ENTRY,
+                    callback,
+                    None,
+                    "some callback testing an entry against the depth-bound extension",
+                );
             }
         }
         for symbol in depth {
@@ -1241,7 +1472,11 @@ impl<'a> Run<'_, '_, 'a> {
 
 /// `Object.keys(slot 0).filter(a).map(b).sort(c).slice(...).map(d)`: the four
 /// callbacks.
-fn key_chain<'a>(index: &Index<'_, 'a>, value: &'a Expression<'a>, at: usize) -> Option<[usize; 4]> {
+fn key_chain<'a>(
+    index: &Index<'_, 'a>,
+    value: &'a Expression<'a>,
+    at: usize,
+) -> Option<[usize; 4]> {
     let mut steps = Vec::new();
     let mut current = strip(value);
     loop {
@@ -1267,9 +1502,16 @@ fn key_chain<'a>(index: &Index<'_, 'a>, value: &'a Expression<'a>, at: usize) ->
         return None;
     }
     let callback = |call: &'a CallExpression<'a>| {
-        call_arguments(call).first().and_then(|arg| index.fn_value(arg))
+        call_arguments(call)
+            .first()
+            .and_then(|arg| index.fn_value(arg))
     };
-    Some([callback(keep)?, callback(score)?, callback(order)?, callback(take)?])
+    Some([
+        callback(keep)?,
+        callback(score)?,
+        callback(order)?,
+        callback(take)?,
+    ])
 }
 
 /// The slot of `at` whose `[item]` element `expression` reads.
@@ -1340,29 +1582,30 @@ fn extension_record<'a>(
 /// The record written by an extend function, with whether it was hoisted into
 /// a local. The first accepted assignment is returned, keeping the previous
 /// any-of-the-writes acceptance.
-fn extend_record<'a>(
-    index: &Index<'_, 'a>,
-    at: usize,
-) -> Option<(&'a ObjectExpression<'a>, bool)> {
-    index.own[at].assignments.iter().copied().find_map(|assignment| {
-        let AssignmentTarget::ComputedMemberExpression(target) = &assignment.left else {
-            return None;
-        };
-        let on_extensions = member_parts(&target.object)
-            .is_some_and(|(object, name)| name == "extensions" && is_this(object));
-        if !on_extensions || index.slot_of(&target.expression, at) != Some(0) {
-            return None;
-        }
-        let (object, hoisted) = extension_record(index, &assignment.right, at)?;
-        let members = object_members_of(object);
-        let holds = |name: &str, slot: u32| {
-            members
-                .iter()
-                .any(|member| member.name == name && index.slot_of(member.value, at) == Some(slot))
-        };
-        (holds("detector", 1) && holds("serialiser", 2) && holds("deserialiser", 3))
-            .then_some((object, hoisted))
-    })
+fn extend_record<'a>(index: &Index<'_, 'a>, at: usize) -> Option<(&'a ObjectExpression<'a>, bool)> {
+    index.own[at]
+        .assignments
+        .iter()
+        .copied()
+        .find_map(|assignment| {
+            let AssignmentTarget::ComputedMemberExpression(target) = &assignment.left else {
+                return None;
+            };
+            let on_extensions = member_parts(&target.object)
+                .is_some_and(|(object, name)| name == "extensions" && is_this(object));
+            if !on_extensions || index.slot_of(&target.expression, at) != Some(0) {
+                return None;
+            }
+            let (object, hoisted) = extension_record(index, &assignment.right, at)?;
+            let members = object_members_of(object);
+            let holds = |name: &str, slot: u32| {
+                members.iter().any(|member| {
+                    member.name == name && index.slot_of(member.value, at) == Some(slot)
+                })
+            };
+            (holds("detector", 1) && holds("serialiser", 2) && holds("deserialiser", 3))
+                .then_some((object, hoisted))
+        })
 }
 
 fn is_member_installer<'a>(index: &Index<'_, 'a>, at: usize) -> bool {
@@ -1418,13 +1661,14 @@ fn encoder_factory_consumed<'a>(
         };
         *name == "encode"
             && index.fn_value(&call.callee) == Some(factory)
-            && call_arguments(call).first().and_then(|arg| index.symbol(arg)).is_some_and(
-                |argument| {
-                    registries.iter().any(|registry| {
-                        !registry.hoisted && registry.holders.contains(&argument)
-                    })
-                },
-            )
+            && call_arguments(call)
+                .first()
+                .and_then(|arg| index.symbol(arg))
+                .is_some_and(|argument| {
+                    registries
+                        .iter()
+                        .any(|registry| !registry.hoisted && registry.holders.contains(&argument))
+                })
     })
 }
 
@@ -1439,7 +1683,11 @@ fn is_encode_value<'a>(index: &Index<'_, 'a>, at: usize, tags: &BTreeSet<SymbolI
     index.calls_on_this(at, "encodeValue")
         && index.calls_on_this(at, "findKeysetIndex")
         && index.reads_this_member(at, "extensions")
-        && index.reads_tags(at, tags, &["FALSE", "TRUE", "NULL", "UNDEFINED", "EXTENSION"])
+        && index.reads_tags(
+            at,
+            tags,
+            &["FALSE", "TRUE", "NULL", "UNDEFINED", "EXTENSION"],
+        )
 }
 
 fn is_find_keyset<'a>(index: &Index<'_, 'a>, at: usize, equal: &BTreeSet<usize>) -> bool {
@@ -1447,7 +1695,11 @@ fn is_find_keyset<'a>(index: &Index<'_, 'a>, at: usize, equal: &BTreeSet<usize>)
         member_parts(call.receiver)
             .is_some_and(|(object, name)| name == "keysets" && is_this(object))
     });
-    appends && index.own[at].nested.iter().any(|nested| returns_call_to(index, *nested, equal))
+    appends
+        && index.own[at]
+            .nested
+            .iter()
+            .any(|nested| returns_call_to(index, *nested, equal))
 }
 
 /// The element callback of a `pushArrayElements` method.

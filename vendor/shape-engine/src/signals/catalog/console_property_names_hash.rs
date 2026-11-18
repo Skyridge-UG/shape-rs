@@ -1,19 +1,27 @@
 //! `ConsolePropertyNamesHash`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `ConsolePropertyNamesHash`. Card: [`CARD`].
-pub(crate) fn recognize_console_property_names_hash(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_console_property_names_hash(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     let sorted_names = view.leaves().all(|leaf| {
-        leaf.transforms.iter().any(|t| t == ".sort()") && leaf.transforms.iter().any(|t| t == ".join()")
+        leaf.transforms.iter().any(|t| t == ".sort()")
+            && leaf.transforms.iter().any(|t| t == ".join()")
     });
-    (one_number(view) && sorted_names && probes(view, &census, "console") && census.list_native.is_empty())
-        .then(|| Claim::new(["console property names", "one sorted-names hash"]))
+    (one_number(view)
+        && sorted_names
+        && probes(view, &census, "console")
+        && census.list_native.is_empty())
+    .then(|| Claim::new(["console property names", "one sorted-names hash"]))
 }
 
 pub(crate) fn bind_console_property_names_hash(

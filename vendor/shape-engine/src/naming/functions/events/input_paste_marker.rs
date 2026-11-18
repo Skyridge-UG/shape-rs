@@ -1,6 +1,6 @@
 //! Literal input protocol only. Captured ports have no proved native identity.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::{NodeId, SymbolId};
 use oxc_span::GetSpan;
 
@@ -240,7 +240,10 @@ pub(in crate::naming) fn evaluate(
     if protocol(model, site, function, false).is_some() {
         return direct_proposal(f);
     }
-    let hoisted = crate::naming::functions::observables::captured_observer_forwarding::paste::evaluate(model, site, f);
+    let hoisted =
+        crate::naming::functions::observables::captured_observer_forwarding::paste::evaluate(
+            model, site, f,
+        );
     if !hoisted.is_empty() {
         return hoisted;
     }

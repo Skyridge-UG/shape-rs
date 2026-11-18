@@ -10,23 +10,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::super::adjacent_ssa::LocalReads;
 use super::super::index::SpanIndex;
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping};
 use oxc_span::{GetSpan, Span};
-use crate::transforms::emitted_js::support::unwrap;
 
-mod scan;
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-mod flow_pattern_tests;
 #[cfg(test)]
 mod exceptional_type_tests;
 #[cfg(test)]
+mod flow_pattern_tests;
+mod scan;
+#[cfg(test)]
 mod split_value_tests;
-
+#[cfg(test)]
+mod tests;
 
 pub(crate) fn inline_fresh_values(
     source: &str,
@@ -249,4 +248,3 @@ fn join_effects(values: impl IntoIterator<Item = String>) -> String {
         .collect::<Vec<_>>()
         .join(",")
 }
-

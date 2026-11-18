@@ -1,10 +1,11 @@
 //! `UserAgentData`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, layout_nodes::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, layout_nodes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// Member names and string literals the field's innermost shared guard
 /// tests directly (depth 0 of its slice): `hasOwn(o, "wow64")`, `o.wow64`.
@@ -35,7 +36,10 @@ const CLIENT_HINTS: &[&str] = &[
 /// `UserAgentData`. Card: [`CARD`].
 pub(crate) fn recognize_user_agent_data(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let leaves = leaves_of(view);
-    let hints = CLIENT_HINTS.iter().filter(|hint| any_transform(&leaves, hint)).count();
+    let hints = CLIENT_HINTS
+        .iter()
+        .filter(|hint| any_transform(&leaves, hint))
+        .count();
     if hints >= 4 {
         return claim(&["values read 4+ high-entropy client hints"]);
     }
@@ -56,12 +60,20 @@ pub(crate) fn bind_user_agent_data(
         let fields = message_fields(view, layout, message)?;
         let tested: std::collections::HashMap<&str, Vec<String>> = fields
             .iter()
-            .filter(|f| matches!(f.node, LayoutNode::Choice { .. }) && f.literal_only() && !f.writes(LeafKind::Byte))
+            .filter(|f| {
+                matches!(f.node, LayoutNode::Choice { .. })
+                    && f.literal_only()
+                    && !f.writes(LeafKind::Byte)
+            })
             .map(|f| (f.key.as_str(), guard_names(ctx, f)))
             .collect();
         let placeholder = |hint: &'static str| {
             let tested = &tested;
-            move |f: &Field| tested.get(f.key.as_str()).is_some_and(|names| names.iter().any(|name| name == hint))
+            move |f: &Field| {
+                tested
+                    .get(f.key.as_str())
+                    .is_some_and(|names| names.iter().any(|name| name == hint))
+            }
         };
         let wow64_placeholder = placeholder("wow64");
         let mobile_placeholder = placeholder("mobile");
@@ -78,10 +90,13 @@ pub(crate) fn bind_user_agent_data(
             .count();
         let flags = |f: &Field| {
             f.is_plain(LeafKind::Byte)
-                && (f.tr(".wow64") || f.tr(".mobile") || (plain_bytes == 1 && !f.literal_only()) || {
-                    let slice = field_slice(ctx, f, 4);
-                    slice.members.contains_key("wow64") || slice.members.contains_key("mobile")
-                })
+                && (f.tr(".wow64")
+                    || f.tr(".mobile")
+                    || (plain_bytes == 1 && !f.literal_only())
+                    || {
+                        let slice = field_slice(ctx, f, 4);
+                        slice.members.contains_key("wow64") || slice.members.contains_key("mobile")
+                    })
         };
         let brands = hint(".brands", LeafKind::Number);
         let full_version_list = hint(".fullVersionList", LeafKind::Number);
@@ -124,7 +139,11 @@ pub(crate) fn bind_user_agent_data(
                     let (count_name, entries_name) = match binding.get(message, &field.key) {
                         Some("brands") => ("brands", "brandEntries"),
                         Some("fullVersionList") => ("fullVersionList", "fullVersionEntries"),
-                        _ => return Err(BindRefusal::new("UserAgentData: list record under a non-list field")),
+                        _ => {
+                            return Err(BindRefusal::new(
+                                "UserAgentData: list record under a non-list field",
+                            ))
+                        }
                     };
                     let count_rule = |f: &Field| f.is_plain(LeafKind::Number);
                     let entries_rule = |f: &Field| f.is_array();
@@ -135,16 +154,19 @@ pub(crate) fn bind_user_agent_data(
                         &mut binding,
                     )?;
                     for entries in inner.iter().filter(|f| f.is_array()) {
-                        let pair = entries
-                            .item_fields()
-                            .ok_or_else(|| BindRefusal::new("UserAgentData: list entry is not a record"))?;
+                        let pair = entries.item_fields().ok_or_else(|| {
+                            BindRefusal::new("UserAgentData: list entry is not a record")
+                        })?;
                         // The key the entry's write site reads (`list[i].brand`);
                         // provenance alone can carry both keys.
                         let read = |f: &Field| -> Option<String> {
                             let mut keys: Vec<String> = f
                                 .leaves
                                 .iter()
-                                .map(|leaf| ctx.caller_value_node(leaf).and_then(|node| ctx.read_key(node)))
+                                .map(|leaf| {
+                                    ctx.caller_value_node(leaf)
+                                        .and_then(|node| ctx.read_key(node))
+                                })
                                 .collect::<Option<_>>()?;
                             keys.dedup();
                             (keys.len() == 1).then(|| keys.remove(0))
@@ -155,7 +177,12 @@ pub(crate) fn bind_user_agent_data(
                         };
                         let brand = |f: &Field| entry_key(f, "brand", ".brand");
                         let version = |f: &Field| entry_key(f, "version", ".version");
-                        solve(message, &pair, &[("brand", &brand), ("version", &version)], &mut binding)?;
+                        solve(
+                            message,
+                            &pair,
+                            &[("brand", &brand), ("version", &version)],
+                            &mut binding,
+                        )?;
                     }
                 }
                 at += count;

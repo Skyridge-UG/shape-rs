@@ -242,7 +242,9 @@ fn is_void_zero(expr: &Expression<'_>) -> bool {
 }
 fn binding(decl: &VariableDeclaration<'_>) -> Option<SymbolId> {
     (decl.declarations.len() == 1)
-        .then(|| crate::signals::extract::bindings::binding_pattern_symbol(&decl.declarations[0].id))
+        .then(|| {
+            crate::signals::extract::bindings::binding_pattern_symbol(&decl.declarations[0].id)
+        })
         .flatten()
 }
 fn assignment<'e, 'a>(

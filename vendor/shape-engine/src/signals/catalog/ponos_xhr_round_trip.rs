@@ -1,29 +1,43 @@
 //! `PonosXhrRoundTrip`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, shape_text::*, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, shape_text::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use value_facts::slot_facts;
 
 /// `PonosXhrRoundTrip`. Card: [`CARD`].
 pub(crate) fn recognize_ponos_xhr_round_trip(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     // One response string, a digested-index list, two emissions (sent and
     // finished) and the proven telemetry request roles around the slot.
-    if !per_emission_counts(view, 1, 4..=16) || repeat_count(view) != 1 || view.emissions().len() < 2 {
+    if !per_emission_counts(view, 1, 4..=16)
+        || repeat_count(view) != 1
+        || view.emissions().len() < 2
+    {
         return None;
     }
     let roles = ctx.slot_roles(view);
     let request = roles.contains(&"send_telemetry_request")
-        && (roles.contains(&"capture_telemetry_response_text") || roles.contains(&"mark_telemetry_request_network_error"));
+        && (roles.contains(&"capture_telemetry_response_text")
+            || roles.contains(&"mark_telemetry_request_network_error"));
     let xhr = view.constructs("XMLHttpRequest") || view.reads_global("XMLHttpRequest") || request;
     if !xhr {
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let record = PONOS_FIELDS.iter().filter(|name| facts.any_member(name)).count() >= 4;
-    (record || request).then(|| Claim::new(["telemetry XMLHttpRequest round trip", "sent and finished messages"]))
+    let record = PONOS_FIELDS
+        .iter()
+        .filter(|name| facts.any_member(name))
+        .count()
+        >= 4;
+    (record || request).then(|| {
+        Claim::new([
+            "telemetry XMLHttpRequest round trip",
+            "sent and finished messages",
+        ])
+    })
 }
 
 pub(crate) fn bind_ponos_xhr_round_trip(
@@ -42,7 +56,10 @@ pub(crate) fn bind_ponos_xhr_round_trip(
         let mut keys = field.sites.iter().flatten().filter_map(|site| {
             let leaf = view.leaves().find(|leaf| leaf.write == *site)?;
             let first = leaf.transforms.iter().find(|t| t.starts_with('.'))?;
-            PONOS_FIELDS.iter().copied().find(|name| first[1..] == **name)
+            PONOS_FIELDS
+                .iter()
+                .copied()
+                .find(|name| first[1..] == **name)
         });
         let key = keys.next()?;
         keys.all(|other| other == key).then_some(key)
@@ -60,7 +77,11 @@ pub(crate) fn bind_ponos_xhr_round_trip(
     };
     binder.top(|field| {
         let desc = field.merged();
-        let mut keyed: Vec<&'static str> = PONOS_FIELDS.iter().copied().filter(|name| desc.has_member(name)).collect();
+        let mut keyed: Vec<&'static str> = PONOS_FIELDS
+            .iter()
+            .copied()
+            .filter(|name| desc.has_member(name))
+            .collect();
         if field.shape != Shape::Array {
             if let Some(key) = literal_key(field) {
                 keyed = vec![key];
@@ -74,7 +95,9 @@ pub(crate) fn bind_ponos_xhr_round_trip(
         match (field.shape, keyed.as_slice()) {
             (Shape::Array, _) => Some("signalIndex"),
             (_, [one]) => Some(*one),
-            (Shape::Scalar(LeafKind::Number), []) if desc.has_member("length") => Some("signalIndexCount"),
+            (Shape::Scalar(LeafKind::Number), []) if desc.has_member("length") => {
+                Some("signalIndexCount")
+            }
             _ => None,
         }
     })?;
@@ -82,7 +105,14 @@ pub(crate) fn bind_ponos_xhr_round_trip(
 }
 
 /// Object keys of the round-trip record (card names).
-const PONOS_FIELDS: &[&str] = &["cpHash", "xhrStatus", "xhrResponse", "hasNetworkError", "xhrSendTs", "xhrLoadEndTs"];
+const PONOS_FIELDS: &[&str] = &[
+    "cpHash",
+    "xhrStatus",
+    "xhrResponse",
+    "hasNetworkError",
+    "xhrSendTs",
+    "xhrLoadEndTs",
+];
 
 // ===========================================================================
 // Card

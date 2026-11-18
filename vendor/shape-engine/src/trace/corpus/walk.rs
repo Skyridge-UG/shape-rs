@@ -1127,8 +1127,13 @@ fn default_cache_path(source: &str) -> Option<std::path::PathBuf> {
         Some(value) if value == "off" => return None,
         Some(value) => std::path::PathBuf::from(value),
         None => match std::env::var_os("XDG_CACHE_HOME") {
-            Some(cache) => std::path::PathBuf::from(cache).join("shape").join("kernels"),
-            None => std::path::PathBuf::from(std::env::var_os("HOME")?).join(".cache").join("shape").join("kernels"),
+            Some(cache) => std::path::PathBuf::from(cache)
+                .join("shape")
+                .join("kernels"),
+            None => std::path::PathBuf::from(std::env::var_os("HOME")?)
+                .join(".cache")
+                .join("shape")
+                .join("kernels"),
         },
     };
     let executable = std::env::current_exe().ok()?.metadata().ok()?;
@@ -1139,7 +1144,10 @@ fn default_cache_path(source: &str) -> Option<std::path::PathBuf> {
         .ok()?
         .as_nanos();
     let build = fnv1a64_hex(format!("{}:{modified}", executable.len()).as_bytes());
-    Some(directory.join(format!("{}-{build}.kernel.json", fnv1a64_hex(source.as_bytes()))))
+    Some(directory.join(format!(
+        "{}-{build}.kernel.json",
+        fnv1a64_hex(source.as_bytes())
+    )))
 }
 
 fn write_cache(path: &Path, artifact: &KernelArtifact) -> Result<(), String> {
@@ -1151,12 +1159,18 @@ fn write_cache(path: &Path, artifact: &KernelArtifact) -> Result<(), String> {
     let published = fs::rename(&temporary, path).map_err(|error| error.to_string());
     let _ = fs::remove_file(&temporary);
     // Entries older builds made for this seed are never read again.
-    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
     if let Some((seed, _)) = name.split_once('-') {
         for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
             let other = entry.file_name();
             let other = other.to_string_lossy();
-            if other != name && other.starts_with(&format!("{seed}-")) && other.ends_with(".kernel.json") {
+            if other != name
+                && other.starts_with(&format!("{seed}-"))
+                && other.ends_with(".kernel.json")
+            {
                 let _ = fs::remove_file(entry.path());
             }
         }

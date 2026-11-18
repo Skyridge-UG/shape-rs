@@ -1,10 +1,11 @@
 //! `UiEventIsTrusted`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{leaf_checks::*, shape_text::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `UiEventIsTrusted`. Card: [`CARD`].
 pub(crate) fn recognize_ui_event_is_trusted(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {

@@ -20,14 +20,20 @@ use oxc_ast_visit::Visit;
 use oxc_semantic::Scoping;
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn inline_adjacent_literals(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, _) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, edits: Vec::new(), moved: 0, comments: program.comments.iter().map(|c| c.span).collect() };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        edits: Vec::new(),
+        moved: 0,
+        comments: program.comments.iter().map(|c| c.span).collect(),
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.moved == 0 {
         return Ok((source.into(), 0));
@@ -56,7 +62,10 @@ fn inert(expression: &Expression<'_>) -> bool {
         Expression::StaticMemberExpression(member) => !member.optional && inert(&member.object),
         Expression::ComputedMemberExpression(member) => {
             !member.optional
-                && matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
+                && matches!(
+                    member.expression,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                )
                 && inert(&member.object)
         }
         _ => false,
@@ -70,15 +79,21 @@ fn first(expression: &Expression<'_>, read: Span) -> bool {
         return matches!(expression, Expression::Identifier(_));
     }
     match expression {
-        Expression::CallExpression(call) => !call.optional && inert(&call.callee) && in_arguments(&call.arguments, read),
+        Expression::CallExpression(call) => {
+            !call.optional && inert(&call.callee) && in_arguments(&call.arguments, read)
+        }
         Expression::NewExpression(new) => inert(&new.callee) && in_arguments(&new.arguments, read),
         Expression::AssignmentExpression(assignment) => {
             let target_inert = match &assignment.left {
                 AssignmentTarget::AssignmentTargetIdentifier(_) => true,
-                AssignmentTarget::StaticMemberExpression(member) => !member.optional && inert(&member.object),
+                AssignmentTarget::StaticMemberExpression(member) => {
+                    !member.optional && inert(&member.object)
+                }
                 _ => false,
             };
-            assignment.operator == AssignmentOperator::Assign && target_inert && first(&assignment.right, read)
+            assignment.operator == AssignmentOperator::Assign
+                && target_inert
+                && first(&assignment.right, read)
         }
         _ => false,
     }
@@ -125,14 +140,25 @@ impl Scan<'_> {
         let [declarator] = declaration.declarations.as_slice() else {
             return false;
         };
-        let (BindingPattern::BindingIdentifier(id), Some(literal)) = (&declarator.id, &declarator.init) else {
+        let (BindingPattern::BindingIdentifier(id), Some(literal)) =
+            (&declarator.id, &declarator.init)
+        else {
             return false;
         };
-        if !matches!(literal, Expression::ObjectExpression(_) | Expression::ArrayExpression(_)) || declaration.kind == VariableDeclarationKind::Var {
+        if !matches!(
+            literal,
+            Expression::ObjectExpression(_) | Expression::ArrayExpression(_)
+        ) || declaration.kind == VariableDeclarationKind::Var
+        {
             return false;
         }
         let between = &self.source[statement.span().end as usize..next.span().start as usize];
-        if !between.trim().is_empty() || self.comments.iter().any(|c| statement.span().start <= c.start && c.end <= statement.span().end) {
+        if !between.trim().is_empty()
+            || self
+                .comments
+                .iter()
+                .any(|c| statement.span().start <= c.start && c.end <= statement.span().end)
+        {
             return false;
         }
         let mut references = self.scoping.get_resolved_references(id.symbol_id());
@@ -147,27 +173,44 @@ impl Scan<'_> {
         };
         let leads = match next {
             Statement::ExpressionStatement(expression) => first(&expression.expression, read),
-            Statement::ReturnStatement(ret) => ret.argument.as_ref().is_some_and(|argument| first(argument, read)),
+            Statement::ReturnStatement(ret) => ret
+                .argument
+                .as_ref()
+                .is_some_and(|argument| first(argument, read)),
             Statement::ThrowStatement(throw) => first(&throw.argument, read),
-            Statement::VariableDeclaration(declaration) => match declaration.declarations.as_slice() {
-                [declarator] => declarator.init.as_ref().is_some_and(|init| first(init, read)),
-                _ => false,
-            },
+            Statement::VariableDeclaration(declaration) => {
+                match declaration.declarations.as_slice() {
+                    [declarator] => declarator
+                        .init
+                        .as_ref()
+                        .is_some_and(|init| first(init, read)),
+                    _ => false,
+                }
+            }
             _ => false,
         };
         if !leads {
             return false;
         }
         let text = &self.source[literal.span().start as usize..literal.span().end as usize];
-        self.edits.push(analysis::Edit::delete(whole_line(self.source, statement.span())));
-        self.edits.push(analysis::Edit::replace(read, text.to_string()));
+        self.edits.push(analysis::Edit::delete(whole_line(
+            self.source,
+            statement.span(),
+        )));
+        self.edits
+            .push(analysis::Edit::replace(read, text.to_string()));
         self.moved += 1;
         true
     }
 
     /// The span of the one read of `symbol` in `statement`, outside the
     /// functions it creates.
-    fn read_span(&self, statement: &Statement<'_>, name: &str, symbol: oxc_semantic::SymbolId) -> Option<Span> {
+    fn read_span(
+        &self,
+        statement: &Statement<'_>,
+        name: &str,
+        symbol: oxc_semantic::SymbolId,
+    ) -> Option<Span> {
         struct Find<'s> {
             scoping: &'s Scoping,
             name: &'s str,
@@ -176,7 +219,13 @@ impl Scan<'_> {
         }
         impl<'a> Visit<'a> for Find<'_> {
             fn visit_identifier_reference(&mut self, reference: &IdentifierReference<'a>) {
-                if reference.name == self.name && self.scoping.get_reference(reference.reference_id()).symbol_id() == Some(self.symbol) {
+                if reference.name == self.name
+                    && self
+                        .scoping
+                        .get_reference(reference.reference_id())
+                        .symbol_id()
+                        == Some(self.symbol)
+                {
                     self.found = Some(reference.span);
                 }
             }
@@ -184,12 +233,16 @@ impl Scan<'_> {
             fn visit_arrow_function_expression(&mut self, _: &ArrowFunctionExpression<'a>) {}
             fn visit_class(&mut self, _: &Class<'a>) {}
         }
-        let mut find = Find { scoping: self.scoping, name, symbol, found: None };
+        let mut find = Find {
+            scoping: self.scoping,
+            name,
+            symbol,
+            found: None,
+        };
         find.visit_statement(statement);
         find.found
     }
 }
-
 
 #[cfg(test)]
 mod tests {

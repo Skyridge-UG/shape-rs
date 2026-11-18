@@ -1,17 +1,21 @@
 //! `CanvasScenePixelSamples`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{layout_nodes::*, leaf_checks::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `CanvasScenePixelSamples`. Card: [`CARD`].
 ///
 /// Shape: `count, R{channelCount R{channel}}` with a terminator scalar first
 /// or last. Evidence: the value closure reads `getImageData`.
-pub(crate) fn recognize_canvas_scene_pixel_samples(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_canvas_scene_pixel_samples(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     claim_for(view, ctx, "CanvasScenePixelSamples")
 }
 
@@ -26,16 +30,27 @@ pub(crate) fn bind_canvas_scene_pixel_samples(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
-        let pairs = count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let pairs =
+            count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
         let [(count, samples)] = pairs.as_slice() else {
             return Err(refuse(SIGNAL, "expected one sample repeat"));
         };
-        let scalars: Vec<usize> = (0..fields.len()).filter(|index| is_scalar(&fields[*index].node)).collect();
+        let scalars: Vec<usize> = (0..fields.len())
+            .filter(|index| is_scalar(&fields[*index].node))
+            .collect();
         if fields.len() != 3 || scalars.len() != 2 {
-            return Err(refuse(SIGNAL, format!("message {message}: expected count, samples and a terminator")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected count, samples and a terminator"),
+            ));
         }
-        let terminator = scalars.iter().copied().find(|index| index != count).unwrap_or(0);
+        let terminator = scalars
+            .iter()
+            .copied()
+            .find(|index| index != count)
+            .unwrap_or(0);
         if any_transform(&leaves[terminator], ".length") {
             return Err(refuse(SIGNAL, "terminator reads a length"));
         }
@@ -43,23 +58,37 @@ pub(crate) fn bind_canvas_scene_pixel_samples(
         // opaque computed key, `x[x !== n ? "length" : …]`); then the
         // terminator must be a plain literal.
         let literal_terminator = !leaves[terminator].is_empty()
-            && leaves[terminator]
-                .iter()
-                .all(|leaf| leaf.classes.iter().all(|class| *class == SourceClass::Literal));
+            && leaves[terminator].iter().all(|leaf| {
+                leaf.classes
+                    .iter()
+                    .all(|class| *class == SourceClass::Literal)
+            });
         if !any_transform(&leaves[*count], ".length") && !literal_terminator {
-            return Err(refuse(SIGNAL, format!("message {message}: no count reading `.length` and no literal terminator")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: no count reading `.length` and no literal terminator"),
+            ));
         }
         let LayoutNode::Array { item } = &fields[*samples].node else {
             return Err(refuse(SIGNAL, "samples is not a repeat"));
         };
-        let LayoutNode::Record { fields: item_fields } = item.as_ref() else {
+        let LayoutNode::Record {
+            fields: item_fields,
+        } = item.as_ref()
+        else {
             return Err(refuse(SIGNAL, "sample item is not a record"));
         };
         let [channel_count, channels] = item_fields.as_slice() else {
-            return Err(refuse(SIGNAL, "sample item is not `channelCount, channels`"));
+            return Err(refuse(
+                SIGNAL,
+                "sample item is not `channelCount, channels`",
+            ));
         };
         if !is_scalar(&channel_count.node) || !is_array(&channels.node) {
-            return Err(refuse(SIGNAL, "sample item is not `channelCount, channels`"));
+            return Err(refuse(
+                SIGNAL,
+                "sample item is not `channelCount, channels`",
+            ));
         }
         binding.insert(message, fields[*count].key.clone(), "sampleCount");
         binding.insert(message, fields[*samples].key.clone(), "samples");

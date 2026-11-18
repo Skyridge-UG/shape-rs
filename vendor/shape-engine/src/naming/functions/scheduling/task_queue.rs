@@ -473,36 +473,75 @@ pub(in crate::naming) fn evaluate(
     claims
 }
 
-
 // A formal provider stays opaque. This proves precisely its setTimeout method
 // protocol and the store-before-iteration of the shared payload, not a native
 // timer identity or a claim about captured callback implementations.
 fn dispatch_callback_list(
-    model: &Model<'_, '_>, site: FunctionSite,
-    function: &Function<'_>, body: &FunctionBody<'_>,
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    function: &Function<'_>,
+    body: &FunctionBody<'_>,
 ) -> Option<()> {
-    if !body.directives.is_empty() { return None; }
-    let [provider,payload] = function.params.items.as_slice() else {return None;};
-    let provider=plain_formal(model,&provider.pattern)?;
-    let payload=plain_formal(model,&payload.pattern)?;
-    let [copy,store,iterate] = body.statements.as_slice() else {return None;};
-    let receiver=local_alias(model,site,copy,provider)?;
-    let store=assignment(store)?;
-    let AssignmentTarget::AssignmentTargetIdentifier(target)=&store.left else {return None;};
-    let slot=captured_symbol(model,site,crate::analysis::identifier_symbol(target,model.scoping)?)?;
-    if symbol(model,&store.right)!=Some(payload) {return None;}
-    let iterate=call(iterate)?;
-    let callbacks=captured_data(model,site,member(&iterate.callee,"forEach")?)?;
-    if callbacks==slot {return None;}
-    let [Argument::ArrowFunctionExpression(callback)] = iterate.arguments.as_slice() else {return None;};
-    if callback.r#async || callback.expression || callback.params.rest.is_some() || !callback.body.directives.is_empty() {return None;}
-    let [item]=callback.params.items.as_slice() else {return None;};
-    if item.initializer.is_some() {return None;}
-    let item=plain_formal(model,&item.pattern)?;
-    let [statement]=callback.body.statements.as_slice() else {return None;};
-    let schedule=call(statement)?;
-    if symbol(model,member(&schedule.callee,"setTimeout")?)!=Some(receiver) {return None;}
-    let arguments=call_arguments(schedule);
-    let [value,delay,argument]=arguments.as_slice() else {return None;};
-    (schedule.arguments.len()==3 && symbol(model,value)==Some(item) && number(delay,0.0) && symbol(model,argument)==Some(slot)).then_some(())
+    if !body.directives.is_empty() {
+        return None;
+    }
+    let [provider, payload] = function.params.items.as_slice() else {
+        return None;
+    };
+    let provider = plain_formal(model, &provider.pattern)?;
+    let payload = plain_formal(model, &payload.pattern)?;
+    let [copy, store, iterate] = body.statements.as_slice() else {
+        return None;
+    };
+    let receiver = local_alias(model, site, copy, provider)?;
+    let store = assignment(store)?;
+    let AssignmentTarget::AssignmentTargetIdentifier(target) = &store.left else {
+        return None;
+    };
+    let slot = captured_symbol(
+        model,
+        site,
+        crate::analysis::identifier_symbol(target, model.scoping)?,
+    )?;
+    if symbol(model, &store.right) != Some(payload) {
+        return None;
+    }
+    let iterate = call(iterate)?;
+    let callbacks = captured_data(model, site, member(&iterate.callee, "forEach")?)?;
+    if callbacks == slot {
+        return None;
+    }
+    let [Argument::ArrowFunctionExpression(callback)] = iterate.arguments.as_slice() else {
+        return None;
+    };
+    if callback.r#async
+        || callback.expression
+        || callback.params.rest.is_some()
+        || !callback.body.directives.is_empty()
+    {
+        return None;
+    }
+    let [item] = callback.params.items.as_slice() else {
+        return None;
+    };
+    if item.initializer.is_some() {
+        return None;
+    }
+    let item = plain_formal(model, &item.pattern)?;
+    let [statement] = callback.body.statements.as_slice() else {
+        return None;
+    };
+    let schedule = call(statement)?;
+    if symbol(model, member(&schedule.callee, "setTimeout")?) != Some(receiver) {
+        return None;
+    }
+    let arguments = call_arguments(schedule);
+    let [value, delay, argument] = arguments.as_slice() else {
+        return None;
+    };
+    (schedule.arguments.len() == 3
+        && symbol(model, value) == Some(item)
+        && number(delay, 0.0)
+        && symbol(model, argument) == Some(slot))
+    .then_some(())
 }

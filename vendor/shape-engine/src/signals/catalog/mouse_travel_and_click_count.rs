@@ -1,23 +1,36 @@
 //! `MouseTravelAndClickCount`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use value_facts::slot_facts;
 
 /// `MouseTravelAndClickCount`. Card: [`CARD`].
-pub(crate) fn recognize_mouse_travel_and_click_count(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_mouse_travel_and_click_count(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if !all_numbers(view, 2) {
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let travel = facts
-        .descs()
-        .any(|desc| (desc.has_call("sqrt") || desc.has_call("pow")) && (desc.has_member("clientX") || desc.has_member("clientY") || desc.has_member("pageX") || desc.has_member("pageY") || desc.has_member("screenX")));
-    (travel && facts.has_event(&["mousemove"]) && facts.has_event(&["click"]))
-        .then(|| Claim::new(["mousemove distance and click listeners", "RAW4 NUMBER NUMBER"]))
+    let travel = facts.descs().any(|desc| {
+        (desc.has_call("sqrt") || desc.has_call("pow"))
+            && (desc.has_member("clientX")
+                || desc.has_member("clientY")
+                || desc.has_member("pageX")
+                || desc.has_member("pageY")
+                || desc.has_member("screenX"))
+    });
+    (travel && facts.has_event(&["mousemove"]) && facts.has_event(&["click"])).then(|| {
+        Claim::new([
+            "mousemove distance and click listeners",
+            "RAW4 NUMBER NUMBER",
+        ])
+    })
 }
 
 pub(crate) fn bind_mouse_travel_and_click_count(

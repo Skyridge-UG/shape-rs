@@ -26,9 +26,7 @@ impl Scan<'_, '_> {
         }
         match e {
             Expression::SequenceExpression(s) => self.split_sequence(s, scope, at, depth - 1),
-            Expression::ConditionalExpression(c) => {
-                self.split_conditional(c, scope, at, depth - 1)
-            }
+            Expression::ConditionalExpression(c) => self.split_conditional(c, scope, at, depth - 1),
             Expression::LogicalExpression(l) => self.split_logical(l, scope, at, depth - 1),
             Expression::AssignmentExpression(a) if a.operator == AssignmentOperator::Assign => {
                 let mut value = child(&a.right)?;
@@ -187,10 +185,7 @@ impl Scan<'_, '_> {
             b.operator,
             BinaryOperator::Equality | BinaryOperator::Inequality
         ) && (left.null || right.null)
-            || !b.operator.is_in()
-                && !b.operator.is_instance_of()
-                && left.scalar
-                && right.scalar;
+            || !b.operator.is_in() && !b.operator.is_instance_of() && left.scalar && right.scalar;
         if !safe {
             return None;
         }
@@ -232,7 +227,12 @@ impl Scan<'_, '_> {
             null: false,
         })
     }
-    pub(super) fn stable_iterations(&self, symbol: oxc_semantic::SymbolId, from: Span, to: Span) -> bool {
+    pub(super) fn stable_iterations(
+        &self,
+        symbol: oxc_semantic::SymbolId,
+        from: Span,
+        to: Span,
+    ) -> bool {
         if !self.locals.same_owner(from, to) {
             return false;
         }
@@ -249,7 +249,12 @@ impl Scan<'_, '_> {
             !(r.is_write() && repeated.start <= at.start && at.end <= repeated.end)
         })
     }
-    pub(super) fn stable_var_initializer(&self, symbol: oxc_semantic::SymbolId, from: Span, to: Span) -> bool {
+    pub(super) fn stable_var_initializer(
+        &self,
+        symbol: oxc_semantic::SymbolId,
+        from: Span,
+        to: Span,
+    ) -> bool {
         if self
             .inputs
             .function_names
@@ -328,7 +333,12 @@ impl Scan<'_, '_> {
             _ => false,
         }
     }
-    pub(super) fn inert(&self, e: &Expression<'_>, use_scope: oxc_semantic::ScopeId, at: Span) -> bool {
+    pub(super) fn inert(
+        &self,
+        e: &Expression<'_>,
+        use_scope: oxc_semantic::ScopeId,
+        at: Span,
+    ) -> bool {
         match unwrap(e) {
             Expression::Identifier(id) => analysis::identifier_symbol(id, self.scoping)
                 .is_some_and(|symbol| {
@@ -454,7 +464,12 @@ impl Scan<'_, '_> {
     // read. It is not a loop-carried value when this is its only store and
     // every read stays in this loop instance. Alias and computed snapshots
     // use the same dependency-version proof as declaration initializers.
-    pub(super) fn loop_values(&mut self, condition: &Expression<'_>, region: Span, update: Option<Span>) {
+    pub(super) fn loop_values(
+        &mut self,
+        condition: &Expression<'_>,
+        region: Span,
+        update: Option<Span>,
+    ) {
         let test = unwrap(condition);
         let expressions: Vec<_> = match test {
             Expression::SequenceExpression(s) => s.expressions.iter().collect(),

@@ -41,22 +41,39 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
             Statement::EmptyStatement(_) => false,
             // A read the VM left behind with its value unused (`arguments[0];`,
             // `x + 1;`) does nothing.
-            Statement::ExpressionStatement(expression) => !(discards && discardable(&expression.expression)),
+            Statement::ExpressionStatement(expression) => {
+                !(discards && discardable(&expression.expression))
+            }
             _ => true,
         });
         walk_mut::walk_statements(self, statements);
         if self.counter_steps {
             for statement in statements.iter_mut() {
-                let Statement::ReturnStatement(ret) = statement else { continue };
-                let Some(Expression::ConditionalExpression(choice)) = &ret.argument else { continue };
-                let busy = |e: &Expression<'_>| !matches!(e.without_parentheses(),
-                    Expression::Identifier(_) | Expression::NumericLiteral(_) | Expression::StringLiteral(_)
-                    | Expression::BooleanLiteral(_) | Expression::NullLiteral(_) | Expression::UnaryExpression(_)
-                    | Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_));
+                let Statement::ReturnStatement(ret) = statement else {
+                    continue;
+                };
+                let Some(Expression::ConditionalExpression(choice)) = &ret.argument else {
+                    continue;
+                };
+                let busy = |e: &Expression<'_>| {
+                    !matches!(
+                        e.without_parentheses(),
+                        Expression::Identifier(_)
+                            | Expression::NumericLiteral(_)
+                            | Expression::StringLiteral(_)
+                            | Expression::BooleanLiteral(_)
+                            | Expression::NullLiteral(_)
+                            | Expression::UnaryExpression(_)
+                            | Expression::StaticMemberExpression(_)
+                            | Expression::ComputedMemberExpression(_)
+                    )
+                };
                 if !(busy(&choice.consequent) || busy(&choice.alternate)) {
                     continue;
                 }
-                let Some(Expression::ConditionalExpression(choice)) = ret.argument.take() else { unreachable!() };
+                let Some(Expression::ConditionalExpression(choice)) = ret.argument.take() else {
+                    unreachable!()
+                };
                 let choice = choice.unbox();
                 let yes = self.builder.statement_return(SPAN, Some(choice.consequent));
                 let no = self.builder.statement_return(SPAN, Some(choice.alternate));
@@ -68,7 +85,8 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
             // bound nowhere else.
             let movable = |binding: &BindingIdentifier<'a>| {
                 binding.symbol_id.get().is_some_and(|symbol| {
-                    self.read_counts.contains_key(&format!("\u{0}movable {}", symbol.index()))
+                    self.read_counts
+                        .contains_key(&format!("\u{0}movable {}", symbol.index()))
                 })
             };
             let bare = |statement: &Statement<'a>| {
@@ -122,8 +140,13 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
                 && !matches!(branch.alternate, Some(Statement::IfStatement(_)))
                 && !matches!(&branch.alternate, Some(Statement::BlockStatement(block)) if matches!(block.body.as_slice(), [Statement::IfStatement(_)]));
             if swap {
-                let Expression::UnaryExpression(unary) = &mut branch.test else { unreachable!() };
-                let test = std::mem::replace(&mut unary.argument, self.builder.expression_null_literal(SPAN));
+                let Expression::UnaryExpression(unary) = &mut branch.test else {
+                    unreachable!()
+                };
+                let test = std::mem::replace(
+                    &mut unary.argument,
+                    self.builder.expression_null_literal(SPAN),
+                );
                 branch.test = test;
                 let alternate = branch.alternate.take().expect("an else");
                 let consequent = std::mem::replace(&mut branch.consequent, alternate);
@@ -143,8 +166,11 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
             branch.alternate = None;
         } else if empty(&branch.consequent) {
             if let Some(alternate) = branch.alternate.take() {
-                let test = std::mem::replace(&mut branch.test, self.builder.expression_null_literal(SPAN));
-                branch.test = self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, test);
+                let test =
+                    std::mem::replace(&mut branch.test, self.builder.expression_null_literal(SPAN));
+                branch.test = self
+                    .builder
+                    .expression_unary(SPAN, UnaryOperator::LogicalNot, test);
                 branch.consequent = alternate;
             }
         }
@@ -161,7 +187,9 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
                 // `i = i + 1 + 1` is `i += 2`.
                 let total = match (&assignment.left, offset(&assignment.right)) {
                     (AssignmentTarget::AssignmentTargetIdentifier(target), Some((name, n)))
-                        if assignment.operator == AssignmentOperator::Assign && name.name == target.name && n > 1.0 =>
+                        if assignment.operator == AssignmentOperator::Assign
+                            && name.name == target.name
+                            && n > 1.0 =>
                     {
                         Some(n)
                     }
@@ -169,7 +197,9 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
                 };
                 if let Some(n) = total {
                     assignment.operator = AssignmentOperator::Addition;
-                    assignment.right = self.builder.expression_numeric_literal(SPAN, n, None, NumberBase::Decimal);
+                    assignment.right =
+                        self.builder
+                            .expression_numeric_literal(SPAN, n, None, NumberBase::Decimal);
                 }
             }
         }
@@ -193,7 +223,11 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
     fn visit_for_statement(&mut self, statement: &mut ForStatement<'a>) {
         walk_mut::walk_for_statement(self, statement);
         if self.counter_steps {
-            if let Some(update) = statement.update.as_ref().and_then(|update| self.counter_step(update, false)) {
+            if let Some(update) = statement
+                .update
+                .as_ref()
+                .and_then(|update| self.counter_step(update, false))
+            {
                 statement.update = Some(update);
             }
         }
@@ -222,15 +256,28 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
                 let Expression::BinaryExpression(binary) = expression else {
                     unreachable!();
                 };
-                let literal = self.builder.expression_string_literal(SPAN, self.builder.atom(&joined), None);
-                if matches!(binary.left, Expression::StringLiteral(_) | Expression::NumericLiteral(_)) {
+                let literal =
+                    self.builder
+                        .expression_string_literal(SPAN, self.builder.atom(&joined), None);
+                if matches!(
+                    binary.left,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                ) {
                     *expression = literal;
                 } else {
                     let Expression::BinaryExpression(inner) = &mut binary.left else {
                         unreachable!();
                     };
-                    let rest = std::mem::replace(&mut inner.left, self.builder.expression_null_literal(SPAN));
-                    *expression = self.builder.expression_binary(SPAN, rest, BinaryOperator::Addition, literal);
+                    let rest = std::mem::replace(
+                        &mut inner.left,
+                        self.builder.expression_null_literal(SPAN),
+                    );
+                    *expression = self.builder.expression_binary(
+                        SPAN,
+                        rest,
+                        BinaryOperator::Addition,
+                        literal,
+                    );
                 }
                 return;
             }
@@ -261,13 +308,19 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
             if let Some((name, n)) = found {
                 if nested && self.own_names.contains(name.as_str()) {
                     let left = self.builder.expression_identifier(SPAN, name);
-                    let right = self.builder.expression_numeric_literal(SPAN, n, None, NumberBase::Decimal);
-                    *expression = self.builder.expression_binary(SPAN, left, BinaryOperator::Addition, right);
+                    let right =
+                        self.builder
+                            .expression_numeric_literal(SPAN, n, None, NumberBase::Decimal);
+                    *expression =
+                        self.builder
+                            .expression_binary(SPAN, left, BinaryOperator::Addition, right);
                     return;
                 }
             }
             if let Some(value) = folded_number(expression) {
-                *expression = self.builder.expression_numeric_literal(SPAN, value, None, NumberBase::Decimal);
+                *expression =
+                    self.builder
+                        .expression_numeric_literal(SPAN, value, None, NumberBase::Decimal);
                 return;
             }
         }
@@ -326,7 +379,10 @@ impl<'a> VisitMut<'a> for Unwrap<'a> {
 
 /// The element a literal index picks out of an array literal whose other
 /// elements run no code (see [`quiet_value`]), taken out of `expression`.
-fn literal_slot<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) -> Option<Expression<'a>> {
+fn literal_slot<'a>(
+    expression: &mut Expression<'a>,
+    builder: AstBuilder<'a>,
+) -> Option<Expression<'a>> {
     let Expression::ComputedMemberExpression(member) = expression else {
         return None;
     };
@@ -349,14 +405,22 @@ fn literal_slot<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) ->
     }
     let at = index as usize;
     // The picked element runs as before; the others must run nothing.
-    let quiet = |element: &ArrayExpressionElement<'_>| element.as_expression().is_some_and(quiet_value);
+    let quiet =
+        |element: &ArrayExpressionElement<'_>| element.as_expression().is_some_and(quiet_value);
     if array.elements[at].as_expression().is_none()
-        || !array.elements.iter().enumerate().all(|(i, element)| i == at || quiet(element))
+        || !array
+            .elements
+            .iter()
+            .enumerate()
+            .all(|(i, element)| i == at || quiet(element))
     {
         return None;
     }
     let element = array.elements.get_mut(at)?;
-    let taken = std::mem::replace(element, ArrayExpressionElement::from(builder.expression_null_literal(SPAN)));
+    let taken = std::mem::replace(
+        element,
+        ArrayExpressionElement::from(builder.expression_null_literal(SPAN)),
+    );
     taken.into_expression().into()
 }
 

@@ -33,8 +33,8 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn optional_chains(source: &str) -> Result<(String, usize), String> {
     let mut code = source.to_string();
@@ -90,11 +90,13 @@ impl<'a> Visit<'a> for Chained {
         walk::walk_call_expression(self, call);
     }
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
-        self.spans.insert(member.object.get_inner_expression().span());
+        self.spans
+            .insert(member.object.get_inner_expression().span());
         walk::walk_computed_member_expression(self, member);
     }
     fn visit_static_member_expression(&mut self, member: &StaticMemberExpression<'a>) {
-        self.spans.insert(member.object.get_inner_expression().span());
+        self.spans
+            .insert(member.object.get_inner_expression().span());
         walk::walk_static_member_expression(self, member);
     }
     fn visit_tagged_template_expression(&mut self, tagged: &TaggedTemplateExpression<'a>) {
@@ -128,7 +130,10 @@ fn pure_path(expression: &Expression<'_>) -> bool {
         Expression::StaticMemberExpression(member) => !member.optional && pure_path(&member.object),
         Expression::ComputedMemberExpression(member) => {
             !member.optional
-                && matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
+                && matches!(
+                    member.expression,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                )
                 && pure_path(&member.object)
         }
         _ => false,
@@ -154,7 +159,11 @@ fn chain_base<'e, 'a>(expression: &'e Expression<'a>) -> Option<&'e Expression<'
 
 /// The link of a member/call chain that reads `path`: `x["a"]` in
 /// `x["a"]["b"](c)` for the path `x["a"]`.
-fn chain_link<'e, 'a>(expression: &'e Expression<'a>, source: &str, path: &str) -> Option<&'e Expression<'a>> {
+fn chain_link<'e, 'a>(
+    expression: &'e Expression<'a>,
+    source: &str,
+    path: &str,
+) -> Option<&'e Expression<'a>> {
     let mut at = expression.get_inner_expression();
     loop {
         at = match at {
@@ -187,22 +196,32 @@ fn link_text(source: &str, base: Span, whole: Span) -> Option<String> {
     let closed = rest.len() - rest.trim_start_matches([')', ' ']).len();
     let rest = &rest[closed..];
     (opened.bytes().all(|b| b == b'(' || b == b' ')
-        && opened.matches('(').count() == source[base.end as usize..base.end as usize + closed].matches(')').count()
+        && opened.matches('(').count()
+            == source[base.end as usize..base.end as usize + closed]
+                .matches(')')
+                .count()
         && rest.starts_with(['.', '[', '(']))
     .then(|| rest.to_string())
 }
 
 /// `typeof x.a !== "undefined" ? x.a : void 0` is `x.a`: the member, for a
 /// member path.
-fn defined_or_undefined<'e, 'a>(expression: &'e Expression<'a>, source: &str) -> Option<&'e Expression<'a>> {
+fn defined_or_undefined<'e, 'a>(
+    expression: &'e Expression<'a>,
+    source: &str,
+) -> Option<&'e Expression<'a>> {
     let Expression::ConditionalExpression(conditional) = expression.get_inner_expression() else {
         return None;
     };
     let Expression::BinaryExpression(binary) = conditional.test.get_inner_expression() else {
         return None;
     };
-    let typed = match (binary.left.get_inner_expression(), binary.right.get_inner_expression()) {
-        (Expression::UnaryExpression(unary), Expression::StringLiteral(name)) | (Expression::StringLiteral(name), Expression::UnaryExpression(unary))
+    let typed = match (
+        binary.left.get_inner_expression(),
+        binary.right.get_inner_expression(),
+    ) {
+        (Expression::UnaryExpression(unary), Expression::StringLiteral(name))
+        | (Expression::StringLiteral(name), Expression::UnaryExpression(unary))
             if unary.operator == UnaryOperator::Typeof && name.value == "undefined" =>
         {
             unary.argument.get_inner_expression()
@@ -212,7 +231,10 @@ fn defined_or_undefined<'e, 'a>(expression: &'e Expression<'a>, source: &str) ->
     let member = conditional.consequent.get_inner_expression();
     (binary.operator == BinaryOperator::StrictInequality
         && is_undefined(&conditional.alternate)
-        && matches!(member, Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_))
+        && matches!(
+            member,
+            Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_)
+        )
         && pure_path(member)
         && text(source, typed.span()) == text(source, member.span()))
     .then_some(member)
@@ -227,12 +249,16 @@ fn null_test<'e, 'a>(test: &'e Expression<'a>) -> Option<&'e Expression<'a>> {
         return None;
     }
     match (&binary.left, &binary.right) {
-        (value, Expression::NullLiteral(_)) | (Expression::NullLiteral(_), value) => Some(value.get_inner_expression()),
+        (value, Expression::NullLiteral(_)) | (Expression::NullLiteral(_), value) => {
+            Some(value.get_inner_expression())
+        }
         _ => None,
     }
 }
 
-fn assigned_name<'e, 'a>(statement: &'e Statement<'a>) -> Option<(&'e IdentifierReference<'a>, &'e Expression<'a>)> {
+fn assigned_name<'e, 'a>(
+    statement: &'e Statement<'a>,
+) -> Option<(&'e IdentifierReference<'a>, &'e Expression<'a>)> {
     let Statement::ExpressionStatement(statement) = statement else {
         return None;
     };
@@ -242,7 +268,8 @@ fn assigned_name<'e, 'a>(statement: &'e Statement<'a>) -> Option<(&'e Identifier
     let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
         return None;
     };
-    (assignment.operator == AssignmentOperator::Assign).then_some((target.as_ref(), &assignment.right))
+    (assignment.operator == AssignmentOperator::Assign)
+        .then_some((target.as_ref(), &assignment.right))
 }
 
 fn branch<'e, 'a>(statement: &'e Statement<'a>) -> &'e [Statement<'a>] {
@@ -270,7 +297,9 @@ struct Use {
 
 impl<'s, 'a> Scan<'s, 'a> {
     fn claimed(&self, span: Span) -> bool {
-        self.claimed.iter().any(|claim| claim.start <= span.start && span.end <= claim.end)
+        self.claimed
+            .iter()
+            .any(|claim| claim.start <= span.start && span.end <= claim.end)
     }
 
     fn symbol(&self, identifier: &IdentifierReference<'_>) -> Option<SymbolId> {
@@ -280,30 +309,46 @@ impl<'s, 'a> Scan<'s, 'a> {
     fn reference_spans(&self, symbol: SymbolId) -> Vec<(Span, bool)> {
         self.scoping
             .get_resolved_references(symbol)
-            .map(|reference| (self.nodes.get_node(reference.node_id()).span(), reference.is_write()))
+            .map(|reference| {
+                (
+                    self.nodes.get_node(reference.node_id()).span(),
+                    reference.is_write(),
+                )
+            })
             .collect()
     }
 
     /// `x == null ? void 0 : x…` → `x?.…`.
     fn simple(&mut self, conditional: &ConditionalExpression<'a>) {
-        if self.claimed(conditional.span) || self.chained.contains(&conditional.span) || !is_undefined(&conditional.consequent) {
+        if self.claimed(conditional.span)
+            || self.chained.contains(&conditional.span)
+            || !is_undefined(&conditional.consequent)
+        {
             return;
         }
         let Some(tested) = null_test(&conditional.test) else {
             return;
         };
         let path = text(self.source, tested.span());
-        let alternate = defined_or_undefined(&conditional.alternate, self.source).unwrap_or(&conditional.alternate);
+        let alternate = defined_or_undefined(&conditional.alternate, self.source)
+            .unwrap_or(&conditional.alternate);
         let Some(base) = chain_link(alternate, self.source, path) else {
             return;
         };
         if !pure_path(tested) {
             return;
         }
-        let Some(rest) = link_text(self.source, base.span(), alternate.get_inner_expression().span()) else {
+        let Some(rest) = link_text(
+            self.source,
+            base.span(),
+            alternate.get_inner_expression().span(),
+        ) else {
             return;
         };
-        self.edits.push(analysis::Edit::replace(conditional.span, format!("{path}{}", optional_link(&rest))));
+        self.edits.push(analysis::Edit::replace(
+            conditional.span,
+            format!("{path}{}", optional_link(&rest)),
+        ));
         self.claimed.push(conditional.span);
         self.count += 1;
     }
@@ -328,9 +373,15 @@ impl<'s, 'a> Scan<'s, 'a> {
         let (one, two) = (assigned_name(first)?, assigned_name(second)?);
         let is_true = |value: &Expression<'_>| match value.get_inner_expression() {
             Expression::BooleanLiteral(value) => value.value,
-            test => null_test(test).is_some_and(|tested| text(self.source, tested.span()) == path_text),
+            test => {
+                null_test(test).is_some_and(|tested| text(self.source, tested.span()) == path_text)
+            }
         };
-        let ((flag, set), (temp, copied)) = if is_true(one.1) { (one, two) } else { (two, one) };
+        let ((flag, set), (temp, copied)) = if is_true(one.1) {
+            (one, two)
+        } else {
+            (two, one)
+        };
         if !is_true(set) || text(self.source, copied.get_inner_expression().span()) != path_text {
             return None;
         }
@@ -358,7 +409,12 @@ impl<'s, 'a> Scan<'s, 'a> {
             return None;
         }
         let link = link_text(self.source, base.span(), value.span())?;
-        Some(Flag { flag, temp, path, link })
+        Some(Flag {
+            flag,
+            temp,
+            path,
+            link,
+        })
     }
 
     fn list(&mut self, statements: &[Statement<'a>]) {
@@ -373,7 +429,12 @@ impl<'s, 'a> Scan<'s, 'a> {
         }
     }
 
-    fn rewrite_flag(&mut self, statements: &[Statement<'a>], index: usize, flag: &Flag<'_, 'a>) -> Option<()> {
+    fn rewrite_flag(
+        &mut self,
+        statements: &[Statement<'a>],
+        index: usize,
+        flag: &Flag<'_, 'a>,
+    ) -> Option<()> {
         let flag_if = statements[index].span();
         // Both names declared together, uninitialised, earlier in this list.
         let declaration_of = |symbol: SymbolId| {
@@ -386,8 +447,13 @@ impl<'s, 'a> Scan<'s, 'a> {
         let declaration = declaration_of(flag.flag)?;
         if declaration_of(flag.temp)?.span != declaration.span
             || declaration.kind != VariableDeclarationKind::Let
-            || declaration.declarations.iter().any(|declarator| declarator.init.is_some())
-            || !statements[..index].iter().any(|statement| statement.span() == declaration.span)
+            || declaration
+                .declarations
+                .iter()
+                .any(|declarator| declarator.init.is_some())
+            || !statements[..index]
+                .iter()
+                .any(|statement| statement.span() == declaration.span)
         {
             return None;
         }
@@ -395,27 +461,51 @@ impl<'s, 'a> Scan<'s, 'a> {
         let temp_refs = self.reference_spans(flag.temp);
         let inside = |span: Span, outer: Span| outer.start <= span.start && span.end <= outer.end;
         // Nothing reads or writes either name before the `if`.
-        if flag_refs.iter().chain(&temp_refs).any(|(span, _)| span.start < flag_if.start) {
+        if flag_refs
+            .iter()
+            .chain(&temp_refs)
+            .any(|(span, _)| span.start < flag_if.start)
+        {
             return None;
         }
         // The pair's reads after the `if`, outside nested functions.
         let rest = &statements[index + 1..];
-        let mut finder = Uses { scan: self, flag: flag.flag, temp: flag.temp, depth: 0, found: Vec::new() };
+        let mut finder = Uses {
+            scan: self,
+            flag: flag.flag,
+            temp: flag.temp,
+            depth: 0,
+            found: Vec::new(),
+        };
         for statement in rest {
             finder.visit_statement(statement);
         }
         let uses = finder.found;
-        let tests: HashMap<Span, usize> = uses.iter().enumerate().map(|(at, found)| (found.test, at)).collect();
+        let tests: HashMap<Span, usize> = uses
+            .iter()
+            .enumerate()
+            .map(|(at, found)| (found.test, at))
+            .collect();
         let bases: HashSet<Span> = uses.iter().map(|found| found.base).collect();
-        let mut walk = FlagWalk { flag_refs: &flag_refs, temp_refs: &temp_refs, tests: &tests, bases: &bases, used: HashSet::new() };
+        let mut walk = FlagWalk {
+            flag_refs: &flag_refs,
+            temp_refs: &temp_refs,
+            tests: &tests,
+            bases: &bases,
+            used: HashSet::new(),
+        };
         let written = walk.statements(rest)?;
         let used = walk.used;
         // Every other reference: the `if`'s own, or of `z` after its new
         // value on every path.
-        if temp_refs.iter().any(|(span, _)| !inside(*span, flag_if) && !used.iter().any(|&at| uses[at].base == *span)) {
+        if temp_refs.iter().any(|(span, _)| {
+            !inside(*span, flag_if) && !used.iter().any(|&at| uses[at].base == *span)
+        }) {
             return None;
         }
-        let flag_kept = flag_refs.iter().any(|(span, _)| !inside(*span, flag_if) && !tests.get(span).is_some_and(|at| used.contains(at)));
+        let flag_kept = flag_refs.iter().any(|(span, _)| {
+            !inside(*span, flag_if) && !tests.get(span).is_some_and(|at| used.contains(at))
+        });
         if flag_kept && !written {
             return None;
         }
@@ -426,7 +516,11 @@ impl<'s, 'a> Scan<'s, 'a> {
         names.visit_expression(flag.path);
         for &reference in &names.references {
             if let Some(symbol) = self.scoping.get_reference(reference).symbol_id() {
-                if self.reference_spans(symbol).iter().any(|(span, write)| *write && span.start >= flag_if.end && span.end <= last) {
+                if self
+                    .reference_spans(symbol)
+                    .iter()
+                    .any(|(span, write)| *write && span.start >= flag_if.end && span.end <= last)
+                {
                     return None;
                 }
             }
@@ -435,7 +529,14 @@ impl<'s, 'a> Scan<'s, 'a> {
             let mut from = 0;
             while let Some(at) = region[from..].find(property.as_str()) {
                 let after = region[from + at + property.len()..].trim_start();
-                if after.starts_with('=') && !after.starts_with("==") || ["+=", "-=", "|=", "&=", "^=", "*=", "/=", "%=", "++", "--", "<<=", ">>=", "**="].iter().any(|op| after.starts_with(op)) {
+                if after.starts_with('=') && !after.starts_with("==")
+                    || [
+                        "+=", "-=", "|=", "&=", "^=", "*=", "/=", "%=", "++", "--", "<<=", ">>=",
+                        "**=",
+                    ]
+                    .iter()
+                    .any(|op| after.starts_with(op))
+                {
                     return None;
                 }
                 from += at + property.len();
@@ -446,10 +547,14 @@ impl<'s, 'a> Scan<'s, 'a> {
         let head = format!("{path_text}{}", optional_link(&flag.link));
         for &at in &used {
             let found = &uses[at];
-            self.edits.push(analysis::Edit::replace(found.whole, format!("{head}{}", optional_link(&found.rest))));
+            self.edits.push(analysis::Edit::replace(
+                found.whole,
+                format!("{head}{}", optional_link(&found.rest)),
+            ));
             self.claimed.push(found.whole);
         }
-        self.edits.push(analysis::Edit::delete(whole_line(self.source, flag_if)));
+        self.edits
+            .push(analysis::Edit::delete(whole_line(self.source, flag_if)));
         self.claimed.push(flag_if);
         let kept: Vec<_> = declaration
             .declarations
@@ -462,9 +567,15 @@ impl<'s, 'a> Scan<'s, 'a> {
             .map(|binding| binding.name.as_str())
             .collect();
         if kept.is_empty() {
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, declaration.span)));
+            self.edits.push(analysis::Edit::delete(whole_line(
+                self.source,
+                declaration.span,
+            )));
         } else {
-            self.edits.push(analysis::Edit::replace(declaration.span, format!("let {};", kept.join(", "))));
+            self.edits.push(analysis::Edit::replace(
+                declaration.span,
+                format!("let {};", kept.join(", ")),
+            ));
         }
         self.claimed.push(declaration.span);
         self.count += 1;
@@ -494,7 +605,10 @@ impl<'a> Visit<'a> for Uses<'_, '_, 'a> {
     }
     fn visit_conditional_expression(&mut self, conditional: &ConditionalExpression<'a>) {
         walk::walk_conditional_expression(self, conditional);
-        if self.depth > 0 || self.scan.chained.contains(&conditional.span) || !is_undefined(&conditional.consequent) {
+        if self.depth > 0
+            || self.scan.chained.contains(&conditional.span)
+            || !is_undefined(&conditional.consequent)
+        {
             return;
         }
         let Expression::Identifier(test) = conditional.test.get_inner_expression() else {
@@ -506,10 +620,19 @@ impl<'a> Visit<'a> for Uses<'_, '_, 'a> {
         if self.scan.symbol(test) != Some(self.flag) || self.scan.symbol(base) != Some(self.temp) {
             return;
         }
-        let Some(rest) = link_text(self.scan.source, base.span, conditional.alternate.get_inner_expression().span()) else {
+        let Some(rest) = link_text(
+            self.scan.source,
+            base.span,
+            conditional.alternate.get_inner_expression().span(),
+        ) else {
             return;
         };
-        self.found.push(Use { whole: conditional.span, test: test.span, base: base.span, rest });
+        self.found.push(Use {
+            whole: conditional.span,
+            test: test.span,
+            base: base.span,
+            rest,
+        });
     }
 }
 
@@ -526,7 +649,8 @@ impl FlagWalk<'_> {
     /// Every reference of the pair in `span`, all being reads of the pair:
     /// `Some(uses)`; otherwise `None`.
     fn reads_only(&self, span: Span, except: Option<Span>) -> Option<Vec<usize>> {
-        let within = |at: &Span| span.start <= at.start && at.end <= span.end && Some(*at) != except;
+        let within =
+            |at: &Span| span.start <= at.start && at.end <= span.end && Some(*at) != except;
         let mut uses = Vec::new();
         for (at, _) in self.flag_refs.iter().filter(|(at, _)| within(at)) {
             uses.push(*self.tests.get(at)?);
@@ -549,13 +673,20 @@ impl FlagWalk<'_> {
             }
             match statement {
                 Statement::ExpressionStatement(expression) => {
-                    let Expression::AssignmentExpression(assignment) = &expression.expression else {
+                    let Expression::AssignmentExpression(assignment) = &expression.expression
+                    else {
                         return None;
                     };
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
                         return None;
                     };
-                    if assignment.operator != AssignmentOperator::Assign || !self.flag_refs.iter().any(|(at, write)| *write && *at == target.span) {
+                    if assignment.operator != AssignmentOperator::Assign
+                        || !self
+                            .flag_refs
+                            .iter()
+                            .any(|(at, write)| *write && *at == target.span)
+                    {
                         return None;
                     }
                     let uses = self.reads_only(assignment.right.span(), None)?;
@@ -565,7 +696,9 @@ impl FlagWalk<'_> {
                 Statement::IfStatement(branching) => {
                     let uses = self.reads_only(branching.test.span(), None)?;
                     let alternate = branching.alternate.as_ref()?;
-                    if self.statements(branch(&branching.consequent))? && self.statements(branch(alternate))? {
+                    if self.statements(branch(&branching.consequent))?
+                        && self.statements(branch(alternate))?
+                    {
                         self.used.extend(uses);
                         return Some(true);
                     }
@@ -673,7 +806,10 @@ mod tests {
         let source = "function f() {\n\tlet a;\n\ta = (null == (k[\"c\"])) ? (void 0) : ((k[\"c\"])[\"g\"](new U(12)));\n\treturn a;\n}\n";
         let (code, count) = optional_chains(source).unwrap();
         assert_eq!(count, 1, "{code}");
-        assert_eq!(code, "function f() {\n\tlet a;\n\ta = k[\"c\"]?.[\"g\"](new U(12));\n\treturn a;\n}\n");
+        assert_eq!(
+            code,
+            "function f() {\n\tlet a;\n\ta = k[\"c\"]?.[\"g\"](new U(12));\n\treturn a;\n}\n"
+        );
         let source = "function f(e) {\n\treturn e[\"t\"] == null ? void 0 : typeof e[\"t\"][\"r\"] !== \"undefined\" ? e[\"t\"][\"r\"] : void 0;\n}\n";
         let (code, _) = optional_chains(source).unwrap();
         assert_eq!(code, "function f(e) {\n\treturn e[\"t\"]?.[\"r\"];\n}\n");

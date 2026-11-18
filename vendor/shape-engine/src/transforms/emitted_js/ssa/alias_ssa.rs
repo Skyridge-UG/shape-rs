@@ -23,8 +23,8 @@ use oxc_syntax::scope::ScopeFlags;
 
 use super::super::adjacent_ssa::LocalReads;
 use super::super::index::SpanIndex;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AliasSsaResult {
@@ -142,7 +142,11 @@ struct Aliases<'s, 'a> {
 impl Aliases<'_, '_> {
     /// The binding the copy reads, unless it is protected, shares its name
     /// with a function binding, or is a parameter `arguments` can write.
-    fn source_symbol(&self, candidate: &Candidate, protected: &BTreeSet<String>) -> Option<SymbolId> {
+    fn source_symbol(
+        &self,
+        candidate: &Candidate,
+        protected: &BTreeSet<String>,
+    ) -> Option<SymbolId> {
         let (scoping, scan) = (self.scoping, self.scan);
         let source_symbol = scoping.get_reference(candidate.source).symbol_id()?;
         if protected.contains(scoping.symbol_name(source_symbol)) {
@@ -251,8 +255,7 @@ impl Aliases<'_, '_> {
     ) -> bool {
         let (scoping, nodes, scan) = (self.scoping, self.nodes, self.scan);
         let source_name = scoping.symbol_ident(source_symbol);
-        scan
-            .enclosing_loop(candidate.statement)
+        scan.enclosing_loop(candidate.statement)
             .is_some_and(|loop_span| {
                 source_name.starts_with("$CARRY_")
                     && alias_spans.iter().all(|span| contains(loop_span, *span))
@@ -295,8 +298,7 @@ impl Aliases<'_, '_> {
                 let last_read = alias_spans.iter().map(|span| span.end).max().unwrap();
                 alias_spans.iter().all(|span| {
                     scan.enclosing_block(*span) == Some(block)
-                        && scan.enclosing_loop(*span)
-                            == scan.enclosing_loop(candidate.statement)
+                        && scan.enclosing_loop(*span) == scan.enclosing_loop(candidate.statement)
                 }) && scoping.get_resolved_references(source_symbol).all(|write| {
                     if !write.is_write() {
                         return true;
@@ -313,7 +315,12 @@ impl Aliases<'_, '_> {
     /// no explicit or implicit store can run in this same iteration.
     /// Captured writers remain barriers even when their source lies
     /// outside the textual interval.
-    fn branch_snapshot(&self, candidate: &Candidate, source_symbol: SymbolId, alias_spans: &[Span]) -> bool {
+    fn branch_snapshot(
+        &self,
+        candidate: &Candidate,
+        source_symbol: SymbolId,
+        alias_spans: &[Span],
+    ) -> bool {
         let (scoping, nodes, locals) = (self.scoping, self.nodes, self.locals);
         locals.initialized(source_symbol, candidate.statement)
             && alias_spans

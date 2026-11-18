@@ -32,8 +32,8 @@ use oxc_syntax::operator::UnaryOperator;
 use oxc_syntax::scope::ScopeFlags;
 
 use super::super::purity::expression_is_pure;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 use crate::transforms::emitted_js::support::indent_at;
 
 /// Helpers longer than this are left as calls.
@@ -49,7 +49,11 @@ pub(crate) fn inline_tuple_helpers(source: &str) -> Result<InlinedTupleHelpers, 
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let comments: Vec<Span> = program.comments.iter().map(|comment| comment.span).collect();
+    let comments: Vec<Span> = program
+        .comments
+        .iter()
+        .map(|comment| comment.span)
+        .collect();
     let mut helpers = Helpers {
         source,
         scoping: &scoping,
@@ -79,9 +83,9 @@ pub(crate) fn inline_tuple_helpers(source: &str) -> Result<InlinedTupleHelpers, 
     let mut counts: BTreeMap<SymbolId, usize> = BTreeMap::new();
     for expansion in calls.expansions {
         let nested = expansion.reads.iter().any(|(read, _)| {
-            statements
-                .iter()
-                .any(|outer| *outer != expansion.statement && outer.start <= read.start && read.end <= outer.end)
+            statements.iter().any(|outer| {
+                *outer != expansion.statement && outer.start <= read.start && read.end <= outer.end
+            })
         });
         if nested {
             continue;
@@ -100,7 +104,10 @@ pub(crate) fn inline_tuple_helpers(source: &str) -> Result<InlinedTupleHelpers, 
         expanded += count;
         let references = scoping.get_resolved_reference_ids(*helper).len();
         if references == *count {
-            edits.push(analysis::Edit::delete(whole_line(source, found[helper].declaration)));
+            edits.push(analysis::Edit::delete(whole_line(
+                source,
+                found[helper].declaration,
+            )));
         }
     }
     let applied = analysis::apply_edits(source, edits);
@@ -237,7 +244,10 @@ impl Helpers<'_> {
             } else if let Some(index) = target.and_then(|t| locals.iter().position(|l| *l == t)) {
                 names.push((span, Name::Local(index)));
             } else {
-                free.push((self.source[span.start as usize..span.end as usize].to_string(), target));
+                free.push((
+                    self.source[span.start as usize..span.end as usize].to_string(),
+                    target,
+                ));
             }
         }
         for (span, local) in closed.bindings {
@@ -445,9 +455,11 @@ impl<'s> Calls<'s, '_> {
         let Some(scope) = self.scope_at(callee.reference_id.get()) else {
             return;
         };
-        if helper.free.iter().any(|(name, symbol)| {
-            self.scoping.find_binding(scope, name.as_str().into()) != *symbol
-        }) {
+        if helper
+            .free
+            .iter()
+            .any(|(name, symbol)| self.scoping.find_binding(scope, name.as_str().into()) != *symbol)
+        {
             return;
         }
         let mut arguments = Vec::new();
@@ -457,7 +469,13 @@ impl<'s> Calls<'s, '_> {
             };
             arguments.push(expression);
         }
-        let text = self.expansion_text(statement.span(), declaration.kind, helper, &arguments, &slots);
+        let text = self.expansion_text(
+            statement.span(),
+            declaration.kind,
+            helper,
+            &arguments,
+            &slots,
+        );
         self.expansions.push(Expansion {
             helper: helper_symbol,
             statement: statement.span(),
@@ -472,8 +490,7 @@ impl<'s> Calls<'s, '_> {
         let Statement::VariableDeclaration(declaration) = statement else {
             return None;
         };
-        if declaration.kind == VariableDeclarationKind::Var || declaration.declarations.len() != 1
-        {
+        if declaration.kind == VariableDeclarationKind::Var || declaration.declarations.len() != 1 {
             return None;
         }
         let declarator = &declaration.declarations[0];
@@ -619,7 +636,8 @@ impl<'s> Calls<'s, '_> {
             match arguments.get(index) {
                 None => parameter_text.push("(void 0)".to_string()),
                 Some(argument) => {
-                    let text = &self.source[argument.span().start as usize..argument.span().end as usize];
+                    let text =
+                        &self.source[argument.span().start as usize..argument.span().end as usize];
                     match self.stable_text(argument, text, statement) {
                         Some(stable) => parameter_text.push(stable),
                         None => {
@@ -635,9 +653,9 @@ impl<'s> Calls<'s, '_> {
         // Extra arguments are evaluated and dropped.
         for argument in arguments.iter().skip(helper.parameters.len()) {
             if !expression_is_pure(argument) {
-                let text = &self.source[argument.span().start as usize..argument.span().end as usize];
+                let text =
+                    &self.source[argument.span().start as usize..argument.span().end as usize];
                 lines.push(format!("({text});"));
-
             }
         }
         parameter_text
@@ -645,7 +663,11 @@ impl<'s> Calls<'s, '_> {
 
     /// Every reference of `holder` as a plain `holder[k]` read with an
     /// in-range literal `k`: the member spans and indexes.
-    fn indexed_reads(&self, holder: &BindingIdentifier<'_>, length: usize) -> Option<Vec<(Span, usize)>> {
+    fn indexed_reads(
+        &self,
+        holder: &BindingIdentifier<'_>,
+        length: usize,
+    ) -> Option<Vec<(Span, usize)>> {
         let symbol = holder.symbol_id.get()?;
         if !(holder.name.starts_with("$SSA_") || holder.name.starts_with("$CARRY_"))
             || self.scoping.symbol_is_mutated(symbol)
@@ -686,13 +708,15 @@ impl<'s> Calls<'s, '_> {
     /// already declared: reading it in the body sees the argument's value.
     fn stable_text(&self, argument: &Expression<'_>, text: &str, call: Span) -> Option<String> {
         match argument {
-            Expression::StringLiteral(_) | Expression::BooleanLiteral(_) | Expression::NullLiteral(_) => {
-                Some(text.to_string())
-            }
+            Expression::StringLiteral(_)
+            | Expression::BooleanLiteral(_)
+            | Expression::NullLiteral(_) => Some(text.to_string()),
             Expression::NumericLiteral(_) => Some(format!("({text})")),
             Expression::UnaryExpression(unary)
-                if matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::Void)
-                    && matches!(unary.argument, Expression::NumericLiteral(_)) =>
+                if matches!(
+                    unary.operator,
+                    UnaryOperator::UnaryNegation | UnaryOperator::Void
+                ) && matches!(unary.argument, Expression::NumericLiteral(_)) =>
             {
                 Some(format!("({text})"))
             }
@@ -730,7 +754,6 @@ impl<'s> Calls<'s, '_> {
     }
 }
 
-
 /// A comma expression cannot be a declarator's initializer bare.
 fn parenthesized(expression: &Expression<'_>, text: &str) -> String {
     if matches!(expression, Expression::SequenceExpression(_)) {
@@ -742,7 +765,9 @@ fn parenthesized(expression: &Expression<'_>, text: &str) -> String {
 
 fn has_comment(comments: &[Span], span: Span) -> bool {
     let at = comments.partition_point(|comment| comment.start < span.start);
-    comments.get(at).is_some_and(|comment| comment.start < span.end)
+    comments
+        .get(at)
+        .is_some_and(|comment| comment.start < span.end)
 }
 
 #[cfg(test)]
@@ -754,21 +779,49 @@ mod tests {
         let source = "function $VMHELPER_1(a, b) {\n  let $SSA_9 = a + 1;\n  return [$SSA_9, b, a[\"next\"]];\n}\nfunction f(x, $SSA_1) {\n  let [$SSA_2, $SSA_3, $SSA_4] = $VMHELPER_1(x.p, 5);\n  let [$SSA_5, , $SSA_6] = $VMHELPER_1($SSA_1, 6);\n  return [$SSA_2, $SSA_3, $SSA_4, $SSA_5, $SSA_6];\n}";
         let result = inline_tuple_helpers(source).unwrap();
         assert_eq!(result.expanded, 2, "{}", result.code);
-        assert!(!result.code.contains("function $VMHELPER_1"), "{}", result.code);
-        assert!(result.code.contains("let $SSA_x1 = x.p;"), "{}", result.code);
-        assert!(result.code.contains("let $SSA_x2 = $SSA_x1 + 1;"), "{}", result.code);
+        assert!(
+            !result.code.contains("function $VMHELPER_1"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("let $SSA_x1 = x.p;"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("let $SSA_x2 = $SSA_x1 + 1;"),
+            "{}",
+            result.code
+        );
         assert!(result.code.contains("let $SSA_3 = (5);"), "{}", result.code);
-        assert!(result.code.contains("let $SSA_4 = $SSA_x1[\"next\"];"), "{}", result.code);
+        assert!(
+            result.code.contains("let $SSA_4 = $SSA_x1[\"next\"];"),
+            "{}",
+            result.code
+        );
         // a caller parameter could change through `arguments`: it is held
-        assert!(result.code.contains("let $SSA_x3 = $SSA_1;"), "{}", result.code);
+        assert!(
+            result.code.contains("let $SSA_x3 = $SSA_1;"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
     fn keeps_comma_arguments_and_elements_parenthesized() {
         let source = "function $VMHELPER_1(a) {\n  return [(0, a.m), a];\n}\nfunction f(o) {\n  let [$SSA_1, $SSA_2] = $VMHELPER_1((0, o[\"p\"]));\n  return [$SSA_1, $SSA_2];\n}";
         let result = inline_tuple_helpers(source).unwrap();
-        assert!(result.code.contains("let $SSA_x1 = (0, o[\"p\"]);"), "{}", result.code);
-        assert!(result.code.contains("let $SSA_1 = (0, $SSA_x1.m);"), "{}", result.code);
+        assert!(
+            result.code.contains("let $SSA_x1 = (0, o[\"p\"]);"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("let $SSA_1 = (0, $SSA_x1.m);"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -776,7 +829,11 @@ mod tests {
         let source = "function $VMHELPER_1(a) {\n  let $SSA_9 = a.m;\n  return [$SSA_9, a.n];\n}\nfunction g() {}\nfunction f(o) {\n  let $SSA_1 = $VMHELPER_1(o);\n  return g($SSA_1[1], $SSA_1[0], $SSA_1[1]);\n}";
         let result = inline_tuple_helpers(source).unwrap();
         assert_eq!(result.expanded, 1, "{}", result.code);
-        assert!(result.code.contains("return g($SSA_x1, $SSA_x2, $SSA_x1);"), "{}", result.code);
+        assert!(
+            result.code.contains("return g($SSA_x1, $SSA_x2, $SSA_x1);"),
+            "{}",
+            result.code
+        );
         // a holder that escapes stays a call
         let source = "function $VMHELPER_1(a) {\n  return [a, a.n];\n}\nfunction g() {}\nfunction f(o) {\n  let $SSA_1 = $VMHELPER_1(o);\n  return g($SSA_1, $SSA_1[0]);\n}";
         assert_eq!(inline_tuple_helpers(source).unwrap().expanded, 0);
@@ -791,7 +848,11 @@ mod tests {
             "function $VMHELPER_1(a) {\n  return [() => a, a];\n}",
         ] {
             let source = format!("{helper}\nfunction f(x) {{\n  let [$SSA_1, $SSA_2] = $VMHELPER_1(x);\n  return $SSA_1;\n}}");
-            assert_eq!(inline_tuple_helpers(&source).unwrap().expanded, 0, "{source}");
+            assert_eq!(
+                inline_tuple_helpers(&source).unwrap().expanded,
+                0,
+                "{source}"
+            );
         }
         // a free name shadowed at the call site
         let source = "let y = 1;\nfunction $VMHELPER_1(a) {\n  return [y, a];\n}\nfunction f(x) {\n  let y = 2;\n  let [$SSA_1, $SSA_2] = $VMHELPER_1(x);\n  return $SSA_1;\n}";

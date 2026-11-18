@@ -43,13 +43,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{
-    ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AssignmentPattern, AssignmentTarget,
-    AssignmentTargetPropertyIdentifier, AssignmentTargetWithDefault, BindingIdentifier,
-    BindingPattern, CallExpression, ComputedMemberExpression, ExportDefaultDeclaration,
-    ExportDefaultDeclarationKind, Expression, FormalParameter, Function, FunctionType,
-    IdentifierReference, MethodDefinition, MethodDefinitionKind, ObjectProperty, Program,
-    PropertyDefinition, PropertyKey, PropertyKind, StaticMemberExpression, VariableDeclarator,
-    WithStatement,
+    ArrowFunctionExpression, AssignmentExpression, AssignmentOperator, AssignmentPattern,
+    AssignmentTarget, AssignmentTargetPropertyIdentifier, AssignmentTargetWithDefault,
+    BindingIdentifier, BindingPattern, CallExpression, ComputedMemberExpression,
+    ExportDefaultDeclaration, ExportDefaultDeclarationKind, Expression, FormalParameter, Function,
+    FunctionType, IdentifierReference, MethodDefinition, MethodDefinitionKind, ObjectProperty,
+    Program, PropertyDefinition, PropertyKey, PropertyKind, StaticMemberExpression,
+    VariableDeclarator, WithStatement,
 };
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::SymbolId;
@@ -239,7 +239,11 @@ pub fn apply_anonymous_names_mapped(
     let positions: Vec<Result<usize, NameSkip>> = if plan_source == edited {
         entries
             .iter()
-            .map(|entry| index.position_of(entry.function).ok_or(NameSkip::NoFunctionAtSpan))
+            .map(|entry| {
+                index
+                    .position_of(entry.function)
+                    .ok_or(NameSkip::NoFunctionAtSpan)
+            })
             .collect()
     } else {
         let plan_allocator = Allocator::default();
@@ -279,8 +283,9 @@ pub fn apply_anonymous_names_mapped(
     for (entry, position) in entries.iter().zip(&resolved) {
         name_checks.push(match position {
             Err(skip) => Err(*skip),
-            Ok(position) => static_name_check(&index.nodes[*position], &entry.proposed_name)
-                .map(|()| *position),
+            Ok(position) => {
+                static_name_check(&index.nodes[*position], &entry.proposed_name).map(|()| *position)
+            }
         });
     }
     if options.name {
@@ -294,7 +299,9 @@ pub fn apply_anonymous_names_mapped(
                     .map(|position| (*position, entry.proposed_name.clone()))
             })
             .fold(BTreeMap::new(), |mut map, (position, name)| {
-                map.entry(position).or_insert_with(BTreeSet::new).insert(name);
+                map.entry(position)
+                    .or_insert_with(BTreeSet::new)
+                    .insert(name);
                 map
             });
         let mut scan = BodyScan::new(&index, targets);
@@ -313,7 +320,10 @@ pub fn apply_anonymous_names_mapped(
     let mut inserts: Vec<(u32, usize, String)> = Vec::new();
     let mut outcomes: Vec<AnonymousNameOutcome> = Vec::new();
     for (order, (entry, position)) in entries.iter().zip(&resolved).enumerate() {
-        let node = position.as_ref().ok().map(|position| &index.nodes[*position]);
+        let node = position
+            .as_ref()
+            .ok()
+            .map(|position| &index.nodes[*position]);
         let base = |action, skip: Option<NameSkip>| AnonymousNameOutcome {
             entry: entry.clone(),
             action,
@@ -362,7 +372,11 @@ pub fn apply_anonymous_names_mapped(
                 } else {
                     ""
                 };
-                inserts.push((at, order * 2, format!("{lead}/* {} */ ", entry.proposed_name)));
+                inserts.push((
+                    at,
+                    order * 2,
+                    format!("{lead}/* {} */ ", entry.proposed_name),
+                ));
             }
             outcomes.push(base(AnonymousNameAction::Annotate, skip));
         }
@@ -587,10 +601,7 @@ impl<'a> Visit<'a> for FunctionIndex {
             span: SourceSpan::new(function.span.start, function.span.end),
             kind,
             own_name: function.id.as_ref().map(|id| id.name.to_string()),
-            own_symbol: function
-                .id
-                .as_ref()
-                .and_then(|id| id.symbol_id.get()),
+            own_symbol: function.id.as_ref().and_then(|id| id.symbol_id.get()),
             params_start: function.params.span.start,
             comment_anchor,
             inferred: self.inferred_for.get(&key).cloned(),
@@ -669,7 +680,10 @@ impl<'a> Visit<'a> for FunctionIndex {
         if let (true, AssignmentTarget::AssignmentTargetIdentifier(identifier)) =
             (named, &assignment.left)
         {
-            self.infer(&assignment.right, Inferred::Static(identifier.name.to_string()));
+            self.infer(
+                &assignment.right,
+                Inferred::Static(identifier.name.to_string()),
+            );
         }
         walk::walk_assignment_expression(self, assignment);
     }
@@ -722,7 +736,6 @@ impl<'a> Visit<'a> for FunctionIndex {
         walk::walk_export_default_declaration(self, export);
     }
 }
-
 
 /// Per target function: does anything inside use a candidate spelling?
 struct BodyScan {
@@ -841,8 +854,7 @@ impl<'a> Visit<'a> for BodyScan {
     }
 
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
-        if matches!(&member.object, Expression::Identifier(object) if object.name == "arguments")
-        {
+        if matches!(&member.object, Expression::Identifier(object) if object.name == "arguments") {
             // Any computed read of `arguments` may be `arguments["callee"]`.
             let callee = match &member.expression {
                 Expression::StringLiteral(literal) => literal.value == "callee",

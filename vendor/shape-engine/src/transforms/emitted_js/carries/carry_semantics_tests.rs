@@ -8,9 +8,7 @@
 
 use std::process::Command;
 
-use super::super::{
-    coalesce_carry_copies, fold_branch_values, merge_equivalent_carries,
-};
+use super::super::{coalesce_carry_copies, fold_branch_values, merge_equivalent_carries};
 
 fn output(source: &str, expression: &str) -> String {
     let script = format!("{source}\nconsole.log(JSON.stringify({expression}));");
@@ -46,4 +44,3 @@ fn equivalent_carries_keep_both_branch_values() {
     let cases = "[f(false,7),f(true,7),f(true,0)]";
     assert_eq!(output(source, cases), output(&rewritten, cases));
 }
-

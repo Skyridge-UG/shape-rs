@@ -85,16 +85,20 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::signals::extract::encoding::{
-    BindingEvidence, EncodingProperties, FunctionEvidence, ENCODING_PROPERTIES_SCHEMA_VERSION,
-};
 use super::function_index::{
     BindingDeclarationKind, FunctionIndex, FunctionKind, HeldAlternative, MainVariableClass,
     MainVariableRecord, FUNCTION_INDEX_SCHEMA_VERSION,
 };
-use crate::signals::extract::wiring::{EmitterMethod, WiringProperties, PROGRAM_WIRING_SCHEMA_VERSION};
-use crate::signals::schema::{BindingRef, Confidence, Diagnostic, SourceIdentity, SourceSpan, UnresolvedFact};
 use crate::naming::function_index::CallResolution;
+use crate::signals::extract::encoding::{
+    BindingEvidence, EncodingProperties, FunctionEvidence, ENCODING_PROPERTIES_SCHEMA_VERSION,
+};
+use crate::signals::extract::wiring::{
+    EmitterMethod, WiringProperties, PROGRAM_WIRING_SCHEMA_VERSION,
+};
+use crate::signals::schema::{
+    BindingRef, Confidence, Diagnostic, SourceIdentity, SourceSpan, UnresolvedFact,
+};
 
 /// Version of the serialized [`ProgramRoleGraph`] contract.
 ///
@@ -847,23 +851,25 @@ pub fn extract_program_role_graph(source: &str) -> Result<ProgramRoleGraph, Role
     if source.trim().is_empty() {
         return Err(RoleGraphError::InvalidInput("source is empty".to_string()));
     }
-    let index =
-        crate::naming::function_index::extract_function_index(source).map_err(|error| RoleGraphError::Extraction {
+    let index = crate::naming::function_index::extract_function_index(source).map_err(|error| {
+        RoleGraphError::Extraction {
             context: "function_index",
             message: error.to_string(),
-        })?;
-    let encoding = crate::signals::extract::encoding::extract_encoding_properties(source).map_err(|error| {
-        RoleGraphError::Extraction {
+        }
+    })?;
+    let encoding = crate::signals::extract::encoding::extract_encoding_properties(source).map_err(
+        |error| RoleGraphError::Extraction {
             context: "encoding_properties",
             message: error.to_string(),
-        }
-    })?;
-    let wiring = crate::signals::extract::wiring::extract_program_wiring(source).map_err(|error| {
-        RoleGraphError::Extraction {
-            context: "wiring_properties",
-            message: error.to_string(),
-        }
-    })?;
+        },
+    )?;
+    let wiring =
+        crate::signals::extract::wiring::extract_program_wiring(source).map_err(|error| {
+            RoleGraphError::Extraction {
+                context: "wiring_properties",
+                message: error.to_string(),
+            }
+        })?;
     extract_program_role_graph_with_context(source, &index, &encoding, &wiring)
 }
 

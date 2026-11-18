@@ -21,25 +21,25 @@
 //! `--x`.
 
 use oxc_allocator::Allocator;
-use oxc_ast::ast::*;
 use oxc_allocator::CloneIn;
+use oxc_ast::ast::*;
 use oxc_ast::AstBuilder;
-use oxc_span::{ContentEq, GetSpan, SPAN};
 use oxc_ast_visit::{walk, walk_mut, Visit, VisitMut};
 use oxc_codegen::{Codegen, CodegenOptions, IndentChar};
+use oxc_span::{ContentEq, GetSpan, SPAN};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator, UpdateOperator};
 
 use crate::analysis;
 
-mod loops;
 mod chains;
-mod unwrap;
+mod loops;
 mod resugar;
 #[cfg(test)]
 mod tests;
+mod unwrap;
 
-pub(crate) use resugar::resugar_expressions;
 use loops::*;
+pub(crate) use resugar::resugar_expressions;
 use resugar::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,7 +63,11 @@ fn tidy(source: &str, counter_steps: bool) -> Result<TidyExpressionsResult, Stri
     let mut program = analysis::parse_program(&allocator, source)?;
     let mut with = WithStatements::default();
     with.visit_program(&program);
-    let (own_names, read_counts) = if counter_steps { own_names(&program) } else { Default::default() };
+    let (own_names, read_counts) = if counter_steps {
+        own_names(&program)
+    } else {
+        Default::default()
+    };
     let mut unwrap = Unwrap {
         builder: AstBuilder::new(&allocator),
         keep: false,
@@ -115,13 +119,21 @@ struct Unwrap<'a> {
 }
 
 /// Names only their declaring function references, and reference counts.
-fn own_names(program: &Program<'_>) -> (std::collections::HashSet<String>, std::collections::HashMap<String, usize>) {
+fn own_names(
+    program: &Program<'_>,
+) -> (
+    std::collections::HashSet<String>,
+    std::collections::HashMap<String, usize>,
+) {
     use oxc_ast::AstKind;
     let (scoping, nodes) = analysis::analyze(program);
     let function_of = |node: oxc_semantic::NodeId| {
-        nodes
-            .ancestor_ids(node)
-            .find(|ancestor| matches!(nodes.kind(*ancestor), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+        nodes.ancestor_ids(node).find(|ancestor| {
+            matches!(
+                nodes.kind(*ancestor),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            )
+        })
     };
     let mut own = std::collections::HashSet::new();
     let mut shared = std::collections::HashSet::new();
@@ -150,7 +162,9 @@ fn own_names(program: &Program<'_>) -> (std::collections::HashSet<String>, std::
     // can move to an outer block without meeting another.
     let mut bindings: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for symbol in scoping.symbol_ids() {
-        *bindings.entry(scoping.symbol_name(symbol).to_string()).or_insert(0) += 1;
+        *bindings
+            .entry(scoping.symbol_name(symbol).to_string())
+            .or_insert(0) += 1;
     }
     for name in scoping.root_unresolved_references().keys() {
         *bindings.entry(name.to_string()).or_insert(0) += 2;
@@ -163,9 +177,13 @@ fn own_names(program: &Program<'_>) -> (std::collections::HashSet<String>, std::
     // A block-scoped binding can move to an enclosing block of its function
     // when no other binding of the name lives in that function's own scopes
     // and every use of the name in the function is this binding.
-    let mut by_name: std::collections::HashMap<&str, Vec<oxc_semantic::SymbolId>> = std::collections::HashMap::new();
+    let mut by_name: std::collections::HashMap<&str, Vec<oxc_semantic::SymbolId>> =
+        std::collections::HashMap::new();
     for symbol in scoping.symbol_ids() {
-        by_name.entry(scoping.symbol_name(symbol)).or_default().push(symbol);
+        by_name
+            .entry(scoping.symbol_name(symbol))
+            .or_default()
+            .push(symbol);
     }
     for symbol in scoping.symbol_ids() {
         let name = scoping.symbol_name(symbol);
@@ -182,14 +200,21 @@ fn own_names(program: &Program<'_>) -> (std::collections::HashSet<String>, std::
                 // one used inside the function.
                 function_of(declaration) == home
                     || (!inside(declaration)
-                        && scoping.get_resolved_references(*other).any(|reference| inside(reference.node_id())))
+                        && scoping
+                            .get_resolved_references(*other)
+                            .any(|reference| inside(reference.node_id())))
             }
-        }) || scoping
-            .root_unresolved_references()
-            .get(name)
-            .is_some_and(|references| references.iter().any(|reference| inside(scoping.get_reference(*reference).node_id())));
+        }) || scoping.root_unresolved_references().get(name).is_some_and(
+            |references| {
+                references
+                    .iter()
+                    .any(|reference| inside(scoping.get_reference(*reference).node_id()))
+            },
+        );
         if !clash {
-            counts.entry(format!("\u{0}movable {}", symbol.index())).or_insert(0);
+            counts
+                .entry(format!("\u{0}movable {}", symbol.index()))
+                .or_insert(0);
         }
     }
     (own, counts)
@@ -222,7 +247,9 @@ fn joined_strings(expression: &Expression<'_>) -> Option<String> {
         return None;
     }
     let text = |literal: &Expression<'_>| match literal {
-        Expression::StringLiteral(string) if !string.value.contains('\u{fffd}') => Some(string.value.to_string()),
+        Expression::StringLiteral(string) if !string.value.contains('\u{fffd}') => {
+            Some(string.value.to_string())
+        }
         Expression::NumericLiteral(number)
             if number.value.fract() == 0.0 && number.value.abs() <= 9007199254740991.0 =>
         {
@@ -236,10 +263,12 @@ fn joined_strings(expression: &Expression<'_>) -> Option<String> {
         Expression::NumericLiteral(_) if matches!(binary.right, Expression::StringLiteral(_)) => {
             Some(format!("{}{right}", text(&binary.left)?))
         }
-        Expression::BinaryExpression(inner) if inner.operator == BinaryOperator::Addition => match &inner.right {
-            Expression::StringLiteral(left) => Some(format!("{}{right}", left.value)),
-            _ => None,
-        },
+        Expression::BinaryExpression(inner) if inner.operator == BinaryOperator::Addition => {
+            match &inner.right {
+                Expression::StringLiteral(left) => Some(format!("{}{right}", left.value)),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -257,8 +286,10 @@ fn normalize<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
             | Expression::BooleanLiteral(_)
             | Expression::NullLiteral(_) => true,
             Expression::UnaryExpression(unary) => {
-                matches!(unary.operator, UnaryOperator::Void | UnaryOperator::UnaryNegation)
-                    && matches!(unary.argument, Expression::NumericLiteral(_))
+                matches!(
+                    unary.operator,
+                    UnaryOperator::Void | UnaryOperator::UnaryNegation
+                ) && matches!(unary.argument, Expression::NumericLiteral(_))
             }
             _ => false,
         }
@@ -290,11 +321,18 @@ fn normalize<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
                         && matches!(&inner.right, Expression::UnaryExpression(r) if r.operator == UnaryOperator::LogicalNot && boolean(&r.argument))) =>
         {
             // !(!a || !b) is !!a && b for a boolean b
-            let argument = std::mem::replace(&mut unary.argument, builder.expression_null_literal(SPAN));
-            let Expression::LogicalExpression(inner) = argument.into_inner_expression() else { unreachable!() };
+            let argument =
+                std::mem::replace(&mut unary.argument, builder.expression_null_literal(SPAN));
+            let Expression::LogicalExpression(inner) = argument.into_inner_expression() else {
+                unreachable!()
+            };
             let inner = inner.unbox();
-            let Expression::UnaryExpression(left) = inner.left else { unreachable!() };
-            let Expression::UnaryExpression(right) = inner.right else { unreachable!() };
+            let Expression::UnaryExpression(left) = inner.left else {
+                unreachable!()
+            };
+            let Expression::UnaryExpression(right) = inner.right else {
+                unreachable!()
+            };
             let left = left.unbox().argument;
             let left = if boolean(&left) {
                 left
@@ -302,16 +340,28 @@ fn normalize<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
                 let once = builder.expression_unary(SPAN, UnaryOperator::LogicalNot, left);
                 builder.expression_unary(SPAN, UnaryOperator::LogicalNot, once)
             };
-            *expression = builder.expression_logical(SPAN, left, oxc_syntax::operator::LogicalOperator::And, right.unbox().argument);
+            *expression = builder.expression_logical(
+                SPAN,
+                left,
+                oxc_syntax::operator::LogicalOperator::And,
+                right.unbox().argument,
+            );
         }
         Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
             if let Expression::BinaryExpression(inner) = unary.argument.without_parentheses() {
                 if matches!(
                     inner.operator,
-                    BinaryOperator::StrictEquality | BinaryOperator::StrictInequality | BinaryOperator::Equality | BinaryOperator::Inequality
+                    BinaryOperator::StrictEquality
+                        | BinaryOperator::StrictInequality
+                        | BinaryOperator::Equality
+                        | BinaryOperator::Inequality
                 ) {
-                    let argument = std::mem::replace(&mut unary.argument, builder.expression_null_literal(SPAN));
-                    let Expression::BinaryExpression(mut inner) = argument.into_inner_expression() else {
+                    let argument = std::mem::replace(
+                        &mut unary.argument,
+                        builder.expression_null_literal(SPAN),
+                    );
+                    let Expression::BinaryExpression(mut inner) = argument.into_inner_expression()
+                    else {
                         unreachable!();
                     };
                     inner.operator = match inner.operator {
@@ -337,7 +387,10 @@ fn normalize<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
         Expression::ConditionalExpression(choice) => {
             if let Expression::UnaryExpression(unary) = &mut choice.test {
                 if unary.operator == UnaryOperator::LogicalNot {
-                    let test = std::mem::replace(&mut unary.argument, builder.expression_null_literal(SPAN));
+                    let test = std::mem::replace(
+                        &mut unary.argument,
+                        builder.expression_null_literal(SPAN),
+                    );
                     let choice = &mut **choice;
                     choice.test = test;
                     std::mem::swap(&mut choice.consequent, &mut choice.alternate);
@@ -352,7 +405,9 @@ fn normalize<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
 fn int32(expression: &Expression<'_>) -> bool {
     match expression.without_parentheses() {
         Expression::NumericLiteral(number) => {
-            number.value.fract() == 0.0 && number.value >= -2147483648.0 && number.value <= 2147483647.0
+            number.value.fract() == 0.0
+                && number.value >= -2147483648.0
+                && number.value <= 2147483647.0
         }
         Expression::BinaryExpression(binary) => matches!(
             binary.operator,
@@ -363,7 +418,9 @@ fn int32(expression: &Expression<'_>) -> bool {
                 | BinaryOperator::ShiftRight
         ),
         Expression::UnaryExpression(unary) => unary.operator == UnaryOperator::BitwiseNot,
-        Expression::ConditionalExpression(choice) => int32(&choice.consequent) && int32(&choice.alternate),
+        Expression::ConditionalExpression(choice) => {
+            int32(&choice.consequent) && int32(&choice.alternate)
+        }
         _ => false,
     }
 }
@@ -384,7 +441,9 @@ fn drop_nan_guard<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) 
             if test.operator == BinaryOperator::StrictEquality
                 && matches!((&test.left, &test.right), (Expression::Identifier(a), Expression::Identifier(b)) if a.name == b.name) =>
         {
-            let Expression::Identifier(name) = &test.left else { unreachable!() };
+            let Expression::Identifier(name) = &test.left else {
+                unreachable!()
+            };
             name.name
         }
         _ => return,
@@ -394,7 +453,10 @@ fn drop_nan_guard<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) 
             && ((matches!(&step.right, Expression::Identifier(x) if x.name == guarded) && step.left.content_eq(&choice.alternate))
                 || (matches!(&step.left, Expression::Identifier(x) if x.name == guarded) && step.right.content_eq(&choice.alternate))));
     if fits {
-        let consequent = std::mem::replace(&mut choice.consequent, builder.expression_null_literal(SPAN));
+        let consequent = std::mem::replace(
+            &mut choice.consequent,
+            builder.expression_null_literal(SPAN),
+        );
         *target = consequent;
     }
 }
@@ -402,8 +464,12 @@ fn drop_nan_guard<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) 
 /// `!!x && …` as `x && …` (the leftmost operand of an `&&` chain).
 fn strip_double_not<'a>(expression: &mut Expression<'a>, builder: AstBuilder<'a>) {
     match expression {
-        Expression::ParenthesizedExpression(inner) => strip_double_not(&mut inner.expression, builder),
-        Expression::LogicalExpression(logical) if logical.operator == oxc_syntax::operator::LogicalOperator::And => {
+        Expression::ParenthesizedExpression(inner) => {
+            strip_double_not(&mut inner.expression, builder)
+        }
+        Expression::LogicalExpression(logical)
+            if logical.operator == oxc_syntax::operator::LogicalOperator::And =>
+        {
             strip_double_not(&mut logical.left, builder);
         }
         Expression::UnaryExpression(unary)
@@ -436,5 +502,3 @@ fn wraps_member(expression: &Expression<'_>) -> bool {
             && matches!(sequence.expressions[0], Expression::NumericLiteral(_))
             && sequence.expressions[1].is_member_expression())
 }
-
-

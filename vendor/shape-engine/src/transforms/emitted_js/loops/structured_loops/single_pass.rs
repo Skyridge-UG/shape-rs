@@ -24,18 +24,25 @@ pub(crate) fn unwrap_single_pass_loops(source: &str) -> Result<(String, usize), 
         }
         let allocator = Allocator::default();
         let program = analysis::parse_program(&allocator, &code)?;
-        let mut scan = Scan { source: &code, found: Vec::new() };
+        let mut scan = Scan {
+            source: &code,
+            found: Vec::new(),
+        };
         scan.visit_program(&program);
         // Outermost first; a nested one goes next round.
         let mut edits: Vec<analysis::Edit> = Vec::new();
         let mut taken: Vec<Span> = Vec::new();
-        scan.found.sort_by_key(|(span, _)| (span.start, std::cmp::Reverse(span.end)));
+        scan.found
+            .sort_by_key(|(span, _)| (span.start, std::cmp::Reverse(span.end)));
         for (span, body) in scan.found {
             if taken.iter().any(|outer| inside(*outer, span)) {
                 continue;
             }
             taken.push(span);
-            edits.push(analysis::Edit::replace(span, code[body.start as usize..body.end as usize].to_string()));
+            edits.push(analysis::Edit::replace(
+                span,
+                code[body.start as usize..body.end as usize].to_string(),
+            ));
         }
         if edits.is_empty() {
             break;
@@ -49,7 +56,8 @@ pub(crate) fn unwrap_single_pass_loops(source: &str) -> Result<(String, usize), 
     }
     if unwrapped > 0 {
         let check = Allocator::default();
-        analysis::check_program(&check, &code).map_err(|error| format!("single-pass loop output: {error}"))?;
+        analysis::check_program(&check, &code)
+            .map_err(|error| format!("single-pass loop output: {error}"))?;
     }
     Ok((code, unwrapped))
 }
@@ -112,7 +120,10 @@ mod tests {
         let source = "function f() {\nvm_loop_1: for (;;) {\n  if (a()) {\n    vm_loop_2: for (;;) {\n      b();\n      vm_loop_3: for (;;) {\n        c();\n        continue vm_loop_1;\n      }\n    }\n  } else {\n    return 1;\n  }\n}\n}\n";
         let (code, count) = unwrap_single_pass_loops(source).unwrap();
         assert_eq!(count, 2);
-        assert!(!code.contains("vm_loop_2") && !code.contains("vm_loop_3"), "{code}");
+        assert!(
+            !code.contains("vm_loop_2") && !code.contains("vm_loop_3"),
+            "{code}"
+        );
         assert!(code.contains("vm_loop_1: for (;;)"), "{code}");
         assert!(code.contains("continue vm_loop_1;"), "{code}");
     }
@@ -138,7 +149,8 @@ mod tests {
 
     #[test]
     fn a_nested_loops_own_jumps_do_not_count() {
-        let source = "function f() { for (;;) { while (a()) { if (b()) break; continue; } return 1; } }";
+        let source =
+            "function f() { for (;;) { while (a()) { if (b()) break; continue; } return 1; } }";
         let (code, count) = unwrap_single_pass_loops(source).unwrap();
         assert_eq!(count, 1, "{code}");
         assert!(code.contains("{ { while"), "{code}");

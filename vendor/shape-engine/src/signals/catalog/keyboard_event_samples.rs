@@ -1,11 +1,13 @@
 //! `KeyboardEventSamples`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, shape_text::*, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, shape_text::*, value_facts};
+use crate::signals::analysis::{
+    top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout,
+    SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 const KEY_EVENTS: &[&str] = &["keydown", "keyup", "keypress"];
 
@@ -20,13 +22,17 @@ pub(crate) fn recognize_keyboard_event_samples(view: &SlotView, ctx: &FinderCtx)
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let keyboard_roles = ctx
-        .slot_roles(view)
-        .iter()
-        .any(|role| role.starts_with("interaction_key") && role.ends_with("_sample_handler") || *role == "interaction_keyboard_event_sample_recorder");
+    let keyboard_roles = ctx.slot_roles(view).iter().any(|role| {
+        role.starts_with("interaction_key") && role.ends_with("_sample_handler")
+            || *role == "interaction_keyboard_event_sample_recorder"
+    });
     let keyed = facts.has_event(KEY_EVENTS) || keyboard_roles;
-    keyed
-        .then(|| Claim::new(["keyboard listeners fill the record ring", "RAW4 NUMBER REPEAT{record with strings}"]))
+    keyed.then(|| {
+        Claim::new([
+            "keyboard listeners fill the record ring",
+            "RAW4 NUMBER REPEAT{record with strings}",
+        ])
+    })
 }
 
 pub(crate) fn bind_keyboard_event_samples(
@@ -44,15 +50,31 @@ pub(crate) fn bind_keyboard_event_samples(
         records.name_by_labels(facts, |field, meaning| {
             let own = field.merged();
             match field.kind() {
-                Some(LeafKind::String) if meaning.has_member("name") && !meaning.has_member("id") => Some("targetName"),
-                Some(LeafKind::String) if meaning.has_member("id") && !meaning.has_member("name") => Some("targetId"),
-                Some(LeafKind::Number) if meaning.has_member("keyCode") || meaning.has_member("which") || meaning.has_member("key") => {
+                Some(LeafKind::String)
+                    if meaning.has_member("name") && !meaning.has_member("id") =>
+                {
+                    Some("targetName")
+                }
+                Some(LeafKind::String)
+                    if meaning.has_member("id") && !meaning.has_member("name") =>
+                {
+                    Some("targetId")
+                }
+                Some(LeafKind::Number)
+                    if meaning.has_member("keyCode")
+                        || meaning.has_member("which")
+                        || meaning.has_member("key") =>
+                {
                     Some("keyCode")
                 }
                 Some(LeafKind::Number) if is_clock_value(meaning) => Some("timeMs"),
-                Some(LeafKind::Byte) if own.labels.len() >= 2 || own.indexed.len() >= 2 => Some("flags"),
+                Some(LeafKind::Byte) if own.labels.len() >= 2 || own.indexed.len() >= 2 => {
+                    Some("flags")
+                }
                 // One boolean on its own byte (which one varies per build).
-                Some(LeafKind::Byte) if own.labels.len() <= 1 && own.indexed.len() <= 1 => Some("ownFlag"),
+                Some(LeafKind::Byte) if own.labels.len() <= 1 && own.indexed.len() <= 1 => {
+                    Some("ownFlag")
+                }
                 _ => None,
             }
         })

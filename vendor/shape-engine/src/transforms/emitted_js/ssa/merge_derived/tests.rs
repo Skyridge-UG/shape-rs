@@ -77,7 +77,8 @@ fn keeps_a_buffer_across_a_later_var_initializer() {
 
 #[test]
 fn keeps_a_value_a_closure_could_see() {
-    let source = "function f() { let i = 3; const g = () => i; let $SSA_1 = i + 1; return [g(), $SSA_1]; }";
+    let source =
+        "function f() { let i = 3; const g = () => i; let $SSA_1 = i + 1; return [g(), $SSA_1]; }";
     assert_eq!(merged(source).1, 0);
 }
 
@@ -102,7 +103,10 @@ fn merges_a_copy_written_back_into_its_local() {
     let source = "function f() { const a = [0, 5, 0, 7]; let $LOOP_1 = 0; for (let i = 0; i < a.length; i++) { let $JOIN_2 = $LOOP_1; if (a[i]) { use_it($LOOP_1); $JOIN_2 = a[i]; } $LOOP_1 = $JOIN_2; } return $LOOP_1; } function use_it() {}";
     let (code, count) = merged(source);
     assert_eq!(count, 1, "{code}");
-    assert!(!code.contains("$JOIN_2") && code.contains("$LOOP_1 = a[i];"), "{code}");
+    assert!(
+        !code.contains("$JOIN_2") && code.contains("$LOOP_1 = a[i];"),
+        "{code}"
+    );
 }
 
 #[test]
@@ -136,7 +140,10 @@ fn merges_into_an_outer_scratch_slot_its_function_always_stores_first() {
 fn keeps_a_value_copied_into_a_local_declared_later_inside() {
     let source = "function f() { const a = { x: 1 }; let $SSA_1 = a.x; if (a) { let $CARRY_2; $CARRY_2 = $SSA_1; return [$CARRY_2, $SSA_1]; } return $SSA_1; }";
     let (code, _) = merged(source);
-    assert!(code.contains("let $CARRY_2") || !code.contains("$CARRY_2 ="), "{code}");
+    assert!(
+        code.contains("let $CARRY_2") || !code.contains("$CARRY_2 ="),
+        "{code}"
+    );
     assert!(!code.contains("$CARRY_2 = a.x"), "{code}");
 }
 
@@ -153,7 +160,12 @@ fn splits_a_value_only_the_next_store_reads() {
     let source = "function f() { const a = { x: 3, y: 5 }; const g = (n) => n + 1; let v = g(a.x); v = 0 | v; let r = g(a.y); v = v | r << 1; return v; }";
     let result = super::split_single_reads(source).unwrap();
     assert_eq!(result.merged, 1, "{}", result.code);
-    assert!(result.code.contains("let $SSA_s1 = 0 | v;") && result.code.contains("v = $SSA_s1 | r << 1;"), "{}", result.code);
+    assert!(
+        result.code.contains("let $SSA_s1 = 0 | v;")
+            && result.code.contains("v = $SSA_s1 | r << 1;"),
+        "{}",
+        result.code
+    );
     assert_eq!(run(source), run(&result.code));
 }
 

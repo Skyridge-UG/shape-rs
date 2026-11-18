@@ -1,17 +1,22 @@
 //! `VisibilityEventLog`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, shape_text::*, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, shape_text::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `VisibilityEventLog`. Card: [`CARD`].
 pub(crate) fn recognize_visibility_event_log(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     // One record list per message (a top-level choice may hold two
     // messages), no strings.
-    if repeat_count(view) == 0 || repeat_count(view) > 2 || max_repeat_depth(view) != 1 || view.leaf_count(LeafOp::String) != 0 {
+    if repeat_count(view) == 0
+        || repeat_count(view) > 2
+        || max_repeat_depth(view) != 1
+        || view.leaf_count(LeafOp::String) != 0
+    {
         return None;
     }
     let facts = slot_facts(view, ctx);
@@ -22,12 +27,15 @@ pub(crate) fn recognize_visibility_event_log(view: &SlotView, ctx: &FinderCtx) -
         .handler_members
         .get("visibilitychange")
         .is_some_and(|members| members.contains("visibilityState") || members.contains("hidden"));
-    let visibility = leaf_transform(view, ".visibilityState") || leaf_transform(view, ".hidden") || handler_reads;
+    let visibility = leaf_transform(view, ".visibilityState")
+        || leaf_transform(view, ".hidden")
+        || handler_reads;
     if !visibility {
         return None;
     }
-    (facts.has_event(&["visibilitychange"]) || ctx.has_role(view, "interaction_visibility_sample_recorder"))
-        .then(|| Claim::new(["visibilitychange record ring", "document.visibilityState"]))
+    (facts.has_event(&["visibilitychange"])
+        || ctx.has_role(view, "interaction_visibility_sample_recorder"))
+    .then(|| Claim::new(["visibilitychange record ring", "document.visibilityState"]))
 }
 
 pub(crate) fn bind_visibility_event_log(
@@ -38,7 +46,11 @@ pub(crate) fn bind_visibility_event_log(
     let mut binder = Binder::new(view, layout, ctx)?;
     binder.top(|field| match (field.shape, field.kind()) {
         (Shape::Array, _) => Some("records"),
-        (_, Some(LeafKind::Number)) if field.merged().counter && !field.merged().has_member("length") => Some("visibilityChangeCount"),
+        (_, Some(LeafKind::Number))
+            if field.merged().counter && !field.merged().has_member("length") =>
+        {
+            Some("visibilityChangeCount")
+        }
         (_, Some(LeafKind::Number)) if field.merged().has_member("length") => Some("recordCount"),
         (_, Some(LeafKind::Byte)) if !field.is_tag() => Some("state"),
         // The literal tag of the unknown-visibility message.

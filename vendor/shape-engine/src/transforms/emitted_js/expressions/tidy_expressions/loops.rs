@@ -9,7 +9,11 @@ impl<'a> Unwrap<'a> {
     /// the loop. A `let` of `S` that `B` reads is declared before the loop
     /// (no closure sees it). Returns whether it rewrote, so the new
     /// statements are looked at again.
-    pub(super) fn restructure_loop(&mut self, statements: &mut oxc_allocator::Vec<'a, Statement<'a>>, at: usize) -> bool {
+    pub(super) fn restructure_loop(
+        &mut self,
+        statements: &mut oxc_allocator::Vec<'a, Statement<'a>>,
+        at: usize,
+    ) -> bool {
         let Some((split, flipped, hoist)) = self.loop_exit_plan(&statements[at]) else {
             return false;
         };
@@ -46,8 +50,14 @@ impl<'a> Unwrap<'a> {
         // out: a `break` before the split or on the stay path would run it
         // too.
         let other_breaks = {
-            let Statement::IfStatement(branch) = &body[split] else { unreachable!() };
-            let stay = if flipped { branch.alternate.as_ref().unwrap() } else { &branch.consequent };
+            let Statement::IfStatement(branch) = &body[split] else {
+                unreachable!()
+            };
+            let stay = if flipped {
+                branch.alternate.as_ref().unwrap()
+            } else {
+                &branch.consequent
+            };
             body[..split].iter().any(|s| breaks_from(s, label)) || breaks_from(stay, label)
         };
         if other_breaks {
@@ -59,24 +69,44 @@ impl<'a> Unwrap<'a> {
 
     /// Lets of the statements before the split that the exit reads, to be
     /// declared before the loop; `None` when one cannot be.
-    fn exit_reads(&self, body: &[Statement<'a>], split: usize, flipped: bool) -> Option<Vec<String>> {
+    fn exit_reads(
+        &self,
+        body: &[Statement<'a>],
+        split: usize,
+        flipped: bool,
+    ) -> Option<Vec<String>> {
         let head_lets: Vec<(String, bool)> = body[..split]
             .iter()
             .filter_map(|s| match s {
-                Statement::VariableDeclaration(declaration) if declaration.kind != VariableDeclarationKind::Var => Some(
-                    declaration
-                        .declarations
-                        .iter()
-                        .filter_map(|d| d.id.get_binding_identifier().map(|b| (b.name.to_string(), declaration.kind == VariableDeclarationKind::Const)))
-                        .collect::<Vec<_>>(),
-                ),
-                Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_) => Some(vec![("\u{0}".to_string(), false)]),
+                Statement::VariableDeclaration(declaration)
+                    if declaration.kind != VariableDeclarationKind::Var =>
+                {
+                    Some(
+                        declaration
+                            .declarations
+                            .iter()
+                            .filter_map(|d| {
+                                d.id.get_binding_identifier().map(|b| {
+                                    (
+                                        b.name.to_string(),
+                                        declaration.kind == VariableDeclarationKind::Const,
+                                    )
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                }
+                Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_) => {
+                    Some(vec![("\u{0}".to_string(), false)])
+                }
                 _ => None,
             })
             .flatten()
             .collect();
         let exit_mentions = |name: &str| {
-            let Statement::IfStatement(branch) = &body[split] else { unreachable!() };
+            let Statement::IfStatement(branch) = &body[split] else {
+                unreachable!()
+            };
             let mut found = false;
             let mut check = |s: &Statement<'_>| {
                 struct Find<'n> {
@@ -134,18 +164,24 @@ impl<'a> Unwrap<'a> {
         let (label_node, mut loop_) = match taken {
             Statement::LabeledStatement(labeled) => {
                 let labeled = labeled.unbox();
-                let Statement::ForStatement(loop_) = labeled.body else { unreachable!() };
+                let Statement::ForStatement(loop_) = labeled.body else {
+                    unreachable!()
+                };
                 (Some(labeled.label), loop_)
             }
             Statement::ForStatement(loop_) => (None, loop_),
             _ => unreachable!(),
         };
-        let Statement::BlockStatement(body) = std::mem::replace(&mut loop_.body, self.builder.statement_empty(SPAN)) else {
+        let Statement::BlockStatement(body) =
+            std::mem::replace(&mut loop_.body, self.builder.statement_empty(SPAN))
+        else {
             unreachable!()
         };
         let mut body = body.unbox().body;
         let mut tail: Vec<Statement<'a>> = body.drain(split + 1..).collect();
-        let Some(Statement::IfStatement(branch)) = body.pop() else { unreachable!() };
+        let Some(Statement::IfStatement(branch)) = body.pop() else {
+            unreachable!()
+        };
         let branch = branch.unbox();
         let (test, mut stay, mut exit) = {
             let consequent: Vec<Statement<'a>> = match branch.consequent {
@@ -157,7 +193,11 @@ impl<'a> Unwrap<'a> {
                 _ => unreachable!(),
             });
             match (alternate, flipped) {
-                (None, _) => (self.negated(branch.test), consequent, std::mem::take(&mut tail)),
+                (None, _) => (
+                    self.negated(branch.test),
+                    consequent,
+                    std::mem::take(&mut tail),
+                ),
                 (Some(alternate), false) => (self.negated(branch.test), consequent, alternate),
                 (Some(alternate), true) => (branch.test, alternate, consequent),
             }
@@ -177,19 +217,32 @@ impl<'a> Unwrap<'a> {
         let mut replacement: Vec<Statement<'a>> = Vec::new();
         for name in declared {
             let binding = self.builder.binding_pattern_binding_identifier(SPAN, name);
-            let declarator = self.builder.variable_declarator(SPAN, VariableDeclarationKind::Let, binding, oxc_ast::NONE, None, false);
-            replacement.push(Statement::VariableDeclaration(self.builder.alloc_variable_declaration(
+            let declarator = self.builder.variable_declarator(
                 SPAN,
                 VariableDeclarationKind::Let,
-                self.builder.vec1(declarator),
+                binding,
+                oxc_ast::NONE,
+                None,
                 false,
-            )));
+            );
+            replacement.push(Statement::VariableDeclaration(
+                self.builder.alloc_variable_declaration(
+                    SPAN,
+                    VariableDeclarationKind::Let,
+                    self.builder.vec1(declarator),
+                    false,
+                ),
+            ));
         }
         let mut loop_statement = Statement::ForStatement(loop_);
         self.reform_loop(&mut loop_statement);
-        let still_labeled = label_node.as_ref().is_some_and(|l| labeled_jumps_to(&loop_statement, l.name.as_str()));
+        let still_labeled = label_node
+            .as_ref()
+            .is_some_and(|l| labeled_jumps_to(&loop_statement, l.name.as_str()));
         replacement.push(match label_node {
-            Some(label) if still_labeled => self.builder.statement_labeled(SPAN, label, loop_statement),
+            Some(label) if still_labeled => {
+                self.builder.statement_labeled(SPAN, label, loop_statement)
+            }
             _ => loop_statement,
         });
         replacement.extend(exit);
@@ -200,12 +253,21 @@ impl<'a> Unwrap<'a> {
 
     /// Hoisted lets become stores; returns the names to declare before the
     /// loop.
-    fn hoisted_stores(&self, body: &mut [Statement<'a>], hoist: &[String]) -> Vec<oxc_span::Ident<'a>> {
+    fn hoisted_stores(
+        &self,
+        body: &mut [Statement<'a>],
+        hoist: &[String],
+    ) -> Vec<oxc_span::Ident<'a>> {
         let mut declared = Vec::new();
         if !hoist.is_empty() {
             for statement in body.iter_mut() {
-                let Statement::VariableDeclaration(declaration) = statement else { continue };
-                if !declaration.declarations.iter().any(|d| d.id.get_binding_identifier().is_some_and(|b| hoist.contains(&b.name.to_string()))) {
+                let Statement::VariableDeclaration(declaration) = statement else {
+                    continue;
+                };
+                if !declaration.declarations.iter().any(|d| {
+                    d.id.get_binding_identifier()
+                        .is_some_and(|b| hoist.contains(&b.name.to_string()))
+                }) {
                     continue;
                 }
                 if declaration.declarations.len() != 1 {
@@ -216,9 +278,19 @@ impl<'a> Unwrap<'a> {
                 let declarator = &mut declaration.declarations[0];
                 let name = declarator.id.get_binding_identifier().unwrap().name;
                 declared.push(name);
-                let init = declarator.init.take().unwrap_or_else(|| self.builder.expression_identifier(SPAN, "undefined"));
-                let target = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, name);
-                let store = self.builder.expression_assignment(SPAN, AssignmentOperator::Assign, AssignmentTarget::from(target), init);
+                let init = declarator
+                    .init
+                    .take()
+                    .unwrap_or_else(|| self.builder.expression_identifier(SPAN, "undefined"));
+                let target = self
+                    .builder
+                    .simple_assignment_target_assignment_target_identifier(SPAN, name);
+                let store = self.builder.expression_assignment(
+                    SPAN,
+                    AssignmentOperator::Assign,
+                    AssignmentTarget::from(target),
+                    init,
+                );
                 *statement = self.builder.statement_expression(SPAN, store);
             }
         }
@@ -228,16 +300,24 @@ impl<'a> Unwrap<'a> {
     /// `!t`, spelled without a double negation.
     pub(super) fn negated(&self, test: Expression<'a>) -> Expression<'a> {
         match test {
-            Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => unary.unbox().argument,
+            Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
+                unary.unbox().argument
+            }
             test => {
-                let mut negated = self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, test);
+                let mut negated =
+                    self.builder
+                        .expression_unary(SPAN, UnaryOperator::LogicalNot, test);
                 normalize(&mut negated, self.builder);
                 negated
             }
         }
     }
 
-    pub(super) fn start_lower(&mut self, statements: &mut oxc_allocator::Vec<'a, Statement<'a>>, at: usize) -> bool {
+    pub(super) fn start_lower(
+        &mut self,
+        statements: &mut oxc_allocator::Vec<'a, Statement<'a>>,
+        at: usize,
+    ) -> bool {
         let (name, start) = match &statements[at] {
             Statement::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => {
                 let declarator = &declaration.declarations[0];
@@ -274,8 +354,12 @@ impl<'a> Unwrap<'a> {
             return false;
         }
         if let Statement::VariableDeclaration(declaration) = &mut statements[at] {
-            declaration.declarations[0].init =
-                Some(self.builder.expression_numeric_literal(SPAN, start - 1.0, None, NumberBase::Decimal));
+            declaration.declarations[0].init = Some(self.builder.expression_numeric_literal(
+                SPAN,
+                start - 1.0,
+                None,
+                NumberBase::Decimal,
+            ));
         }
         let Some(store) = indexed_store(&mut statements[at + 1]) else {
             unreachable!();
@@ -283,15 +367,23 @@ impl<'a> Unwrap<'a> {
         let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left else {
             unreachable!();
         };
-        let argument = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, name);
-        member.expression = self.builder.expression_update(SPAN, UpdateOperator::Increment, true, argument);
+        let argument = self
+            .builder
+            .simple_assignment_target_assignment_target_identifier(SPAN, name);
+        member.expression =
+            self.builder
+                .expression_update(SPAN, UpdateOperator::Increment, true, argument);
         false
     }
 
     /// From `statements[at]`: stores indexed `i + 1`, `i + 2`, … in order,
     /// with nothing else mentioning `i`, up to `i = i + n` (n at least the
     /// stores) become `a[++i] = v` each and `i += n - k`.
-    pub(super) fn fold_offsets(&mut self, statements: &mut oxc_allocator::Vec<'a, Statement<'a>>, at: usize) -> bool {
+    pub(super) fn fold_offsets(
+        &mut self,
+        statements: &mut oxc_allocator::Vec<'a, Statement<'a>>,
+        at: usize,
+    ) -> bool {
         let counter = {
             let Some(store) = indexed_store(&mut statements[at]) else {
                 return false;
@@ -353,13 +445,19 @@ impl<'a> Unwrap<'a> {
                         }
                     }
                 }
-                let mut find = Find { name: &counter, found: false };
+                let mut find = Find {
+                    name: &counter,
+                    found: false,
+                };
                 find.visit_statement(&statements[index]);
                 find.found
             };
             // Only straight-line statements may sit in between.
             if mentioned
-                || !matches!(statements[index], Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_))
+                || !matches!(
+                    statements[index],
+                    Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_)
+                )
             {
                 return false;
             }
@@ -372,8 +470,12 @@ impl<'a> Unwrap<'a> {
                 let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left else {
                     unreachable!();
                 };
-                let argument = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, counter);
-                member.expression = self.builder.expression_update(SPAN, UpdateOperator::Increment, true, argument);
+                let argument = self
+                    .builder
+                    .simple_assignment_target_assignment_target_identifier(SPAN, counter);
+                member.expression =
+                    self.builder
+                        .expression_update(SPAN, UpdateOperator::Increment, true, argument);
             }
             let Statement::ExpressionStatement(expression) = &mut statements[closing] else {
                 unreachable!();
@@ -381,7 +483,11 @@ impl<'a> Unwrap<'a> {
             let Expression::AssignmentExpression(assignment) = &mut expression.expression else {
                 unreachable!();
             };
-            let mut shift = Shift { name: &counter, by: planned.len() as f64, builder: self.builder };
+            let mut shift = Shift {
+                name: &counter,
+                by: planned.len() as f64,
+                builder: self.builder,
+            };
             shift.visit_expression(&mut assignment.right);
             return true;
         }
@@ -398,20 +504,34 @@ impl<'a> Unwrap<'a> {
             let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left else {
                 unreachable!();
             };
-            let argument = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, counter);
-            member.expression = self.builder.expression_update(SPAN, UpdateOperator::Increment, true, argument);
+            let argument = self
+                .builder
+                .simple_assignment_target_assignment_target_identifier(SPAN, counter);
+            member.expression =
+                self.builder
+                    .expression_update(SPAN, UpdateOperator::Increment, true, argument);
         }
         let left = n - planned.len() as f64;
         if left == 0.0 {
             statements.remove(closing);
         } else {
-            let target = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, counter);
+            let target = self
+                .builder
+                .simple_assignment_target_assignment_target_identifier(SPAN, counter);
             let step = if left == 1.0 {
-                self.builder.expression_update(SPAN, UpdateOperator::Increment, true, target)
+                self.builder
+                    .expression_update(SPAN, UpdateOperator::Increment, true, target)
             } else {
                 let target = AssignmentTarget::from(target);
-                let amount = self.builder.expression_numeric_literal(SPAN, left, None, NumberBase::Decimal);
-                self.builder.expression_assignment(SPAN, AssignmentOperator::Addition, target, amount)
+                let amount =
+                    self.builder
+                        .expression_numeric_literal(SPAN, left, None, NumberBase::Decimal);
+                self.builder.expression_assignment(
+                    SPAN,
+                    AssignmentOperator::Addition,
+                    target,
+                    amount,
+                )
             };
             statements[closing] = self.builder.statement_expression(SPAN, step);
         }
@@ -431,12 +551,12 @@ impl<'a> Unwrap<'a> {
             return;
         };
         let exits = matches!(body.body.first(), Some(Statement::IfStatement(branch))
-            if branch.alternate.is_none()
-                && match &branch.consequent {
-                    Statement::BreakStatement(jump) => jump.label.is_none(),
-                    Statement::BlockStatement(block) => matches!(block.body.as_slice(), [Statement::BreakStatement(jump)] if jump.label.is_none()),
-                    _ => false,
-                });
+        if branch.alternate.is_none()
+            && match &branch.consequent {
+                Statement::BreakStatement(jump) => jump.label.is_none(),
+                Statement::BlockStatement(block) => matches!(block.body.as_slice(), [Statement::BreakStatement(jump)] if jump.label.is_none()),
+                _ => false,
+            });
         if !exits {
             return;
         }
@@ -444,8 +564,12 @@ impl<'a> Unwrap<'a> {
             unreachable!();
         };
         let test = match branch.unbox().test {
-            Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => unary.unbox().argument,
-            test => self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, test),
+            Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
+                unary.unbox().argument
+            }
+            test => self
+                .builder
+                .expression_unary(SPAN, UnaryOperator::LogicalNot, test),
         };
         if loop_.init.is_none() && loop_.update.is_none() {
             let body = std::mem::replace(&mut loop_.body, self.builder.statement_empty(SPAN));
@@ -459,22 +583,28 @@ impl<'a> Unwrap<'a> {
     /// it: `++i; a[i] = v;` and `a[i + 1] = v; ++i;` are `a[++i] = v;`, and
     /// `let t = i + 1; ++i; … t …` reads `i`. The counter is a local no call
     /// can read, and the array expression and value do not mention it.
-    pub(super) fn fold_increments(&mut self, statements: &mut oxc_allocator::Vec<'a, Statement<'a>>) {
+    pub(super) fn fold_increments(
+        &mut self,
+        statements: &mut oxc_allocator::Vec<'a, Statement<'a>>,
+    ) {
         let mut index = 0;
         while index + 1 < statements.len() {
             // `let t = i + 1; ++i;` then `t` read once, next: read `i`.
             if index + 2 < statements.len() {
                 let pending = match (&statements[index], increment_of(&statements[index + 1])) {
                     (Statement::VariableDeclaration(declaration), Some(counter))
-                        if declaration.declarations.len() == 1 && self.own_names.contains(counter) =>
+                        if declaration.declarations.len() == 1
+                            && self.own_names.contains(counter) =>
                     {
                         let declarator = &declaration.declarations[0];
                         match (&declarator.id, declarator.init.as_ref()) {
-                            (BindingPattern::BindingIdentifier(temp), Some(Expression::BinaryExpression(step)))
-                                if step.operator == BinaryOperator::Addition
-                                    && matches!(&step.left, Expression::Identifier(name) if name.name == counter)
-                                    && matches!(&step.right, Expression::NumericLiteral(one) if one.value == 1.0)
-                                    && self.read_counts.get(temp.name.as_str()) == Some(&1) =>
+                            (
+                                BindingPattern::BindingIdentifier(temp),
+                                Some(Expression::BinaryExpression(step)),
+                            ) if step.operator == BinaryOperator::Addition
+                                && matches!(&step.left, Expression::Identifier(name) if name.name == counter)
+                                && matches!(&step.right, Expression::NumericLiteral(one) if one.value == 1.0)
+                                && self.read_counts.get(temp.name.as_str()) == Some(&1) =>
                             {
                                 Some((temp.name.to_string(), counter.to_string()))
                             }
@@ -487,7 +617,11 @@ impl<'a> Unwrap<'a> {
                     let Some(counter) = increment_ident(&statements[index + 1]) else {
                         unreachable!();
                     };
-                    let mut rename = Rename { from: &temp, to: counter, done: false };
+                    let mut rename = Rename {
+                        from: &temp,
+                        to: counter,
+                        done: false,
+                    };
                     rename.visit_statement(&mut statements[index + 2]);
                     if rename.done {
                         statements.remove(index);
@@ -503,19 +637,23 @@ impl<'a> Unwrap<'a> {
                         if matches!(&a.left, AssignmentTarget::ComputedMemberExpression(m) if plain_path(&m.object))));
                 if self.own_names.contains(&counter) || path_object {
                     if let Some(store) = indexed_store(&mut statements[index + 1]) {
-                        let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left else {
+                        let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left
+                        else {
                             unreachable!();
                         };
                         if matches!(&member.expression, Expression::Identifier(name) if name.name == counter.as_str())
                             && !mentions(&member.object, &counter)
                         {
-                            let Statement::ExpressionStatement(step) = statements.remove(index) else {
+                            let Statement::ExpressionStatement(step) = statements.remove(index)
+                            else {
                                 unreachable!();
                             };
                             let Some(store) = indexed_store(&mut statements[index]) else {
                                 unreachable!();
                             };
-                            let AssignmentTarget::ComputedMemberExpression(member) = &mut store.left else {
+                            let AssignmentTarget::ComputedMemberExpression(member) =
+                                &mut store.left
+                            else {
                                 unreachable!();
                             };
                             member.expression = step.unbox().expression;
@@ -529,7 +667,8 @@ impl<'a> Unwrap<'a> {
             if index + 3 < statements.len() && self.fold_optional_chain(statements, index) {
                 continue;
             }
-            if index + 2 < statements.len() && self.fold_repeated_optional_chain(statements, index) {
+            if index + 2 < statements.len() && self.fold_repeated_optional_chain(statements, index)
+            {
                 continue;
             }
             // `let i = 4; a[i] = v; a[++i] = w;` starts one lower and steps
@@ -547,7 +686,11 @@ impl<'a> Unwrap<'a> {
     }
 
     /// `x = Number(x) ± 1` (or `x = x - 1`) as `++x`/`--x` (`x++`/`x--`).
-    pub(super) fn counter_step(&self, expression: &Expression<'a>, prefix: bool) -> Option<Expression<'a>> {
+    pub(super) fn counter_step(
+        &self,
+        expression: &Expression<'a>,
+        prefix: bool,
+    ) -> Option<Expression<'a>> {
         let Expression::AssignmentExpression(assignment) = expression else {
             return None;
         };
@@ -594,8 +737,13 @@ impl<'a> Unwrap<'a> {
         if !converted {
             return None;
         }
-        let argument = self.builder.simple_assignment_target_assignment_target_identifier(SPAN, target.name);
-        Some(self.builder.expression_update(SPAN, operator, prefix, argument))
+        let argument = self
+            .builder
+            .simple_assignment_target_assignment_target_identifier(SPAN, target.name);
+        Some(
+            self.builder
+                .expression_update(SPAN, operator, prefix, argument),
+        )
     }
 }
 
@@ -603,12 +751,17 @@ impl<'a> Unwrap<'a> {
 /// arm ends in a jump back to this loop while the other path leaves. Returns
 /// its index and whether its else arm is the one that stays.
 fn continuing_split(body: &[Statement<'_>], label: Option<&str>) -> Option<(usize, bool)> {
-    let back = |statements: &[Statement<'_>]| matches!(statements.last(), Some(Statement::ContinueStatement(jump))
-        if jump.label.as_ref().map(|l| l.name.as_str()) == label || jump.label.is_none());
-    let leaves = |statements: &[Statement<'_>]| matches!(statements.last(),
-        Some(Statement::ReturnStatement(_) | Statement::ThrowStatement(_)))
-        || matches!(statements.last(), Some(Statement::BreakStatement(jump)) if jump.label.is_none() || jump.label.as_ref().map(|l| l.name.as_str()) == label)
-        || matches!(statements.last(), Some(Statement::ContinueStatement(jump)) if jump.label.is_some() && jump.label.as_ref().map(|l| l.name.as_str()) != label);
+    let back = |statements: &[Statement<'_>]| {
+        matches!(statements.last(), Some(Statement::ContinueStatement(jump))
+        if jump.label.as_ref().map(|l| l.name.as_str()) == label || jump.label.is_none())
+    };
+    let leaves = |statements: &[Statement<'_>]| {
+        matches!(
+            statements.last(),
+            Some(Statement::ReturnStatement(_) | Statement::ThrowStatement(_))
+        ) || matches!(statements.last(), Some(Statement::BreakStatement(jump)) if jump.label.is_none() || jump.label.as_ref().map(|l| l.name.as_str()) == label)
+            || matches!(statements.last(), Some(Statement::ContinueStatement(jump)) if jump.label.is_some() && jump.label.as_ref().map(|l| l.name.as_str()) != label)
+    };
     let mut plan = None;
     for (index, statement) in body.iter().enumerate() {
         let Statement::IfStatement(branch) = statement else {
@@ -621,7 +774,9 @@ fn continuing_split(body: &[Statement<'_>], label: Option<&str>) -> Option<(usiz
         match &branch.alternate {
             None if back(consequent) && leaves(rest) => plan = Some((index, false)),
             Some(alternate) if rest.is_empty() => {
-                let Some(alternate) = block_of(alternate) else { continue };
+                let Some(alternate) = block_of(alternate) else {
+                    continue;
+                };
                 if back(consequent) && leaves(alternate) {
                     plan = Some((index, false));
                 } else if back(alternate) && leaves(consequent) {
@@ -643,19 +798,28 @@ fn block_of<'s, 'b>(statement: &'s Statement<'b>) -> Option<&'s [Statement<'b>]>
 
 /// Whether the exit path jumps to the loop other than by its own trailing
 /// `break`.
-fn exit_jumps_back(body: &[Statement<'_>], split: usize, flipped: bool, label: Option<&str>) -> bool {
-    let Statement::IfStatement(branch) = &body[split] else { unreachable!() };
+fn exit_jumps_back(
+    body: &[Statement<'_>],
+    split: usize,
+    flipped: bool,
+    label: Option<&str>,
+) -> bool {
+    let Statement::IfStatement(branch) = &body[split] else {
+        unreachable!()
+    };
     let exit: Vec<&Statement<'_>> = if branch.alternate.is_none() {
         body[split + 1..].iter().collect()
     } else if flipped {
         block_of(&branch.consequent).unwrap().iter().collect()
     } else {
-        block_of(branch.alternate.as_ref().unwrap()).unwrap().iter().collect()
+        block_of(branch.alternate.as_ref().unwrap())
+            .unwrap()
+            .iter()
+            .collect()
     };
     let (last, rest) = exit.split_last().expect("an exit");
     let trailing_own = matches!(last, Statement::BreakStatement(jump) if jump.label.is_none() || jump.label.as_ref().map(|l| l.name.as_str()) == label);
-    rest.iter().any(|s| jumps_to(s, label))
-        || (!trailing_own && jumps_to(last, label))
+    rest.iter().any(|s| jumps_to(s, label)) || (!trailing_own && jumps_to(last, label))
 }
 
 /// `++name;`
@@ -742,7 +906,13 @@ pub(super) fn jumps(statement: &Statement<'_>, label: Option<&str>, breaks_only:
         fn visit_function(&mut self, _: &Function<'b>, _: oxc_syntax::scope::ScopeFlags) {}
         fn visit_arrow_function_expression(&mut self, _: &ArrowFunctionExpression<'b>) {}
     }
-    let mut jumps = Jumps { label, breaks_only, loops: 0, switches: 0, found: false };
+    let mut jumps = Jumps {
+        label,
+        breaks_only,
+        loops: 0,
+        switches: 0,
+        found: false,
+    };
     // The loop statement itself: look inside its body.
     match statement {
         Statement::ForStatement(loop_) => jumps.visit_statement(&loop_.body),
@@ -755,10 +925,15 @@ pub(super) fn jumps(statement: &Statement<'_>, label: Option<&str>, breaks_only:
 pub(super) fn plain_path(expression: &Expression<'_>) -> bool {
     match expression.without_parentheses() {
         Expression::Identifier(_) => true,
-        Expression::StaticMemberExpression(member) => !member.optional && plain_path(&member.object),
+        Expression::StaticMemberExpression(member) => {
+            !member.optional && plain_path(&member.object)
+        }
         Expression::ComputedMemberExpression(member) => {
             !member.optional
-                && matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
+                && matches!(
+                    member.expression,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                )
                 && plain_path(&member.object)
         }
         _ => false,
@@ -782,7 +957,9 @@ pub(super) fn labeled_jumps_to(statement: &Statement<'_>, label: &str) -> bool {
 }
 
 /// `name + 1 + 1 …` (or `name + n`): the counter and its offset.
-pub(super) fn offset<'s, 'a>(expression: &'s Expression<'a>) -> Option<(&'s IdentifierReference<'a>, f64)> {
+pub(super) fn offset<'s, 'a>(
+    expression: &'s Expression<'a>,
+) -> Option<(&'s IdentifierReference<'a>, f64)> {
     let Expression::BinaryExpression(binary) = expression.without_parentheses() else {
         return None;
     };
@@ -819,10 +996,14 @@ pub(super) fn step_of(statement: &Statement<'_>, name: &str) -> Option<f64> {
         return None;
     }
     match (assignment.operator, &assignment.right) {
-        (AssignmentOperator::Addition, Expression::NumericLiteral(step)) if step.value.fract() == 0.0 && step.value >= 1.0 => {
+        (AssignmentOperator::Addition, Expression::NumericLiteral(step))
+            if step.value.fract() == 0.0 && step.value >= 1.0 =>
+        {
             Some(step.value)
         }
-        (AssignmentOperator::Assign, right) => offset(right).filter(|(counter, _)| counter.name == name).map(|(_, n)| n),
+        (AssignmentOperator::Assign, right) => offset(right)
+            .filter(|(counter, _)| counter.name == name)
+            .map(|(_, n)| n),
         _ => None,
     }
 }
@@ -852,7 +1033,12 @@ pub(super) fn offsets_only(expression: &Expression<'_>, name: &str, least: f64) 
             walk::walk_binary_expression(self, binary);
         }
     }
-    let mut count = Count { name, least, reads: 0, offsets: 0 };
+    let mut count = Count {
+        name,
+        least,
+        reads: 0,
+        offsets: 0,
+    };
     count.visit_expression(expression);
     count.reads > 0 && count.reads == count.offsets
 }
@@ -873,7 +1059,10 @@ impl<'a> VisitMut<'a> for Shift<'_, 'a> {
                 if let Expression::NumericLiteral(n) = &mut binary.right {
                     let left = n.value - self.by;
                     if left == 0.0 {
-                        let name = std::mem::replace(&mut binary.left, self.builder.expression_null_literal(SPAN));
+                        let name = std::mem::replace(
+                            &mut binary.left,
+                            self.builder.expression_null_literal(SPAN),
+                        );
                         *expression = name;
                     } else {
                         n.value = left;
@@ -918,7 +1107,9 @@ pub(super) fn increment_ident<'a>(statement: &Statement<'a>) -> Option<oxc_span:
 }
 
 /// `x[k] = v;` with its parts.
-pub(super) fn indexed_store<'s, 'a>(statement: &'s mut Statement<'a>) -> Option<&'s mut AssignmentExpression<'a>> {
+pub(super) fn indexed_store<'s, 'a>(
+    statement: &'s mut Statement<'a>,
+) -> Option<&'s mut AssignmentExpression<'a>> {
     let Statement::ExpressionStatement(expression) = statement else {
         return None;
     };
@@ -926,6 +1117,9 @@ pub(super) fn indexed_store<'s, 'a>(statement: &'s mut Statement<'a>) -> Option<
         return None;
     };
     (assignment.operator == AssignmentOperator::Assign
-        && matches!(assignment.left, AssignmentTarget::ComputedMemberExpression(_)))
+        && matches!(
+            assignment.left,
+            AssignmentTarget::ComputedMemberExpression(_)
+        ))
     .then_some(assignment)
 }

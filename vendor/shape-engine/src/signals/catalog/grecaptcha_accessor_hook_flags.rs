@@ -1,27 +1,40 @@
 //! `GrecaptchaAccessorHookFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, flag_bytes::*};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use buffer_writes::slot_info;
 
 /// `GrecaptchaAccessorHookFlags`. Card: [`CARD`].
-pub(crate) fn recognize_grecaptcha_accessor_hook_flags(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_grecaptcha_accessor_hook_flags(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if !plain_ops(view, &[LeafOp::Byte, LeafOp::Byte]) {
         return None;
     }
     let info = slot_info(view, ctx);
-    let features = info
-        .facts
-        .count_strings(&["FeaturePolicy", "LayoutShiftAttribution", "CompressionStream"]);
+    let features = info.facts.count_strings(&[
+        "FeaturePolicy",
+        "LayoutShiftAttribution",
+        "CompressionStream",
+    ]);
     // `String.fromCharCode(…)` or `String.fromCharCode.apply(null, codes)`.
     let decoded = info.facts.call("fromCharCode")
         || (info.facts.member("fromCharCode") && info.facts.call("apply"))
-        || view.leaves().any(|leaf| has_transform(leaf, "String.fromCharCode.apply"));
+        || view
+            .leaves()
+            .any(|leaf| has_transform(leaf, "String.fromCharCode.apply"));
     (features >= 2 && decoded)
-        .then(|| claim(&["own FeaturePolicy/LayoutShiftAttribution/CompressionStream", "decoded accessor markers"]))
+        .then(|| {
+            claim(&[
+                "own FeaturePolicy/LayoutShiftAttribution/CompressionStream",
+                "decoded accessor markers",
+            ])
+        })
         .flatten()
 }
 

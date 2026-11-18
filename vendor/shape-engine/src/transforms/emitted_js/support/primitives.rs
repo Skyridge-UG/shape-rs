@@ -101,8 +101,21 @@ pub(crate) fn is_builtin_member(member: &MemberExpression<'_>, scoping: &Scoping
             .is_some_and(|reference| scoping.get_reference(reference).symbol_id().is_none())
         && matches!(
             object.name.as_str(),
-            "Object" | "Function" | "Array" | "Number" | "String" | "Boolean" | "Symbol" | "Math" | "JSON"
-                | "Reflect" | "Promise" | "Date" | "ArrayBuffer" | "Uint8Array" | "BigInt"
+            "Object"
+                | "Function"
+                | "Array"
+                | "Number"
+                | "String"
+                | "Boolean"
+                | "Symbol"
+                | "Math"
+                | "JSON"
+                | "Reflect"
+                | "Promise"
+                | "Date"
+                | "ArrayBuffer"
+                | "Uint8Array"
+                | "BigInt"
         )
 }
 
@@ -113,15 +126,62 @@ pub(crate) fn is_builtin_member(member: &MemberExpression<'_>, scoping: &Scoping
 pub(crate) fn is_stable_global(name: &str) -> bool {
     matches!(
         name,
-        "undefined" | "NaN" | "Infinity" | "globalThis"
-            | "Object" | "Function" | "Array" | "Number" | "String" | "Boolean" | "Symbol" | "BigInt"
-            | "Math" | "JSON" | "Date" | "RegExp" | "Promise" | "Proxy" | "Reflect" | "Intl" | "Atomics"
-            | "Error" | "TypeError" | "RangeError" | "SyntaxError" | "ReferenceError" | "EvalError" | "URIError"
-            | "Map" | "Set" | "WeakMap" | "WeakSet" | "ArrayBuffer" | "SharedArrayBuffer" | "DataView"
-            | "Int8Array" | "Uint8Array" | "Uint8ClampedArray" | "Int16Array" | "Uint16Array"
-            | "Int32Array" | "Uint32Array" | "Float32Array" | "Float64Array" | "BigInt64Array" | "BigUint64Array"
-            | "parseInt" | "parseFloat" | "isNaN" | "isFinite" | "encodeURIComponent" | "decodeURIComponent"
-            | "encodeURI" | "decodeURI" | "escape" | "unescape"
+        "undefined"
+            | "NaN"
+            | "Infinity"
+            | "globalThis"
+            | "Object"
+            | "Function"
+            | "Array"
+            | "Number"
+            | "String"
+            | "Boolean"
+            | "Symbol"
+            | "BigInt"
+            | "Math"
+            | "JSON"
+            | "Date"
+            | "RegExp"
+            | "Promise"
+            | "Proxy"
+            | "Reflect"
+            | "Intl"
+            | "Atomics"
+            | "Error"
+            | "TypeError"
+            | "RangeError"
+            | "SyntaxError"
+            | "ReferenceError"
+            | "EvalError"
+            | "URIError"
+            | "Map"
+            | "Set"
+            | "WeakMap"
+            | "WeakSet"
+            | "ArrayBuffer"
+            | "SharedArrayBuffer"
+            | "DataView"
+            | "Int8Array"
+            | "Uint8Array"
+            | "Uint8ClampedArray"
+            | "Int16Array"
+            | "Uint16Array"
+            | "Int32Array"
+            | "Uint32Array"
+            | "Float32Array"
+            | "Float64Array"
+            | "BigInt64Array"
+            | "BigUint64Array"
+            | "parseInt"
+            | "parseFloat"
+            | "isNaN"
+            | "isFinite"
+            | "encodeURIComponent"
+            | "decodeURIComponent"
+            | "encodeURI"
+            | "decodeURI"
+            | "escape"
+            | "unescape"
     )
 }
 
@@ -175,7 +235,10 @@ impl Factories<'_, '_> {
     fn value(&self, expression: &Expression<'_>) -> bool {
         match expression.without_parentheses() {
             Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_) => true,
-            Expression::ArrayExpression(array) => array.elements.iter().all(|e| e.as_expression().is_some_and(|e| self.value(e))),
+            Expression::ArrayExpression(array) => array
+                .elements
+                .iter()
+                .all(|e| e.as_expression().is_some_and(|e| self.value(e))),
             Expression::ObjectExpression(object) => object.properties.iter().all(|p| match p {
                 ObjectPropertyKind::ObjectProperty(p) => !p.computed && self.value(&p.value),
                 _ => false,
@@ -190,7 +253,10 @@ impl Factories<'_, '_> {
                         is_builtin_member(m, self.types.scoping)
                             && m.static_property_name().is_some_and(|n| n == "create")
                     })
-                    && call.arguments.iter().all(|a| a.as_expression().is_some_and(|a| self.value(a)))
+                    && call
+                        .arguments
+                        .iter()
+                        .all(|a| a.as_expression().is_some_and(|a| self.value(a)))
             }
             expression => self.types.pure(expression),
         }
@@ -227,7 +293,11 @@ impl Factories<'_, '_> {
 }
 
 /// Names stored exactly once, with a factory function (`$KEY_n = F;`).
-fn factory_aliases(program: &Program<'_>, scoping: &Scoping, factories: &BTreeSet<SymbolId>) -> BTreeSet<SymbolId> {
+fn factory_aliases(
+    program: &Program<'_>,
+    scoping: &Scoping,
+    factories: &BTreeSet<SymbolId>,
+) -> BTreeSet<SymbolId> {
     struct Aliases<'s> {
         scoping: &'s Scoping,
         factories: &'s BTreeSet<SymbolId>,
@@ -235,13 +305,28 @@ fn factory_aliases(program: &Program<'_>, scoping: &Scoping, factories: &BTreeSe
     }
     impl<'a> Visit<'a> for Aliases<'_> {
         fn visit_assignment_expression(&mut self, assignment: &AssignmentExpression<'a>) {
-            if let (AssignmentTarget::AssignmentTargetIdentifier(target), Expression::Identifier(value)) = (&assignment.left, &assignment.right) {
-                let target = self.scoping.get_reference(target.reference_id()).symbol_id();
+            if let (
+                AssignmentTarget::AssignmentTargetIdentifier(target),
+                Expression::Identifier(value),
+            ) = (&assignment.left, &assignment.right)
+            {
+                let target = self
+                    .scoping
+                    .get_reference(target.reference_id())
+                    .symbol_id();
                 let value = self.scoping.get_reference(value.reference_id()).symbol_id();
                 if let (Some(target), Some(value)) = (target, value) {
-                    let writes = self.scoping.get_resolved_references(target).filter(|r| r.is_write()).count();
+                    let writes = self
+                        .scoping
+                        .get_resolved_references(target)
+                        .filter(|r| r.is_write())
+                        .count();
                     let declared_plain = self.scoping.symbol_declarations(target).count() == 1;
-                    if assignment.operator == AssignmentOperator::Assign && self.factories.contains(&value) && writes == 1 && declared_plain {
+                    if assignment.operator == AssignmentOperator::Assign
+                        && self.factories.contains(&value)
+                        && writes == 1
+                        && declared_plain
+                    {
                         self.found.insert(target);
                     }
                 }
@@ -249,13 +334,21 @@ fn factory_aliases(program: &Program<'_>, scoping: &Scoping, factories: &BTreeSe
             walk::walk_assignment_expression(self, assignment);
         }
     }
-    let mut aliases = Aliases { scoping, factories, found: BTreeSet::new() };
+    let mut aliases = Aliases {
+        scoping,
+        factories,
+        found: BTreeSet::new(),
+    };
     aliases.visit_program(program);
     aliases.found
 }
 
 impl<'s> Types<'s> {
-    pub(crate) fn build<'a>(program: &Program<'a>, scoping: &'s Scoping, nodes: &oxc_semantic::AstNodes<'a>) -> Self {
+    pub(crate) fn build<'a>(
+        program: &Program<'a>,
+        scoping: &'s Scoping,
+        nodes: &oxc_semantic::AstNodes<'a>,
+    ) -> Self {
         // The fixpoint below re-checks calls and writes until the types
         // settle: gather those nodes once instead of walking the program
         // each round.
@@ -276,7 +369,11 @@ impl<'s> Types<'s> {
             declared: BTreeMap::new(),
             factories: BTreeSet::new(),
         };
-        let mut collect = Collect { types: &mut types, rewritten: BTreeMap::new(), functions: BTreeMap::new() };
+        let mut collect = Collect {
+            types: &mut types,
+            rewritten: BTreeMap::new(),
+            functions: BTreeMap::new(),
+        };
         collect.visit_program(program);
         // A rewritten `let` keeps its initializer's type when every write
         // stores that type, and a parameter of a function only ever called
@@ -288,16 +385,26 @@ impl<'s> Types<'s> {
         // from a fitting write or argument over fitting values.
         let mut rewritten = std::mem::take(&mut collect.rewritten);
         let functions = std::mem::take(&mut collect.functions);
-        let mut factories = Factories { types: &types, found: BTreeSet::new() };
+        let mut factories = Factories {
+            types: &types,
+            found: BTreeSet::new(),
+        };
         factories.visit_program(program);
         let mut found = factories.found;
         // A name stored exactly once, with a factory, calls that factory.
         found.extend(factory_aliases(program, scoping, &found));
         types.factories = found;
-        types.bindings.extend(rewritten.iter().map(|(symbol, prim)| (*symbol, *prim)));
+        types
+            .bindings
+            .extend(rewritten.iter().map(|(symbol, prim)| (*symbol, *prim)));
         let mut parameters: BTreeMap<SymbolId, Prim> = BTreeMap::new();
         for _ in 0..4 {
-            let mut calls = Calls { types: &types, functions: &functions, sites: BTreeMap::new(), escaped: BTreeSet::new() };
+            let mut calls = Calls {
+                types: &types,
+                functions: &functions,
+                sites: BTreeMap::new(),
+                escaped: BTreeSet::new(),
+            };
             for call in &call_nodes {
                 calls.site(call);
             }
@@ -307,14 +414,18 @@ impl<'s> Types<'s> {
                 let Some(sites) = all_sites.get(function) else {
                     continue;
                 };
-                if escaped.contains(function) || sites.len() != scoping.get_resolved_references(*function).count() {
+                if escaped.contains(function)
+                    || sites.len() != scoping.get_resolved_references(*function).count()
+                {
                     continue;
                 }
                 for (index, param) in params.iter().enumerate() {
                     let Some(param) = param else {
                         continue;
                     };
-                    let mut agreed = sites.iter().map(|site| site.get(index).copied().unwrap_or(Some(Prim::Nullish)));
+                    let mut agreed = sites
+                        .iter()
+                        .map(|site| site.get(index).copied().unwrap_or(Some(Prim::Nullish)));
                     let Some(Some(first)) = agreed.next() else {
                         continue;
                     };
@@ -330,7 +441,11 @@ impl<'s> Types<'s> {
             }
         }
         loop {
-            let mut check = CheckWrites { types: &types, seen: BTreeMap::new(), failed: BTreeSet::new() };
+            let mut check = CheckWrites {
+                types: &types,
+                seen: BTreeMap::new(),
+                failed: BTreeSet::new(),
+            };
             for assignment in &assignments {
                 check.assignment(assignment);
             }
@@ -339,12 +454,20 @@ impl<'s> Types<'s> {
             }
             let mut failed = check.failed;
             for (symbol, _) in &rewritten {
-                let writes = scoping.get_resolved_references(*symbol).filter(|reference| reference.is_write()).count();
+                let writes = scoping
+                    .get_resolved_references(*symbol)
+                    .filter(|reference| reference.is_write())
+                    .count();
                 if check.seen.get(symbol).copied().unwrap_or(0) != writes {
                     failed.insert(*symbol);
                 }
             }
-            let mut calls = Calls { types: &types, functions: &functions, sites: BTreeMap::new(), escaped: BTreeSet::new() };
+            let mut calls = Calls {
+                types: &types,
+                functions: &functions,
+                sites: BTreeMap::new(),
+                escaped: BTreeSet::new(),
+            };
             for call in &call_nodes {
                 calls.site(call);
             }
@@ -360,15 +483,16 @@ impl<'s> Types<'s> {
                         continue;
                     };
                     let fits = complete
-                        && sites
-                            .iter()
-                            .all(|site| site.get(index).copied().unwrap_or(Some(Prim::Nullish)) == Some(*prim));
+                        && sites.iter().all(|site| {
+                            site.get(index).copied().unwrap_or(Some(Prim::Nullish)) == Some(*prim)
+                        });
                     if !fits {
                         failed.insert(*param);
                     }
                 }
             }
-            failed.retain(|symbol| rewritten.contains_key(symbol) || parameters.contains_key(symbol));
+            failed
+                .retain(|symbol| rewritten.contains_key(symbol) || parameters.contains_key(symbol));
             if failed.is_empty() {
                 break;
             }
@@ -398,9 +522,10 @@ impl<'s> Types<'s> {
                 },
             },
             Expression::ParenthesizedExpression(inner) => self.type_of(&inner.expression),
-            Expression::SequenceExpression(sequence) => {
-                sequence.expressions.last().and_then(|last| self.type_of(last))
-            }
+            Expression::SequenceExpression(sequence) => sequence
+                .expressions
+                .last()
+                .and_then(|last| self.type_of(last)),
             Expression::AssignmentExpression(assignment)
                 if assignment.operator == oxc_syntax::operator::AssignmentOperator::Assign =>
             {
@@ -492,29 +617,41 @@ impl<'s> Types<'s> {
             },
             // Allocating a literal of pure parts runs nothing.
             Expression::ThisExpression(_) => true,
-            Expression::ArrayExpression(array) => array.elements.iter().all(|element| match element {
-                ArrayExpressionElement::Elision(_) => true,
-                ArrayExpressionElement::SpreadElement(_) => false,
-                _ => element.as_expression().is_some_and(|e| self.pure(e)),
-            }),
-            Expression::ObjectExpression(object) => object.properties.iter().all(|property| match property {
-                ObjectPropertyKind::SpreadProperty(_) => false,
-                ObjectPropertyKind::ObjectProperty(property) => {
-                    (!property.computed
-                        || matches!(property.key, PropertyKey::StringLiteral(_) | PropertyKey::NumericLiteral(_)))
-                        && self.pure(&property.value)
-                }
-            }),
+            Expression::ArrayExpression(array) => {
+                array.elements.iter().all(|element| match element {
+                    ArrayExpressionElement::Elision(_) => true,
+                    ArrayExpressionElement::SpreadElement(_) => false,
+                    _ => element.as_expression().is_some_and(|e| self.pure(e)),
+                })
+            }
+            Expression::ObjectExpression(object) => {
+                object.properties.iter().all(|property| match property {
+                    ObjectPropertyKind::SpreadProperty(_) => false,
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        (!property.computed
+                            || matches!(
+                                property.key,
+                                PropertyKey::StringLiteral(_) | PropertyKey::NumericLiteral(_)
+                            ))
+                            && self.pure(&property.value)
+                    }
+                })
+            }
             Expression::ParenthesizedExpression(inner) => self.pure(&inner.expression),
             // A factory builds something fresh from its arguments.
             Expression::CallExpression(call) => {
                 !call.optional
                     && matches!(&call.callee, Expression::Identifier(callee)
                         if self.symbol(callee).is_some_and(|symbol| self.factories.contains(&symbol)))
-                    && call.arguments.iter().all(|a| a.as_expression().is_some_and(|a| self.pure(a)))
+                    && call
+                        .arguments
+                        .iter()
+                        .all(|a| a.as_expression().is_some_and(|a| self.pure(a)))
             }
             Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_) => {
-                expression.as_member_expression().is_some_and(|member| is_builtin_member(member, self.scoping))
+                expression
+                    .as_member_expression()
+                    .is_some_and(|member| is_builtin_member(member, self.scoping))
             }
             Expression::UnaryExpression(unary) => self.pure_unary(unary),
             Expression::BinaryExpression(binary) => self.pure_binary(binary),
@@ -584,7 +721,10 @@ impl<'s> Types<'s> {
         // A `var` reads `undefined` before its initializer runs, never throws.
         let flags = self.scoping.symbol_flags(symbol);
         if flags.contains(oxc_semantic::SymbolFlags::FunctionScopedVariable)
-            && !self.scoping.symbol_flags(symbol).contains(oxc_semantic::SymbolFlags::Function)
+            && !self
+                .scoping
+                .symbol_flags(symbol)
+                .contains(oxc_semantic::SymbolFlags::Function)
         {
             return true;
         }
@@ -601,7 +741,8 @@ impl<'s> Types<'s> {
         };
         let read_scope = self.scoping.get_reference(reference).scope_id();
         end <= read.span.start
-            && self.function_scope(read_scope) == self.function_scope(self.scoping.symbol_scope_id(symbol))
+            && self.function_scope(read_scope)
+                == self.function_scope(self.scoping.symbol_scope_id(symbol))
     }
 
     fn function_scope(&self, scope: oxc_semantic::ScopeId) -> oxc_semantic::ScopeId {
@@ -660,17 +801,30 @@ impl Calls<'_, '_> {
         let Expression::Identifier(callee) = &call.callee else {
             return;
         };
-        let Some(function) = self.types.symbol(callee).filter(|symbol| self.functions.contains_key(symbol)) else {
+        let Some(function) = self
+            .types
+            .symbol(callee)
+            .filter(|symbol| self.functions.contains_key(symbol))
+        else {
             return;
         };
-        if call.optional || call.arguments.iter().any(|argument| matches!(argument, Argument::SpreadElement(_))) {
+        if call.optional
+            || call
+                .arguments
+                .iter()
+                .any(|argument| matches!(argument, Argument::SpreadElement(_)))
+        {
             self.escaped.insert(function);
             return;
         }
         let types = call
             .arguments
             .iter()
-            .map(|argument| argument.as_expression().and_then(|value| self.types.type_of(value)))
+            .map(|argument| {
+                argument
+                    .as_expression()
+                    .and_then(|value| self.types.type_of(value))
+            })
             .collect();
         self.sites.entry(function).or_default().push(types);
     }
@@ -772,7 +926,10 @@ impl<'a> Visit<'a> for Collect<'_, '_> {
         if let Some(body) = &function.body {
             if let Some(Statement::VariableDeclaration(declaration)) = body.statements.first() {
                 if declaration.kind == VariableDeclarationKind::Let
-                    && declaration.declarations.iter().all(|declarator| declarator.init.is_none())
+                    && declaration
+                        .declarations
+                        .iter()
+                        .all(|declarator| declarator.init.is_none())
                 {
                     for declarator in &declaration.declarations {
                         if let BindingPattern::BindingIdentifier(binding) = &declarator.id {
@@ -789,7 +946,8 @@ impl<'a> Visit<'a> for Collect<'_, '_> {
         // Plain parameters without defaults are initialized before any of
         // the function's code runs; `arguments` could alias them.
         let plain = function.params.items.iter().all(|param| {
-            matches!(param.pattern, BindingPattern::BindingIdentifier(_)) && param.initializer.is_none()
+            matches!(param.pattern, BindingPattern::BindingIdentifier(_))
+                && param.initializer.is_none()
         });
         let mut mentions = MentionsArguments::default();
         if let Some(body) = &function.body {
@@ -822,7 +980,9 @@ impl<'a> Visit<'a> for Collect<'_, '_> {
             }
             if function.is_declaration() {
                 if let Some(symbol) = function.id.as_ref().and_then(|id| id.symbol_id.get()) {
-                    if !scoping.symbol_is_mutated(symbol) && scoping.symbol_declarations(symbol).count() == 1 {
+                    if !scoping.symbol_is_mutated(symbol)
+                        && scoping.symbol_declarations(symbol).count() == 1
+                    {
                         self.functions.insert(symbol, params);
                     }
                 }
@@ -833,7 +993,8 @@ impl<'a> Visit<'a> for Collect<'_, '_> {
 
     fn visit_variable_declarator(&mut self, declarator: &VariableDeclarator<'a>) {
         walk::walk_variable_declarator(self, declarator);
-        let (BindingPattern::BindingIdentifier(binding), Some(init)) = (&declarator.id, &declarator.init)
+        let (BindingPattern::BindingIdentifier(binding), Some(init)) =
+            (&declarator.id, &declarator.init)
         else {
             return;
         };
@@ -850,7 +1011,10 @@ impl<'a> Visit<'a> for Collect<'_, '_> {
         if scoping.symbol_is_mutated(symbol) {
             // A hoisted `var` can be read as `undefined` before its
             // initializer; a `let` cannot be read at all before it.
-            if scoping.symbol_flags(symbol).contains(oxc_semantic::SymbolFlags::BlockScopedVariable) {
+            if scoping
+                .symbol_flags(symbol)
+                .contains(oxc_semantic::SymbolFlags::BlockScopedVariable)
+            {
                 if let Some(prim) = self.types.type_of(init) {
                     self.rewritten.insert(symbol, prim);
                 }
@@ -906,7 +1070,10 @@ mod tests {
             let types = Types::build(&program, &scoping, &nodes);
             types.type_of(last_expression(&program))
         };
-        assert_eq!(typed("let i = 0; let j = 1; i = j + 1; j = i << 2; i++; j -= 3; i;"), Some(Prim::Number));
+        assert_eq!(
+            typed("let i = 0; let j = 1; i = j + 1; j = i << 2; i++; j -= 3; i;"),
+            Some(Prim::Number)
+        );
         assert_eq!(typed("let s = \"\"; s += o; s;"), Some(Prim::String));
         // one write of another type, or one this scan cannot type
         assert_eq!(typed("let i = 0; i = o; i;"), None);
@@ -927,13 +1094,24 @@ mod tests {
             let Some(Statement::FunctionDeclaration(function)) = program.body.first() else {
                 panic!("starts with the function");
             };
-            let Some(Statement::ReturnStatement(ret)) = function.body.as_ref().unwrap().statements.last() else {
+            let Some(Statement::ReturnStatement(ret)) =
+                function.body.as_ref().unwrap().statements.last()
+            else {
                 panic!("ends in a return");
             };
-            (types.type_of(ret.argument.as_ref().unwrap()), types.pure(ret.argument.as_ref().unwrap()))
+            (
+                types.type_of(ret.argument.as_ref().unwrap()),
+                types.pure(ret.argument.as_ref().unwrap()),
+            )
         };
-        assert_eq!(typed("function h(a, b) { return a >> 16; }\nh(1, 2); h(3 | x);"), (Some(Prim::Number), true));
+        assert_eq!(
+            typed("function h(a, b) { return a >> 16; }\nh(1, 2); h(3 | x);"),
+            (Some(Prim::Number), true)
+        );
         // a recursive helper passing its own typed values
-        assert_eq!(typed("function h(a) { return h(a - 1) >> 16; }\nh(1);").0, Some(Prim::Number));
+        assert_eq!(
+            typed("function h(a) { return h(a - 1) >> 16; }\nh(1);").0,
+            Some(Prim::Number)
+        );
     }
 }

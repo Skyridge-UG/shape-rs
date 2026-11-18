@@ -717,10 +717,12 @@ mod tests {
     }
     const SPLIT_EPOCH: &str =
         include_str!("../../../../tests/fixtures/captured_range_predicate/direct-call-parent.js");
-    const SHARED_EPOCH: &str =
-        include_str!("../../../../tests/fixtures/captured_range_predicate/initialized-bounds-parent.js");
-    const FOUR_EPOCH: &str =
-        include_str!("../../../../tests/fixtures/captured_range_predicate/multi-epoch-constructor.js");
+    const SHARED_EPOCH: &str = include_str!(
+        "../../../../tests/fixtures/captured_range_predicate/initialized-bounds-parent.js"
+    );
+    const FOUR_EPOCH: &str = include_str!(
+        "../../../../tests/fixtures/captured_range_predicate/multi-epoch-constructor.js"
+    );
     const ROLE: &str = "signals_captured_range_predicate";
 
     fn model_proof(source: &str, name: &str, expected: bool) {

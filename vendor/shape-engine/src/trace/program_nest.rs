@@ -36,11 +36,7 @@ pub fn thread_name(function: Function) -> String {
 /// does not declare (`free`) and every name it declares (`declared`): the
 /// only generated names it reads from outside are the `$KEY_K` of the slots
 /// it shares, and it declares none of those, so each one is its creator's.
-pub fn check(
-    facts: &ProgramFacts,
-    free: &[String],
-    declared: &[String],
-) -> Result<(), String> {
+pub fn check(facts: &ProgramFacts, free: &[String], declared: &[String]) -> Result<(), String> {
     let shared: BTreeSet<String> = facts
         .captured
         .iter()
@@ -74,10 +70,7 @@ fn is_generated(name: &str) -> bool {
 /// the program may start: each further root (a Worker's bootstrap, or a
 /// function the program posts there) that no function creates, every one
 /// with the functions it creates nested in it, and none called here.
-pub fn build(
-    roots: &[Function],
-    parts: &BTreeMap<Function, Part<'_>>,
-) -> Result<String, String> {
+pub fn build(roots: &[Function], parts: &BTreeMap<Function, Part<'_>>) -> Result<String, String> {
     let (&entry, others) = roots.split_first().ok_or("a program needs an entry")?;
     let name = thread_name(entry);
     let mut code =

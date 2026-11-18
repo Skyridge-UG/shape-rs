@@ -31,25 +31,46 @@ use oxc_ast::AstKind;
 use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 /// The edits folding every fingerprint of `vmEntry`, or `None` when some
 /// use is not one.
-pub(crate) fn fold_entry_fingerprint(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, raw: &str) -> Option<Vec<analysis::Edit>> {
+pub(crate) fn fold_entry_fingerprint(
+    source: &str,
+    scoping: &Scoping,
+    nodes: &AstNodes<'_>,
+    raw: &str,
+) -> Option<Vec<analysis::Edit>> {
     let entry: Rc<Vec<u16>> = Rc::new(entry_function_source(raw)?.encode_utf16().collect());
     let reads: Vec<NodeId> = scoping
         .root_unresolved_references()
         .iter()
         .filter(|(name, _)| name.as_str() == "vmEntry")
-        .flat_map(|(_, references)| references.iter().map(|&reference| scoping.get_reference(reference).node_id()))
+        .flat_map(|(_, references)| {
+            references
+                .iter()
+                .map(|&reference| scoping.get_reference(reference).node_id())
+        })
         .collect();
-    let [read] = reads.as_slice() else { return None };
+    let [read] = reads.as_slice() else {
+        return None;
+    };
     let slot_node = nodes.parent_id(*read);
-    let AstKind::VariableDeclarator(declarator) = nodes.kind(slot_node) else { return None };
-    let BindingPattern::BindingIdentifier(slot) = &declarator.id else { return None };
+    let AstKind::VariableDeclarator(declarator) = nodes.kind(slot_node) else {
+        return None;
+    };
+    let BindingPattern::BindingIdentifier(slot) = &declarator.id else {
+        return None;
+    };
     let slot = slot.symbol_id();
-    let fold = Fold { source, scoping, nodes, entry, slot };
+    let fold = Fold {
+        source,
+        scoping,
+        nodes,
+        entry,
+        slot,
+    };
     let mut edits = Vec::new();
     let mut helpers: HashMap<SymbolId, usize> = HashMap::new();
     for reference in scoping.get_resolved_references(slot) {
@@ -64,10 +85,16 @@ pub(crate) fn fold_entry_fingerprint(source: &str, scoping: &Scoping, nodes: &As
         return None;
     }
     // The slot and the helpers only these chains used go.
-    edits.push(analysis::Edit::delete(whole_line(source, declaration_of(nodes, slot_node)?)));
+    edits.push(analysis::Edit::delete(whole_line(
+        source,
+        declaration_of(nodes, slot_node)?,
+    )));
     for (helper, uses) in helpers {
         if scoping.get_resolved_references(helper).count() == uses {
-            edits.push(analysis::Edit::delete(whole_line(source, declaration_of(nodes, scoping.symbol_declaration(helper))?)));
+            edits.push(analysis::Edit::delete(whole_line(
+                source,
+                declaration_of(nodes, scoping.symbol_declaration(helper))?,
+            )));
         }
     }
     Some(edits)
@@ -79,9 +106,15 @@ pub(crate) fn fold_entry_fingerprint(source: &str, scoping: &Scoping, nodes: &As
 fn entry_function_source(raw: &str) -> Option<String> {
     let allocator = oxc_allocator::Allocator::default();
     let program = analysis::parse_program(&allocator, raw).ok()?;
-    let [Statement::ExpressionStatement(statement)] = program.body.as_slice() else { return None };
-    let Expression::CallExpression(call) = statement.expression.get_inner_expression() else { return None };
-    let Expression::FunctionExpression(function) = call.callee.get_inner_expression() else { return None };
+    let [Statement::ExpressionStatement(statement)] = program.body.as_slice() else {
+        return None;
+    };
+    let Expression::CallExpression(call) = statement.expression.get_inner_expression() else {
+        return None;
+    };
+    let Expression::FunctionExpression(function) = call.callee.get_inner_expression() else {
+        return None;
+    };
     Some(raw[function.span.start as usize..function.span.end as usize].to_string())
 }
 
@@ -89,7 +122,9 @@ fn entry_function_source(raw: &str) -> Option<String> {
 /// declarator's node.
 fn declaration_of(nodes: &AstNodes<'_>, declarator: NodeId) -> Option<Span> {
     match nodes.parent_kind(declarator) {
-        AstKind::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => Some(declaration.span),
+        AstKind::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => {
+            Some(declaration.span)
+        }
         _ => None,
     }
 }
@@ -118,7 +153,10 @@ impl<'s, 'a> Fold<'s, 'a> {
 
     fn symbol(&self, expression: &Expression<'_>) -> Option<SymbolId> {
         match expression.get_inner_expression() {
-            Expression::Identifier(identifier) => self.scoping.get_reference(identifier.reference_id()).symbol_id(),
+            Expression::Identifier(identifier) => self
+                .scoping
+                .get_reference(identifier.reference_id())
+                .symbol_id(),
             _ => None,
         }
     }
@@ -126,18 +164,32 @@ impl<'s, 'a> Fold<'s, 'a> {
     /// A never-written `Function["prototype"]["call"]["bind"](Function["prototype"]["toString"])`.
     fn to_string_helper(&self, callee: &Expression<'_>) -> Option<SymbolId> {
         let helper = self.symbol(callee)?;
-        if self.scoping.get_resolved_references(helper).any(|reference| reference.is_write()) {
+        if self
+            .scoping
+            .get_resolved_references(helper)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
-        let AstKind::VariableDeclarator(definition) = self.nodes.kind(self.scoping.symbol_declaration(helper)) else { return None };
+        let AstKind::VariableDeclarator(definition) =
+            self.nodes.kind(self.scoping.symbol_declaration(helper))
+        else {
+            return None;
+        };
         let init = self.text(definition.init.as_ref()?.span());
-        (init == "Function[\"prototype\"][\"call\"][\"bind\"](Function[\"prototype\"][\"toString\"])").then_some(helper)
+        (init
+            == "Function[\"prototype\"][\"call\"][\"bind\"](Function[\"prototype\"][\"toString\"])")
+            .then_some(helper)
     }
 
     /// `let s = t(slot);` and what follows it in its statement list, folded.
     fn chain(&self, read: NodeId) -> Option<(SymbolId, Vec<analysis::Edit>)> {
-        let AstKind::CallExpression(call) = self.nodes.parent_kind(read) else { return None };
-        let [_] = call.arguments.as_slice() else { return None };
+        let AstKind::CallExpression(call) = self.nodes.parent_kind(read) else {
+            return None;
+        };
+        let [_] = call.arguments.as_slice() else {
+            return None;
+        };
         let helper = self.to_string_helper(&call.callee)?;
         let call_node = self.nodes.parent_id(read);
         let declarator = self.nodes.parent_id(call_node);
@@ -150,33 +202,58 @@ impl<'s, 'a> Fold<'s, 'a> {
             AstKind::FunctionBody(body) => &body.statements,
             _ => return None,
         };
-        let start = statements.iter().position(|statement| statement.span() == self.nodes.get_node(declaration).span())?;
+        let start = statements
+            .iter()
+            .position(|statement| statement.span() == self.nodes.get_node(declaration).span())?;
         let mut env: HashMap<SymbolId, Value> = HashMap::new();
         let mut folded: Vec<Span> = Vec::new();
         let mut edits = Vec::new();
         for statement in &statements[start..] {
-            let touches = self.touches(&env, statement.span()) || statement.span().start == statements[start].span().start;
+            let touches = self.touches(&env, statement.span())
+                || statement.span().start == statements[start].span().start;
             if !touches {
                 continue;
             }
             match statement {
                 Statement::VariableDeclaration(declaration) => {
-                    let [declarator] = declaration.declarations.as_slice() else { return None };
-                    let BindingPattern::BindingIdentifier(id) = &declarator.id else { return None };
+                    let [declarator] = declaration.declarations.as_slice() else {
+                        return None;
+                    };
+                    let BindingPattern::BindingIdentifier(id) = &declarator.id else {
+                        return None;
+                    };
                     let value = self.eval(declarator.init.as_ref()?, &env)?;
                     env.insert(id.symbol_id(), value);
-                    edits.push(analysis::Edit::delete(whole_line(self.source, statement.span())));
+                    edits.push(analysis::Edit::delete(whole_line(
+                        self.source,
+                        statement.span(),
+                    )));
                 }
                 Statement::ExpressionStatement(expression) => {
-                    let Expression::AssignmentExpression(assignment) = &expression.expression else { return None };
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else { return None };
+                    let Expression::AssignmentExpression(assignment) = &expression.expression
+                    else {
+                        return None;
+                    };
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
+                        return None;
+                    };
                     if assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign
-                        || self.scoping.get_reference(target.reference_id()).symbol_id().is_some_and(|symbol| env.contains_key(&symbol))
+                        || self
+                            .scoping
+                            .get_reference(target.reference_id())
+                            .symbol_id()
+                            .is_some_and(|symbol| env.contains_key(&symbol))
                     {
                         return None;
                     }
-                    let Value::Number(number) = self.eval(&assignment.right, &env)? else { return None };
-                    edits.push(analysis::Edit::replace(assignment.right.span(), number_text(number)?));
+                    let Value::Number(number) = self.eval(&assignment.right, &env)? else {
+                        return None;
+                    };
+                    edits.push(analysis::Edit::replace(
+                        assignment.right.span(),
+                        number_text(number)?,
+                    ));
                 }
                 _ => return None,
             }
@@ -184,10 +261,15 @@ impl<'s, 'a> Fold<'s, 'a> {
         }
         // Every temporary lives only in the folded statements.
         for &symbol in env.keys() {
-            let outside = self.scoping.get_resolved_references(symbol).any(|reference| {
-                let span = self.nodes.get_node(reference.node_id()).span();
-                !folded.iter().any(|statement| statement.contains_inclusive(span))
-            });
+            let outside = self
+                .scoping
+                .get_resolved_references(symbol)
+                .any(|reference| {
+                    let span = self.nodes.get_node(reference.node_id()).span();
+                    !folded
+                        .iter()
+                        .any(|statement| statement.contains_inclusive(span))
+                });
             if outside {
                 return None;
             }
@@ -198,30 +280,50 @@ impl<'s, 'a> Fold<'s, 'a> {
     /// Whether `span` reads any temporary.
     fn touches(&self, env: &HashMap<SymbolId, Value>, span: Span) -> bool {
         env.keys().any(|&symbol| {
-            self.scoping.get_resolved_references(symbol).any(|reference| span.contains_inclusive(self.nodes.get_node(reference.node_id()).span()))
+            self.scoping
+                .get_resolved_references(symbol)
+                .any(|reference| {
+                    span.contains_inclusive(self.nodes.get_node(reference.node_id()).span())
+                })
         })
     }
 
     fn eval(&self, expression: &Expression<'_>, env: &HashMap<SymbolId, Value>) -> Option<Value> {
         match expression.get_inner_expression() {
-            Expression::StringLiteral(literal) => Some(Value::String(Rc::new(literal.value.encode_utf16().collect()))),
+            Expression::StringLiteral(literal) => Some(Value::String(Rc::new(
+                literal.value.encode_utf16().collect(),
+            ))),
             Expression::NumericLiteral(literal) => Some(Value::Number(literal.value)),
             Expression::Identifier(_) => env.get(&self.symbol(expression)?).cloned(),
-            Expression::StaticMemberExpression(member) if member.property.name == "length" => self.length(self.eval(&member.object, env)?),
+            Expression::StaticMemberExpression(member) if member.property.name == "length" => {
+                self.length(self.eval(&member.object, env)?)
+            }
             Expression::ComputedMemberExpression(member) if matches!(&member.expression, Expression::StringLiteral(key) if key.value == "length") => {
                 self.length(self.eval(&member.object, env)?)
             }
             Expression::ConditionalExpression(conditional) => {
                 // m == null ? a : b
-                let Expression::BinaryExpression(test) = conditional.test.get_inner_expression() else { return None };
-                if test.operator != oxc_syntax::operator::BinaryOperator::Equality || !matches!(test.right, Expression::NullLiteral(_)) {
+                let Expression::BinaryExpression(test) = conditional.test.get_inner_expression()
+                else {
+                    return None;
+                };
+                if test.operator != oxc_syntax::operator::BinaryOperator::Equality
+                    || !matches!(test.right, Expression::NullLiteral(_))
+                {
                     return None;
                 }
                 let null = match self.eval(&test.left, env)? {
                     Value::Null => true,
                     Value::Matches(_) | Value::String(_) | Value::Number(_) => false,
                 };
-                self.eval(if null { &conditional.consequent } else { &conditional.alternate }, env)
+                self.eval(
+                    if null {
+                        &conditional.consequent
+                    } else {
+                        &conditional.alternate
+                    },
+                    env,
+                )
             }
             Expression::CallExpression(call) => self.call(call, env),
             _ => None,
@@ -242,7 +344,9 @@ impl<'s, 'a> Fold<'s, 'a> {
         }
         // t(slot): the entry function's source.
         if let ([argument], Expression::Identifier(_)) = (call.arguments.as_slice(), &call.callee) {
-            if self.symbol(argument.as_expression()?) == Some(self.slot) && self.to_string_helper(&call.callee).is_some() {
+            if self.symbol(argument.as_expression()?) == Some(self.slot)
+                && self.to_string_helper(&call.callee).is_some()
+            {
                 return Some(Value::String(self.entry.clone()));
             }
             return None;
@@ -256,17 +360,39 @@ impl<'s, 'a> Fold<'s, 'a> {
             },
             _ => return None,
         };
-        let Value::String(text) = self.eval(member.object(), env)? else { return None };
-        let arguments: Vec<&Expression<'_>> = call.arguments.iter().map(Argument::as_expression).collect::<Option<_>>()?;
+        let Value::String(text) = self.eval(member.object(), env)? else {
+            return None;
+        };
+        let arguments: Vec<&Expression<'_>> = call
+            .arguments
+            .iter()
+            .map(Argument::as_expression)
+            .collect::<Option<_>>()?;
         match (method, arguments.as_slice()) {
             ("indexOf", [search]) | ("lastIndexOf", [search]) => {
-                let Value::String(search) = self.eval(search, env)? else { return None };
-                let found = if method == "indexOf" { index_of(&text, &search) } else { last_index_of(&text, &search) };
+                let Value::String(search) = self.eval(search, env)? else {
+                    return None;
+                };
+                let found = if method == "indexOf" {
+                    index_of(&text, &search)
+                } else {
+                    last_index_of(&text, &search)
+                };
                 Some(Value::Number(found.map_or(-1.0, |at| at as f64)))
             }
             ("substring", [start, end]) => {
-                let (Value::Number(start), Value::Number(end)) = (self.eval(start, env)?, self.eval(end, env)?) else { return None };
-                let clamp = |value: f64| if value.is_nan() { 0 } else { value.clamp(0.0, text.len() as f64) as usize };
+                let (Value::Number(start), Value::Number(end)) =
+                    (self.eval(start, env)?, self.eval(end, env)?)
+                else {
+                    return None;
+                };
+                let clamp = |value: f64| {
+                    if value.is_nan() {
+                        0
+                    } else {
+                        value.clamp(0.0, text.len() as f64) as usize
+                    }
+                };
                 let (from, to) = (clamp(start), clamp(end));
                 let (from, to) = if from > to { (to, from) } else { (from, to) };
                 Some(Value::String(Rc::new(text[from..to].to_vec())))
@@ -274,7 +400,11 @@ impl<'s, 'a> Fold<'s, 'a> {
             ("match", [pattern]) => {
                 let set = self.regex_set(pattern)?;
                 let count = text.iter().filter(|&&unit| set.contains(unit)).count();
-                Some(if count == 0 { Value::Null } else { Value::Matches(count) })
+                Some(if count == 0 {
+                    Value::Null
+                } else {
+                    Value::Matches(count)
+                })
             }
             _ => None,
         }
@@ -284,20 +414,40 @@ impl<'s, 'a> Fold<'s, 'a> {
     /// characters from a known set.
     fn regex_set(&self, pattern: &Expression<'_>) -> Option<CharSet> {
         let symbol = self.symbol(pattern)?;
-        if self.scoping.get_resolved_references(symbol).any(|reference| reference.is_write()) {
+        if self
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
-        let AstKind::VariableDeclarator(definition) = self.nodes.kind(self.scoping.symbol_declaration(symbol)) else { return None };
+        let AstKind::VariableDeclarator(definition) =
+            self.nodes.kind(self.scoping.symbol_declaration(symbol))
+        else {
+            return None;
+        };
         let (callee, arguments) = match definition.init.as_ref()?.get_inner_expression() {
             Expression::CallExpression(call) => (&call.callee, &call.arguments),
             Expression::NewExpression(new) => (&new.callee, &new.arguments),
             _ => return None,
         };
-        let Expression::Identifier(constructor) = callee else { return None };
-        if constructor.name != "RegExp" || self.scoping.get_reference(constructor.reference_id()).symbol_id().is_some() {
+        let Expression::Identifier(constructor) = callee else {
+            return None;
+        };
+        if constructor.name != "RegExp"
+            || self
+                .scoping
+                .get_reference(constructor.reference_id())
+                .symbol_id()
+                .is_some()
+        {
             return None;
         }
-        let [Argument::StringLiteral(source), Argument::StringLiteral(flags)] = arguments.as_slice() else { return None };
+        let [Argument::StringLiteral(source), Argument::StringLiteral(flags)] =
+            arguments.as_slice()
+        else {
+            return None;
+        };
         if flags.value != "g" {
             return None;
         }
@@ -312,7 +462,9 @@ struct CharSet {
 
 impl CharSet {
     fn contains(&self, unit: u16) -> bool {
-        self.ranges.iter().any(|&(low, high)| low <= unit && unit <= high)
+        self.ranges
+            .iter()
+            .any(|&(low, high)| low <= unit && unit <= high)
     }
 
     /// `\s`, `\d`, `\w`, one literal character, or a class of those (with
@@ -333,7 +485,11 @@ impl CharSet {
                         // a-b
                         if inner.get(at) == Some(&'-') && at + 1 < inner.len() {
                             let mut ignored = Vec::new();
-                            let (Some(high), step) = Self::atom(&inner[at + 1..], &mut ignored, true)? else { return None };
+                            let (Some(high), step) =
+                                Self::atom(&inner[at + 1..], &mut ignored, true)?
+                            else {
+                                return None;
+                            };
                             if high < low {
                                 return None;
                             }
@@ -360,7 +516,11 @@ impl CharSet {
 
     /// One atom: a literal character (`Some`) or a class escape (pushed to
     /// `ranges`), and how many characters it took.
-    fn atom(chars: &[char], ranges: &mut Vec<(u16, u16)>, in_class: bool) -> Option<(Option<u16>, usize)> {
+    fn atom(
+        chars: &[char],
+        ranges: &mut Vec<(u16, u16)>,
+        in_class: bool,
+    ) -> Option<(Option<u16>, usize)> {
         let first = *chars.first()?;
         if first == '\\' {
             let escaped = *chars.get(1)?;
@@ -409,14 +569,16 @@ fn index_of(text: &[u16], search: &[u16]) -> Option<usize> {
     if search.is_empty() {
         return Some(0);
     }
-    text.windows(search.len()).position(|window| window == search)
+    text.windows(search.len())
+        .position(|window| window == search)
 }
 
 fn last_index_of(text: &[u16], search: &[u16]) -> Option<usize> {
     if search.is_empty() {
         return Some(text.len());
     }
-    text.windows(search.len()).rposition(|window| window == search)
+    text.windows(search.len())
+        .rposition(|window| window == search)
 }
 
 /// A whole number's literal; other numbers do not fold.
@@ -461,9 +623,17 @@ mod tests {
     #[test]
     fn character_sets_follow_javascript() {
         let whitespace = CharSet::parse("\\s").unwrap();
-        assert!(whitespace.contains(0x20) && whitespace.contains(0xA0) && whitespace.contains(0xFEFF) && !whitespace.contains(0x41));
+        assert!(
+            whitespace.contains(0x20)
+                && whitespace.contains(0xA0)
+                && whitespace.contains(0xFEFF)
+                && !whitespace.contains(0x41)
+        );
         let class = CharSet::parse("[.{([,;=/]").unwrap();
-        assert!(".{([,;=/".encode_utf16().all(|unit| class.contains(unit)) && !class.contains(u16::from(b'}')));
+        assert!(
+            ".{([,;=/".encode_utf16().all(|unit| class.contains(unit))
+                && !class.contains(u16::from(b'}'))
+        );
         assert!(CharSet::parse("[^a]").is_none() && CharSet::parse("a+").is_none());
     }
 }

@@ -27,17 +27,25 @@ pub(crate) enum NativeCount {
 /// The native-code census a counted number's transforms and API paths describe.
 pub(crate) fn native_count_kind(transforms: &[String], apis: &[String]) -> Option<NativeCount> {
     let has = |t: &str| transforms.iter().any(|x| x == t);
-    let builtin_list = ["Function.prototype.bind", "Function.prototype.call", "Function.prototype.apply"]
-        .iter()
-        .filter(|api| apis.iter().any(|a| a == **api))
-        .count();
+    let builtin_list = [
+        "Function.prototype.bind",
+        "Function.prototype.call",
+        "Function.prototype.apply",
+    ]
+    .iter()
+    .filter(|api| apis.iter().any(|a| a == **api))
+    .count();
     let filtered = has(".filter()") && has(".length") && builtin_list >= 2;
     // A counted native-code test over own property names.
     let census = has("count") && has(".test()") && has(".value");
     let realm = has(".styleNonce") || has("context.csp");
     let global = has("Object.getOwnPropertyNames") && has(".enumerable");
     let nested = has(".getOwnPropertyNames()") && has(".getOwnPropertyDescriptor()");
-    match (filtered, census && global && !realm, census && nested && realm) {
+    match (
+        filtered,
+        census && global && !realm,
+        census && nested && realm,
+    ) {
         (true, false, false) => Some(NativeCount::NonNativeBuiltins),
         (false, true, false) => Some(NativeCount::GlobalRealm),
         (false, false, true) => Some(NativeCount::IframeRealm),
@@ -62,7 +70,9 @@ pub(crate) enum ConsoleRealm {
 
 /// `stores`: the contexts of the flag stores of one slot.
 pub(crate) fn console_realm(stores: &[Facts]) -> Option<ConsoleRealm> {
-    let probe = |facts: &Facts| facts.string("stack") && (facts.call("defineProperty") || facts.member("defineProperty"));
+    let probe = |facts: &Facts| {
+        facts.string("stack") && (facts.call("defineProperty") || facts.member("defineProperty"))
+    };
     let direct = stores
         .iter()
         .any(|facts| probe(facts) && facts.member("contentWindow") && facts.member("console"));
@@ -116,7 +126,8 @@ pub(crate) fn proxy_kind(bytes: &[usize], slice: &Facts, stores: &Facts) -> Opti
     ];
     let detectors = slice.string("object")
         && slice.string("function")
-        && (slice.count_members(DETECTED) + DETECTED.iter().filter(|g| slice.global(g)).count()) >= 3;
+        && (slice.count_members(DETECTED) + DETECTED.iter().filter(|g| slice.global(g)).count())
+            >= 3;
     let brand = stores.string("Proxy.toString") || stores.string("incompatible Proxy");
     let three = !bytes.is_empty() && bytes.iter().all(|count| *count == 3);
     let one = !bytes.is_empty() && bytes.iter().all(|count| *count == 1);
@@ -154,7 +165,11 @@ pub(crate) const INTEGRITY_APIS: &[&str] = &[
 ];
 
 /// `fields`: top-level field count per message; `hashes`: hash slots seen.
-pub(crate) fn integrity_kind(fields: &[usize], hashes: usize, slice: &Facts) -> Option<IntegrityKind> {
+pub(crate) fn integrity_kind(
+    fields: &[usize],
+    hashes: usize,
+    slice: &Facts,
+) -> Option<IntegrityKind> {
     let integrity = slice.string("[object Object]") && slice.count_strings(INTEGRITY_APIS) >= 4;
     if !integrity || fields.is_empty() {
         return None;
@@ -176,13 +191,22 @@ pub(crate) fn integrity_kind(fields: &[usize], hashes: usize, slice: &Facts) -> 
 mod tests {
     use std::collections::BTreeSet;
 
-    use super::{console_realm, integrity_kind, native_count_kind, proxy_kind, ConsoleRealm, Facts, IntegrityKind, NativeCount, ProxyKind};
+    use super::{
+        console_realm, integrity_kind, native_count_kind, proxy_kind, ConsoleRealm, Facts,
+        IntegrityKind, NativeCount, ProxyKind,
+    };
 
     fn strings(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()
     }
 
-    fn facts(members: &[&str], strings_: &[&str], calls: &[&str], globals: &[&str], param_console: bool) -> Facts {
+    fn facts(
+        members: &[&str],
+        strings_: &[&str],
+        calls: &[&str],
+        globals: &[&str],
+        param_console: bool,
+    ) -> Facts {
         Facts {
             members: members.iter().map(|s| s.to_string()).collect(),
             strings: strings_.iter().map(|s| s.to_string()).collect(),
@@ -199,17 +223,46 @@ mod tests {
     #[test]
     fn tie_native_counts() {
         let builtins = strings(&["Function.prototype.bind", "Function.prototype.call", "JSON"]);
-        let filtered = strings(&[".length", ".filter()", "array", ".push", "select", "===", "typeof"]);
+        let filtered = strings(&[
+            ".length",
+            ".filter()",
+            "array",
+            ".push",
+            "select",
+            "===",
+            "typeof",
+        ]);
         let global = strings(&[
-            "count", "guard", ".value", ".test()", ".enumerable", "Object.getOwnPropertyNames", "context.global",
+            "count",
+            "guard",
+            ".value",
+            ".test()",
+            ".enumerable",
+            "Object.getOwnPropertyNames",
+            "context.global",
         ]);
         let iframe = strings(&[
-            "count", "guard", ".value", ".test()", ".getOwnPropertyDescriptor()", ".getOwnPropertyNames()",
-            ".styleNonce", "context.csp",
+            "count",
+            "guard",
+            ".value",
+            ".test()",
+            ".getOwnPropertyDescriptor()",
+            ".getOwnPropertyNames()",
+            ".styleNonce",
+            "context.csp",
         ]);
-        assert_eq!(native_count_kind(&filtered, &builtins), Some(NativeCount::NonNativeBuiltins));
-        assert_eq!(native_count_kind(&global, &[]), Some(NativeCount::GlobalRealm));
-        assert_eq!(native_count_kind(&iframe, &[]), Some(NativeCount::IframeRealm));
+        assert_eq!(
+            native_count_kind(&filtered, &builtins),
+            Some(NativeCount::NonNativeBuiltins)
+        );
+        assert_eq!(
+            native_count_kind(&global, &[]),
+            Some(NativeCount::GlobalRealm)
+        );
+        assert_eq!(
+            native_count_kind(&iframe, &[]),
+            Some(NativeCount::IframeRealm)
+        );
         // The realm helper's nonce turns a global census into no decision.
         let mut mixed = global.clone();
         mixed.push(".styleNonce".into());
@@ -225,10 +278,28 @@ mod tests {
     /// ConsoleStackAccessFlags vs CleanConsoleStackAccessFlags.
     #[test]
     fn tie_console_realms() {
-        let local = facts(&["log", "name"], &["stack"], &["defineProperty"], &[], false);
+        let local = facts(
+            &["log", "name"],
+            &["stack"],
+            &["defineProperty"],
+            &[],
+            false,
+        );
         let sentry = facts(&["log", "__sentry_original__"], &[], &[], &[], false);
-        let direct = facts(&["contentWindow", "console", "log"], &["stack"], &["defineProperty"], &[], false);
-        let clean = facts(&["console", "log"], &["stack"], &["defineProperty"], &[], true);
+        let direct = facts(
+            &["contentWindow", "console", "log"],
+            &["stack"],
+            &["defineProperty"],
+            &[],
+            false,
+        );
+        let clean = facts(
+            &["console", "log"],
+            &["stack"],
+            &["defineProperty"],
+            &[],
+            true,
+        );
         assert_eq!(
             console_realm(&[local.clone(), sentry.clone(), direct.clone()]),
             Some(ConsoleRealm::DirectIframe)
@@ -238,7 +309,10 @@ mod tests {
             Some(ConsoleRealm::CleanRealm)
         );
         // Both probes in one slot's stores: equal evidence, no claim.
-        assert_eq!(console_realm(&[local.clone(), direct.clone(), clean.clone()]), None);
+        assert_eq!(
+            console_realm(&[local.clone(), direct.clone(), clean.clone()]),
+            None
+        );
         // The page-console and Sentry probes alone prove neither.
         assert_eq!(console_realm(&[local, sentry]), None);
         // A realm console without the stack trap is not a probe.
@@ -256,11 +330,26 @@ mod tests {
             &["Proxy", "navigator"],
             false,
         );
-        let brand = facts(&["stack", "message", "indexOf"], &["Proxy.toString", "incompatible Proxy"], &[], &[], false);
+        let brand = facts(
+            &["stack", "message", "indexOf"],
+            &["Proxy.toString", "incompatible Proxy"],
+            &[],
+            &[],
+            false,
+        );
         let none = Facts::default();
-        assert_eq!(proxy_kind(&[3], &detectors, &none), Some(ProxyKind::ApiDetectors));
-        assert_eq!(proxy_kind(&[3, 3], &detectors, &none), Some(ProxyKind::ApiDetectors));
-        assert_eq!(proxy_kind(&[1], &none, &brand), Some(ProxyKind::BrandErrors));
+        assert_eq!(
+            proxy_kind(&[3], &detectors, &none),
+            Some(ProxyKind::ApiDetectors)
+        );
+        assert_eq!(
+            proxy_kind(&[3, 3], &detectors, &none),
+            Some(ProxyKind::ApiDetectors)
+        );
+        assert_eq!(
+            proxy_kind(&[1], &none, &brand),
+            Some(ProxyKind::BrandErrors)
+        );
         // Byte count decides nothing on its own.
         assert_eq!(proxy_kind(&[1], &detectors, &none), None);
         assert_eq!(proxy_kind(&[3], &none, &brand), None);
@@ -273,16 +362,32 @@ mod tests {
     fn tie_integrity_kinds() {
         let slice = facts(
             &["get", "set"],
-            &["[object Object]", "createElement", "userAgent", "plugins", "mimeTypes", "toDataURL"],
+            &[
+                "[object Object]",
+                "createElement",
+                "userAgent",
+                "plugins",
+                "mimeTypes",
+                "toDataURL",
+            ],
             &[],
             &[],
             false,
         );
-        assert_eq!(integrity_kind(&[3, 3], 0, &slice), Some(IntegrityKind::ThreeBytes));
-        assert_eq!(integrity_kind(&[26, 26], 15, &slice), Some(IntegrityKind::WithSourceHashes));
+        assert_eq!(
+            integrity_kind(&[3, 3], 0, &slice),
+            Some(IntegrityKind::ThreeBytes)
+        );
+        assert_eq!(
+            integrity_kind(&[26, 26], 15, &slice),
+            Some(IntegrityKind::WithSourceHashes)
+        );
         // Three bytes with hash slots, or many fields without: neither.
         // Builds without source hashes: eleven flag bytes.
-        assert_eq!(integrity_kind(&[11, 11], 0, &slice), Some(IntegrityKind::WithSourceHashes));
+        assert_eq!(
+            integrity_kind(&[11, 11], 0, &slice),
+            Some(IntegrityKind::WithSourceHashes)
+        );
         assert_eq!(integrity_kind(&[3], 2, &slice), None);
         assert_eq!(integrity_kind(&[26], 0, &slice), None);
         assert_eq!(integrity_kind(&[3, 11], 0, &slice), None);

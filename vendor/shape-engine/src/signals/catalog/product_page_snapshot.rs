@@ -1,9 +1,10 @@
 //! `ProductPageSnapshot`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_by_object_key, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    bind_by_object_key, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `ProductPageSnapshot`. Card: [`CARD`].
 /// Wire key -> card name (the producer's own object keys, identical in every build).

@@ -390,7 +390,10 @@ fn keyup(model: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> Option<
     };
     if symbol(model, &clear_target.object) != Some(map)
         || !event_keycode(model, &clear_target.expression, event)
-        || !matches!(clear.right.without_parentheses(), Expression::NullLiteral(_))
+        || !matches!(
+            clear.right.without_parentheses(),
+            Expression::NullLiteral(_)
+        )
     {
         return None;
     }

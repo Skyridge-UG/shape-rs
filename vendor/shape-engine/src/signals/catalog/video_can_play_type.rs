@@ -1,10 +1,11 @@
 //! `VideoCanPlayType`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `VideoCanPlayType`. Card: [`CARD`].
 ///

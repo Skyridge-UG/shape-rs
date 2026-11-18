@@ -16,8 +16,8 @@ use oxc_parser::Parser;
 use oxc_semantic::{Scoping, SemanticBuilder, SymbolId};
 use oxc_span::{GetSpan, SourceType, Span};
 
-use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::analysis::roles::FinderClaim;
+use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::schema::Confidence;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -118,17 +118,27 @@ impl<'a> Body<'a> {
                     children.push(node("init", vec![init]));
                 }
                 children.extend([
-                    node("test", s.test.iter().map(|e| self.expression(e)).collect::<Option<_>>()?),
-                    node("update", s.update.iter().map(|e| self.expression(e)).collect::<Option<_>>()?),
+                    node(
+                        "test",
+                        s.test
+                            .iter()
+                            .map(|e| self.expression(e))
+                            .collect::<Option<_>>()?,
+                    ),
+                    node(
+                        "update",
+                        s.update
+                            .iter()
+                            .map(|e| self.expression(e))
+                            .collect::<Option<_>>()?,
+                    ),
                     self.statement(&s.body)?,
                 ]);
-                Some(node(
-                    "for",
-                    children,
-                ))
+                Some(node("for", children))
             }
             Statement::WhileStatement(s) if self.setup_getter.is_some() => Some(node(
-                "while", vec![self.expression(&s.test)?, self.statement(&s.body)?],
+                "while",
+                vec![self.expression(&s.test)?, self.statement(&s.body)?],
             )),
             Statement::BlockStatement(s) => self.statements(&s.body),
             Statement::ExpressionStatement(s) => {
@@ -157,8 +167,20 @@ impl<'a> Body<'a> {
                     };
                     Some(node("finite if", vec![test, selected]))
                 } else {
-                    Some(node("if", vec![test, self.statement(&s.consequent)?,
-                        node("else", s.alternate.iter().map(|s| self.statement(s)).collect::<Option<_>>()?)]))
+                    Some(node(
+                        "if",
+                        vec![
+                            test,
+                            self.statement(&s.consequent)?,
+                            node(
+                                "else",
+                                s.alternate
+                                    .iter()
+                                    .map(|s| self.statement(s))
+                                    .collect::<Option<_>>()?,
+                            ),
+                        ],
+                    ))
                 }
             }
             Statement::IfStatement(s) => Some(node(
@@ -213,8 +235,19 @@ impl<'a> Body<'a> {
         let mut children = vec![atom(format!("{:?}", s.kind))];
         for d in &s.declarations {
             let binding = self.bind(&d.id)?;
-            children.push(node("declaration", vec![binding, node("init",
-                d.init.iter().map(|e| self.expression(e)).collect::<Option<_>>()?)]));
+            children.push(node(
+                "declaration",
+                vec![
+                    binding,
+                    node(
+                        "init",
+                        d.init
+                            .iter()
+                            .map(|e| self.expression(e))
+                            .collect::<Option<_>>()?,
+                    ),
+                ],
+            ));
         }
         Some(node("variables", children))
     }
@@ -328,11 +361,17 @@ impl<'a> Body<'a> {
                 let target = self.target(&a.left)?;
                 let value = self.expression(&a.right)?;
                 if self.closed_key.is_some() && matches!(target, Tree::Local(_)) {
-                    let closed = self.is_closed_string(&value) && format!("{:?}", a.operator) == "Assign";
+                    let closed =
+                        self.is_closed_string(&value) && format!("{:?}", a.operator) == "Assign";
                     self.closed_locals.retain(|local| local != &target);
-                    if closed { self.closed_locals.push(target.clone()); }
+                    if closed {
+                        self.closed_locals.push(target.clone());
+                    }
                 }
-                Some(node("assign", vec![atom(format!("{:?}", a.operator)), target, value]))
+                Some(node(
+                    "assign",
+                    vec![atom(format!("{:?}", a.operator)), target, value],
+                ))
             }
             Expression::ArrayExpression(a) => Some(node(
                 "array",
@@ -360,11 +399,18 @@ impl<'a> Body<'a> {
         self.closed_key.as_ref() == Some(value) || self.closed_locals.contains(value)
     }
     fn closed_condition(&self, test: &Tree) -> Option<bool> {
-        let Tree::Node(tag, children) = test else { return None };
+        let Tree::Node(tag, children) = test else {
+            return None;
+        };
         match (*tag, children.as_slice()) {
-            ("binary", [Tree::Atom(operator), Tree::Node("unary", unary), Tree::Node("string", kind)])
-                if matches!(unary.as_slice(), [Tree::Atom(op), value] if op == "Typeof" && self.is_closed_string(value)) => {
-                let [Tree::Atom(kind)] = kind.as_slice() else { return None };
+            (
+                "binary",
+                [Tree::Atom(operator), Tree::Node("unary", unary), Tree::Node("string", kind)],
+            ) if matches!(unary.as_slice(), [Tree::Atom(op), value] if op == "Typeof" && self.is_closed_string(value)) =>
+            {
+                let [Tree::Atom(kind)] = kind.as_slice() else {
+                    return None;
+                };
                 match operator.as_str() {
                     "Equality" | "StrictEquality" => Some(kind == "string"),
                     "Inequality" | "StrictInequality" => Some(kind != "string"),
@@ -372,10 +418,18 @@ impl<'a> Body<'a> {
                 }
             }
             ("logical", [Tree::Atom(operator), left, right]) if operator == "Or" => {
-                if self.closed_condition(left)? { Some(true) } else { self.closed_condition(right) }
+                if self.closed_condition(left)? {
+                    Some(true)
+                } else {
+                    self.closed_condition(right)
+                }
             }
             ("conditional", [test, yes, no]) => {
-                self.closed_condition(if self.closed_condition(test)? { yes } else { no })
+                self.closed_condition(if self.closed_condition(test)? {
+                    yes
+                } else {
+                    no
+                })
             }
             _ => None,
         }
@@ -536,26 +590,54 @@ fn descriptor_setup(model: &Model<'_, '_>, class: &Class<'_>, getter: &Tree) -> 
         .position(|s| matches!(s, Statement::ClassDeclaration(c) if c.span == class.span))?;
     let class_symbol = class.id.as_ref()?.symbol_id.get()?;
     for count in [7, 6] {
-        let Some(setup) = statements.get(index + 1..index + 1 + count) else { continue };
+        let Some(setup) = statements.get(index + 1..index + 1 + count) else {
+            continue;
+        };
         let mut original = setup_projection(model.scoping, class_symbol, getter);
-        let projection = if original.statements(setup).is_some_and(|tree| setup_grammar(getter).contains(&tree)) {
+        let projection = if original
+            .statements(setup)
+            .is_some_and(|tree| setup_grammar(getter).contains(&tree))
+        {
             original
         } else if count == 7 {
-            let Some((tree, finite)) = finite_setup_projection(model.scoping, class_symbol, getter, setup) else { continue };
-            if !finite_setup_grammar(getter).contains(&tree) { continue; }
+            let Some((tree, finite)) =
+                finite_setup_projection(model.scoping, class_symbol, getter, setup)
+            else {
+                continue;
+            };
+            if !finite_setup_grammar(getter).contains(&tree) {
+                continue;
+            }
             finite
-        } else { continue };
+        } else {
+            continue;
+        };
         let span = Span::new(setup.first()?.span().start, setup.last()?.span().end);
-        if projection.locals.keys().copied().filter(|s| *s != class_symbol).any(|symbol| {
-            model.scoping.get_resolved_references(symbol)
-                .any(|r| !span.contains_inclusive(model.nodes.kind(r.node_id()).span()))
-        }) {
+        if projection
+            .locals
+            .keys()
+            .copied()
+            .filter(|s| *s != class_symbol)
+            .any(|symbol| {
+                model
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|r| !span.contains_inclusive(model.nodes.kind(r.node_id()).span()))
+            })
+        {
             return None;
         }
         // New layouts do not inherit function-style hoisting. Check aliases
         // separately without widening the existing constructor-use grammar.
-        if count == 6 && !eager_alias_uses(model, class_symbol, class.span.end,
-            model.nodes.parent_id(class.node_id.get()), &mut BTreeSet::new()) {
+        if count == 6
+            && !eager_alias_uses(
+                model,
+                class_symbol,
+                class.span.end,
+                model.nodes.parent_id(class.node_id.get()),
+                &mut BTreeSet::new(),
+            )
+        {
             return None;
         }
         return Some(span);
@@ -563,23 +645,40 @@ fn descriptor_setup(model: &Model<'_, '_>, class: &Class<'_>, getter: &Tree) -> 
     None
 }
 
-fn eager_alias_uses(model: &Model<'_, '_>, symbol: SymbolId, ready: u32,
-    owner: oxc_semantic::NodeId, seen: &mut BTreeSet<SymbolId>) -> bool {
-    if !seen.insert(symbol) || seen.len() > 32 { return false; }
+fn eager_alias_uses(
+    model: &Model<'_, '_>,
+    symbol: SymbolId,
+    ready: u32,
+    owner: oxc_semantic::NodeId,
+    seen: &mut BTreeSet<SymbolId>,
+) -> bool {
+    if !seen.insert(symbol) || seen.len() > 32 {
+        return false;
+    }
     let callable = model.owning_site(owner).map(|site| site.span);
     model.scoping.get_resolved_references(symbol).all(|r| {
-        let AstKind::IdentifierReference(id) = model.nodes.kind(r.node_id()) else { return false };
+        let AstKind::IdentifierReference(id) = model.nodes.kind(r.node_id()) else {
+            return false;
+        };
         // Source order alone does not prove a hoisted callable runs after the
         // class or alias initializer. Those captures need a separate epoch proof.
-        if id.span.start < ready || model.owning_site(r.node_id()).map(|site| site.span) != callable {
+        if id.span.start < ready || model.owning_site(r.node_id()).map(|site| site.span) != callable
+        {
             return false;
         }
         if let AstKind::VariableDeclarator(d) = model.nodes.parent_kind(r.node_id()) {
             let declaration = model.nodes.parent_id(model.nodes.parent_id(r.node_id()));
             // A conditional var initializer is not an unconditional publication.
-            if model.nodes.parent_id(declaration) != owner { return false; }
-            let BindingPattern::BindingIdentifier(alias) = &d.id else { return false };
-            return alias.symbol_id.get().is_some_and(|s| eager_alias_uses(model, s, d.span.end, owner, seen));
+            if model.nodes.parent_id(declaration) != owner {
+                return false;
+            }
+            let BindingPattern::BindingIdentifier(alias) = &d.id else {
+                return false;
+            };
+            return alias
+                .symbol_id
+                .get()
+                .is_some_and(|s| eager_alias_uses(model, s, d.span.end, owner, seen));
         }
         true
     })
@@ -627,29 +726,53 @@ fn setup_projection<'a>(scoping: &'a Scoping, class: SymbolId, getter: &Tree) ->
 // In particular the prefix must still equal the reference's literal descriptor,
 // own getter attachment, singleton list and zero index. No facts reach methods.
 fn finite_setup_projection<'a>(
-    scoping: &'a Scoping, class: SymbolId, getter: &Tree, setup: &[Statement<'_>],
+    scoping: &'a Scoping,
+    class: SymbolId,
+    getter: &Tree,
+    setup: &[Statement<'_>],
 ) -> Option<(Tree, Body<'a>)> {
     let mut proof = setup_projection(scoping, class, getter);
-    let Tree::Node("body", mut prefix) = proof.statements(setup.get(..5)?)? else { return None };
+    let Tree::Node("body", mut prefix) = proof.statements(setup.get(..5)?)? else {
+        return None;
+    };
     let list = match setup.get(3)? {
         Statement::ExpressionStatement(s) => {
-            let Expression::AssignmentExpression(a) = s.expression.without_parentheses() else { return None };
-            let AssignmentTarget::AssignmentTargetIdentifier(id) = &a.left else { return None };
+            let Expression::AssignmentExpression(a) = s.expression.without_parentheses() else {
+                return None;
+            };
+            let AssignmentTarget::AssignmentTargetIdentifier(id) = &a.left else {
+                return None;
+            };
             proof.reference(id)?
         }
         Statement::VariableDeclaration(d) => {
-            let [d] = d.declarations.as_slice() else { return None };
-            let BindingPattern::BindingIdentifier(id) = &d.id else { return None };
+            let [d] = d.declarations.as_slice() else {
+                return None;
+            };
+            let BindingPattern::BindingIdentifier(id) = &d.id else {
+                return None;
+            };
             Tree::Local(*proof.locals.get(&id.symbol_id.get()?)?)
         }
         _ => return None,
     };
-    let Statement::VariableDeclaration(d) = setup.get(4)? else { return None };
-    let [d] = d.declarations.as_slice() else { return None };
-    let BindingPattern::BindingIdentifier(id) = &d.id else { return None };
+    let Statement::VariableDeclaration(d) = setup.get(4)? else {
+        return None;
+    };
+    let [d] = d.declarations.as_slice() else {
+        return None;
+    };
+    let BindingPattern::BindingIdentifier(id) = &d.id else {
+        return None;
+    };
     let index = Tree::Local(*proof.locals.get(&id.symbol_id.get()?)?);
-    proof.closed_key = Some(node("member", vec![node("index", vec![list, index]), atom("key")]));
-    let Tree::Node("body", tail) = proof.statements(setup.get(5..)?)? else { return None };
+    proof.closed_key = Some(node(
+        "member",
+        vec![node("index", vec![list, index]), atom("key")],
+    ));
+    let Tree::Node("body", tail) = proof.statements(setup.get(5..)?)? else {
+        return None;
+    };
     prefix.extend(tail);
     Some((node("body", prefix), proof))
 }
@@ -687,7 +810,10 @@ fn finite_setup_grammar(getter: &Tree) -> Vec<Tree> {
             (closed, shapes)
         }).collect()
     });
-    all.iter().find(|(closed, _)| closed == getter).map(|(_, shapes)| shapes.clone()).unwrap_or_default()
+    all.iter()
+        .find(|(closed, _)| closed == getter)
+        .map(|(_, shapes)| shapes.clone())
+        .unwrap_or_default()
 }
 
 fn setup_grammar(getter: &Tree) -> Vec<Tree> {
@@ -753,22 +879,53 @@ fn setup_grammar(getter: &Tree) -> Vec<Tree> {
 // references resolve to one local singleton and the same class parameter;
 // while loops retain their terminal increment; tuple indices remain exact.
 fn descriptor_forms(source: &str) -> Vec<String> {
-    let separate = source.replace("descriptors = [descriptors];", "let list = [descriptors];")
+    let separate = source
+        .replace("descriptors = [descriptors];", "let list = [descriptors];")
         .replace("descriptors[index]", "list[index]")
         .replace("index < descriptors.length", "index < list.length");
-    let while_loop = source.replace("for (; index < descriptors.length; index++)", "while (index < descriptors.length)")
-        .replace("\n    }\n    Object.defineProperty", "\n        ++index;\n    }\n    Object.defineProperty");
-    let start = source.find("        Object.defineProperty(Class.prototype,").unwrap();
+    let while_loop = source
+        .replace(
+            "for (; index < descriptors.length; index++)",
+            "while (index < descriptors.length)",
+        )
+        .replace(
+            "\n    }\n    Object.defineProperty",
+            "\n        ++index;\n    }\n    Object.defineProperty",
+        );
+    let start = source
+        .find("        Object.defineProperty(Class.prototype,")
+        .unwrap();
     let end = source[start..].find('\n').unwrap() + start;
     let tuple = format!("{}        key = [key, key];\n        Object.defineProperty(Class.prototype, typeof key[1] == \"symbol\" ? key[0] : key[0] + \"\", descriptors[index]);{}", &source[..start], &source[end..]);
-    let mut saved_symbol = source.replace("let key;", "let symbol, key;")
-        .replace("key = descriptors[index].key;", "symbol = typeof descriptors[index].key == \"symbol\"; key = descriptors[index].key;");
+    let mut saved_symbol = source.replace("let key;", "let symbol, key;").replace(
+        "key = descriptors[index].key;",
+        "symbol = typeof descriptors[index].key == \"symbol\"; key = descriptors[index].key;",
+    );
     // Preserve the nested else grouping and the assignment after coercion.
-    saved_symbol = saved_symbol.replace("} else if (descriptors[index].key[Symbol.toPrimitive]", "} else { if (descriptors[index].key[Symbol.toPrimitive]")
-        .replace("} else { key = String(descriptors[index].key); }", "} else { key = String(descriptors[index].key); } symbol = typeof key == \"symbol\"; }")
-        .replace("typeof key == \"symbol\" ? key : key + \"\"", "symbol ? key : String(key)")
-        .replace("typeof key == \"symbol\" ? key : String(key)", "symbol ? key : String(key)");
-    vec![source.to_string(), separate, while_loop, tuple, saved_symbol]
+    saved_symbol = saved_symbol
+        .replace(
+            "} else if (descriptors[index].key[Symbol.toPrimitive]",
+            "} else { if (descriptors[index].key[Symbol.toPrimitive]",
+        )
+        .replace(
+            "} else { key = String(descriptors[index].key); }",
+            "} else { key = String(descriptors[index].key); } symbol = typeof key == \"symbol\"; }",
+        )
+        .replace(
+            "typeof key == \"symbol\" ? key : key + \"\"",
+            "symbol ? key : String(key)",
+        )
+        .replace(
+            "typeof key == \"symbol\" ? key : String(key)",
+            "symbol ? key : String(key)",
+        );
+    vec![
+        source.to_string(),
+        separate,
+        while_loop,
+        tuple,
+        saved_symbol,
+    ]
 }
 
 const DESCRIPTOR_SETUP: &str = r#"function setup(Class) {

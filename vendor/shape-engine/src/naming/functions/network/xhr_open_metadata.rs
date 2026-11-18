@@ -544,7 +544,11 @@ fn protocol(m: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> Option<(
     .all(|s| unique.insert(s))
     .then_some(())
 }
-pub(in crate::naming) fn evaluate(m: &Model<'_, '_>, site: FunctionSite, facts: &Facts<'_>) -> Vec<Proposal> {
+pub(in crate::naming) fn evaluate(
+    m: &Model<'_, '_>,
+    site: FunctionSite,
+    facts: &Facts<'_>,
+) -> Vec<Proposal> {
     let AstKind::Function(f) = m.nodes.kind(site.node_id) else {
         return vec![];
     };

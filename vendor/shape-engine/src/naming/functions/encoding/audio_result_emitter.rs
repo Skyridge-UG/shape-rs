@@ -1,8 +1,8 @@
 //! Closed scalar-prefix/reverse-for and scalar-trailer/reverse-while protocols. The input's
 //! getChannelData method is opaque: a native AudioBuffer origin is unproved.
 //! No byte equivalence with another ordering or salt is claimed.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::SymbolId;
 use oxc_span::GetSpan;
 
@@ -294,7 +294,10 @@ fn proof(
         return None;
     }
     let scalar = capture(model, site, scalar)?;
-    let writer = crate::naming::resolve::ordered_callable(model, &first.callee, 0).or_else(|| crate::naming::support::callable_identity::captured_callable(model, site, &first.callee))?;
+    let writer =
+        crate::naming::resolve::ordered_callable(model, &first.callee, 0).or_else(|| {
+            crate::naming::support::callable_identity::captured_callable(model, site, &first.callee)
+        })?;
     if !super::numeric_writer::evaluate(model, writer, &facts(model, writer), proposals)
         .iter()
         .any(|p| p.name == "writeNumber" && p.evaluator == "thread_posthost_numeric")
@@ -318,9 +321,13 @@ fn proof(
     // A countdown may begin at length and decrement before its guard. This
     // consumes a different closed loop grammar; no expression is rewritten.
     let predecrement = member(init(index)?, "length").is_some();
-    let len = if predecrement { init(index)? } else {
+    let len = if predecrement {
+        init(index)?
+    } else {
         let (len, one) = binary(init(index)?, "-")?;
-        if !number(one, 1.0) { return None; }
+        if !number(one, 1.0) {
+            return None;
+        }
         len
     };
     if symbol(model, member(len, "length")?) != Some(samples) {
@@ -336,25 +343,50 @@ fn proof(
         call(&length_write.right)?
     };
     let a = arguments(length_call)?;
-    if a.len() != 4 || !(if predecrement {
-        symbol(model, a[1]) == Some(counter)
-    } else { symbol(model, member(a[1], "length")?) == Some(samples) }) {
+    if a.len() != 4
+        || !(if predecrement {
+            symbol(model, a[1]) == Some(counter)
+        } else {
+            symbol(model, member(a[1], "length")?) == Some(samples)
+        })
+    {
         return None;
     }
     let (test, update, step) = if predecrement {
-        let Statement::ForStatement(loop_) = loop_ else { return None; };
-        if loop_.init.is_some() || loop_.test.is_some() || loop_.update.is_some() { return None; }
-        let Statement::BlockStatement(block) = &loop_.body else { return None; };
-        let [decrement, Statement::IfStatement(guard), step, coercion] = block.body.as_slice() else { return None; };
-        if guard.alternate.is_some() || !matches!(&guard.consequent, Statement::BreakStatement(b) if b.label.is_none()) { return None; }
-        let Expression::UnaryExpression(negation) = &guard.test else { return None; };
-        if negation.operator.as_str() != "!" { return None; }
+        let Statement::ForStatement(loop_) = loop_ else {
+            return None;
+        };
+        if loop_.init.is_some() || loop_.test.is_some() || loop_.update.is_some() {
+            return None;
+        }
+        let Statement::BlockStatement(block) = &loop_.body else {
+            return None;
+        };
+        let [decrement, Statement::IfStatement(guard), step, coercion] = block.body.as_slice()
+        else {
+            return None;
+        };
+        if guard.alternate.is_some()
+            || !matches!(&guard.consequent, Statement::BreakStatement(b) if b.label.is_none())
+        {
+            return None;
+        }
+        let Expression::UnaryExpression(negation) = &guard.test else {
+            return None;
+        };
+        if negation.operator.as_str() != "!" {
+            return None;
+        }
         let coerce = assignment(expression_statement(coercion)?)?;
         let numeric = call(&coerce.right)?;
         let args = arguments(numeric)?;
         if target_symbol(model, &coerce.left) != Some(counter)
             || expression_path(model, &numeric.callee) != ["Number"]
-            || args.len() != 1 || symbol(model, args[0]) != Some(counter) { return None; }
+            || args.len() != 1
+            || symbol(model, args[0]) != Some(counter)
+        {
+            return None;
+        }
         (&negation.argument, expression_statement(decrement)?, step)
     } else if trailer {
         let Statement::WhileStatement(loop_) = loop_ else {
@@ -414,7 +446,14 @@ fn proof(
         let a = arguments(c)?;
         if a.len() != 4
             || symbol(model, &c.callee) != symbol(model, &first.callee)
-            || crate::naming::resolve::ordered_callable(model, &c.callee, 0).or_else(|| crate::naming::support::callable_identity::captured_callable(model, site, &c.callee))?.span != writer.span
+            || crate::naming::resolve::ordered_callable(model, &c.callee, 0)
+                .or_else(|| {
+                    crate::naming::support::callable_identity::captured_callable(
+                        model, site, &c.callee,
+                    )
+                })?
+                .span
+                != writer.span
             || symbol(model, a[0]) != Some(stream_symbol)
             || symbol(model, a[2]) != Some(output)
             || !(if c.span == first.span {
@@ -457,7 +496,11 @@ fn proof(
             (seed, 9, 1),
             (output, 4, 0),
             (cursor_symbol, 3, 1),
-            (counter, if predecrement { 6 } else { 3 }, if predecrement { 2 } else { 1 }),
+            (
+                counter,
+                if predecrement { 6 } else { 3 },
+                if predecrement { 2 } else { 1 },
+            ),
         ]
     } else {
         vec![
@@ -467,7 +510,11 @@ fn proof(
             (output, 4, 0),
             (stream_symbol, 3, 0),
             (cursor_symbol, 4, 2),
-            (counter, if predecrement { 6 } else { 3 }, if predecrement { 2 } else { 1 }),
+            (
+                counter,
+                if predecrement { 6 } else { 3 },
+                if predecrement { 2 } else { 1 },
+            ),
         ]
     };
     let distinct: BTreeSet<_> = locals.iter().map(|(s, _, _)| *s).collect();

@@ -2,7 +2,10 @@ use super::*;
 
 use crate::naming::support::installer_events::*;
 
-pub(in crate::naming) fn register_extension(model: &Model<'_, '_>, function: &Function<'_>) -> Option<()> {
+pub(in crate::naming) fn register_extension(
+    model: &Model<'_, '_>,
+    function: &Function<'_>,
+) -> Option<()> {
     let body = function.body.as_ref()?;
     if function.params.rest.is_some()
         || function.r#async
@@ -133,7 +136,11 @@ pub(in crate::naming) fn sibling_register(model: &Model<'_, '_>, site: FunctionS
     candidates == 0 || proven > 0
 }
 
-pub(in crate::naming) fn registry_constructor(model: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> Option<()> {
+pub(in crate::naming) fn registry_constructor(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    f: &Function<'_>,
+) -> Option<()> {
     let body = f.body.as_ref()?;
     if f.r#async
         || f.generator

@@ -222,7 +222,9 @@ impl EncodingProperties {
     /// Every proven function span for one helper role: the canonical copy
     /// followed by its equivalents, deduplicated and sorted.
     fn role_spans(primary: Option<SourceSpan>, equivalents: &[SourceSpan]) -> Vec<Span> {
-        let mut spans: Vec<Span> = primary.into_iter().chain(equivalents.iter().copied())
+        let mut spans: Vec<Span> = primary
+            .into_iter()
+            .chain(equivalents.iter().copied())
             .map(|span| Span::new(span.start, span.end))
             .collect();
         spans.sort_by_key(|span| (span.start, span.end));
@@ -646,39 +648,100 @@ fn computed_buffer_write(
     let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left else {
         return None;
     };
-    identity_buffer_slot(&member.object, site, functions, scoping, nodes, &mut BTreeSet::new())
+    identity_buffer_slot(
+        &member.object,
+        site,
+        functions,
+        scoping,
+        nodes,
+        &mut BTreeSet::new(),
+    )
 }
 
 /// Resolve an output-buffer alias only when every definition preserves the
 /// same parameter object. Conditional/sequence expressions may change other
 /// locals, but neither selected value may replace the buffer.
 fn identity_buffer_slot(
-    expression: &Expression<'_>, site: &FunctionSite,
-    functions: &FunctionScopeIndex<'_>, scoping: &Scoping,
-    nodes: &oxc_semantic::AstNodes<'_>, seen: &mut BTreeSet<SymbolId>,
+    expression: &Expression<'_>,
+    site: &FunctionSite,
+    functions: &FunctionScopeIndex<'_>,
+    scoping: &Scoping,
+    nodes: &oxc_semantic::AstNodes<'_>,
+    seen: &mut BTreeSet<SymbolId>,
 ) -> Option<usize> {
-    if let Some(slot) = functions.slot(expression, site) { return Some(slot); }
+    if let Some(slot) = functions.slot(expression, site) {
+        return Some(slot);
+    }
     match expression.without_parentheses() {
         Expression::ConditionalExpression(value) => {
-            let left = identity_buffer_slot(&value.consequent, site, functions, scoping, nodes, &mut seen.clone())?;
-            let right = identity_buffer_slot(&value.alternate, site, functions, scoping, nodes, &mut seen.clone())?;
+            let left = identity_buffer_slot(
+                &value.consequent,
+                site,
+                functions,
+                scoping,
+                nodes,
+                &mut seen.clone(),
+            )?;
+            let right = identity_buffer_slot(
+                &value.alternate,
+                site,
+                functions,
+                scoping,
+                nodes,
+                &mut seen.clone(),
+            )?;
             (left == right).then_some(left)
         }
-        Expression::SequenceExpression(value) => identity_buffer_slot(value.expressions.last()?, site, functions, scoping, nodes, seen),
+        Expression::SequenceExpression(value) => identity_buffer_slot(
+            value.expressions.last()?,
+            site,
+            functions,
+            scoping,
+            nodes,
+            seen,
+        ),
         Expression::Identifier(id) => {
             let symbol = crate::analysis::identifier_symbol(id, scoping)?;
-            if !seen.insert(symbol) { return None; }
+            if !seen.insert(symbol) {
+                return None;
+            }
             let mut values = Vec::new();
-            if let AstKind::VariableDeclarator(declaration) = nodes.kind(scoping.symbol_declaration(symbol)) {
-                if let Some(value) = &declaration.init { values.push(value); }
-            } else { return None; }
-            for reference in scoping.get_resolved_references(symbol).filter(|r| r.is_write()) {
-                let AstKind::AssignmentExpression(assignment) = nodes.parent_kind(reference.node_id()) else { return None; };
-                if assignment.operator != AssignmentOperator::Assign || !node_in(site, assignment.span) { return None; }
+            if let AstKind::VariableDeclarator(declaration) =
+                nodes.kind(scoping.symbol_declaration(symbol))
+            {
+                if let Some(value) = &declaration.init {
+                    values.push(value);
+                }
+            } else {
+                return None;
+            }
+            for reference in scoping
+                .get_resolved_references(symbol)
+                .filter(|r| r.is_write())
+            {
+                let AstKind::AssignmentExpression(assignment) =
+                    nodes.parent_kind(reference.node_id())
+                else {
+                    return None;
+                };
+                if assignment.operator != AssignmentOperator::Assign
+                    || !node_in(site, assignment.span)
+                {
+                    return None;
+                }
                 values.push(&assignment.right);
             }
-            let slots: BTreeSet<_> = values.into_iter().map(|value| identity_buffer_slot(value, site, functions, scoping, nodes, &mut seen.clone())).collect();
-            if slots.len() == 1 { slots.into_iter().next().flatten() } else { None }
+            let slots: BTreeSet<_> = values
+                .into_iter()
+                .map(|value| {
+                    identity_buffer_slot(value, site, functions, scoping, nodes, &mut seen.clone())
+                })
+                .collect();
+            if slots.len() == 1 {
+                slots.into_iter().next().flatten()
+            } else {
+                None
+            }
         }
         _ => None,
     }
@@ -782,7 +845,11 @@ fn resolve_alias(
             if future.len() == 1 {
                 return Some(future[0]);
             }
-            match future.iter().filter(|event| !event.conditional).collect::<Vec<_>>()[..] {
+            match future
+                .iter()
+                .filter(|event| !event.conditional)
+                .collect::<Vec<_>>()[..]
+            {
                 [only] => Some(*only),
                 _ => None,
             }
@@ -1034,7 +1101,8 @@ fn number_candidates(
 ) -> Vec<FunctionSite> {
     let mut candidates = Vec::new();
     for site in functions.iter() {
-        let writes: Vec<&AssignmentExpression<'_>> = functions.direct(site, nodes)
+        let writes: Vec<&AssignmentExpression<'_>> = functions
+            .direct(site, nodes)
             .filter_map(|node| {
                 if !direct_node(site, node.span(), functions) {
                     return None;
@@ -1042,13 +1110,15 @@ fn number_candidates(
                 let AstKind::AssignmentExpression(assignment) = node.kind() else {
                     return None;
                 };
-                computed_buffer_write(assignment, site, functions, scoping, nodes).map(|_| assignment)
+                computed_buffer_write(assignment, site, functions, scoping, nodes)
+                    .map(|_| assignment)
             })
             .collect();
         if writes.len() < 2 {
             continue;
         }
-        let integer_tests = functions.direct(site, nodes)
+        let integer_tests = functions
+            .direct(site, nodes)
             .filter_map(|node| {
                 if !direct_node(site, node.span(), functions) {
                     return None;
@@ -1066,7 +1136,8 @@ fn number_candidates(
                 .then_some(binary)
             })
             .count();
-        let sign_tests = functions.direct(site, nodes)
+        let sign_tests = functions
+            .direct(site, nodes)
             .filter(|node| {
                 if !direct_node(site, node.span(), functions) {
                     return false;
@@ -1079,7 +1150,8 @@ fn number_candidates(
                         || !functions.mentioned_slots(&binary.right, site).is_empty())
             })
             .count();
-        let calls = functions.direct(site, nodes)
+        let calls = functions
+            .direct(site, nodes)
             .filter(|node| {
                 let AstKind::CallExpression(call) = node.kind() else {
                     return false;
@@ -1155,7 +1227,9 @@ fn number_properties(
         }
         match node.kind() {
             AstKind::AssignmentExpression(assignment) => {
-                if let Some(slot) = computed_buffer_write(assignment, &site, functions, scoping, nodes) {
+                if let Some(slot) =
+                    computed_buffer_write(assignment, &site, functions, scoping, nodes)
+                {
                     buffer_slots.insert(slot);
                     writes.push(assignment);
                 }
@@ -1194,7 +1268,8 @@ fn number_properties(
             _ => {}
         }
     }
-    let equality_slots: BTreeSet<usize> = functions.direct(&site, nodes)
+    let equality_slots: BTreeSet<usize> = functions
+        .direct(&site, nodes)
         .filter_map(|node| {
             let AstKind::BinaryExpression(binary) = node.kind() else {
                 return None;
@@ -1208,7 +1283,8 @@ fn number_properties(
         .collect();
     let value_parameter = equality_slots.iter().next().copied();
     let buffer_parameter = buffer_slots.iter().next().copied();
-    let mask_parameters: BTreeSet<usize> = functions.direct(&site, nodes)
+    let mask_parameters: BTreeSet<usize> = functions
+        .direct(&site, nodes)
         .filter_map(|node| {
             let AstKind::CallExpression(call) = node.kind() else {
                 return None;
@@ -1219,7 +1295,8 @@ fn number_properties(
             functions.slot(plain_call(call).0, &site)
         })
         .collect();
-    let offset_parameter = functions.direct(&site, nodes)
+    let offset_parameter = functions
+        .direct(&site, nodes)
         .filter_map(|node| {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 return None;
@@ -1462,7 +1539,8 @@ fn first_object_create_binding(
     writer: FunctionSite,
     functions: &FunctionScopeIndex<'_>,
 ) -> Option<BindingEvidence> {
-    let created: BTreeSet<SymbolId> = functions.direct(&site, nodes)
+    let created: BTreeSet<SymbolId> = functions
+        .direct(&site, nodes)
         .filter_map(|node| {
             if !direct_node(&site, node.span(), functions) {
                 return None;
@@ -1498,7 +1576,8 @@ fn first_object_create_binding(
             }
         })
         .collect();
-    let used: BTreeSet<SymbolId> = functions.direct(&writer, nodes)
+    let used: BTreeSet<SymbolId> = functions
+        .direct(&writer, nodes)
         .filter_map(|node| {
             if !direct_node(&writer, node.span(), functions) {
                 return None;
@@ -1520,7 +1599,8 @@ fn first_zero_binding(
     writer: FunctionSite,
     functions: &FunctionScopeIndex<'_>,
 ) -> Option<BindingEvidence> {
-    let zeros: BTreeSet<SymbolId> = functions.direct(&site, nodes)
+    let zeros: BTreeSet<SymbolId> = functions
+        .direct(&site, nodes)
         .filter_map(|node| {
             if !direct_node(&site, node.span(), functions) {
                 return None;
@@ -1589,7 +1669,8 @@ fn string_properties(
     let mut terminator_is_literal_zero = false;
     let mut number_dependency = None;
     let writer_buffer = writer.as_ref().and_then(|writer| {
-        let buffers: BTreeSet<_> = functions.direct(&writer, nodes)
+        let buffers: BTreeSet<_> = functions
+            .direct(&writer, nodes)
             .filter_map(|node| {
                 if !direct_node(&writer, node.span(), functions) {
                     return None;
@@ -1605,7 +1686,8 @@ fn string_properties(
             .flatten()
     });
     let writer_value = writer.as_ref().and_then(|writer| {
-        let values: BTreeSet<_> = functions.direct(&writer, nodes)
+        let values: BTreeSet<_> = functions
+            .direct(&writer, nodes)
             .filter_map(|node| {
                 if !direct_node(&writer, node.span(), functions) {
                     return None;
@@ -1630,7 +1712,8 @@ fn string_properties(
             .flatten()
     });
     let writer_offset = writer.as_ref().and_then(|writer| {
-        let offsets: BTreeSet<_> = functions.direct(&writer, nodes)
+        let offsets: BTreeSet<_> = functions
+            .direct(&writer, nodes)
             .filter_map(|node| {
                 if !direct_node(&writer, node.span(), functions) {
                     return None;
@@ -1654,7 +1737,8 @@ fn string_properties(
     let mask_symbols: BTreeSet<_> = writer
         .as_ref()
         .map(|writer| {
-            functions.direct(&writer, nodes)
+            functions
+                .direct(&writer, nodes)
                 .filter_map(|node| {
                     if !direct_node(&writer, node.span(), functions) {
                         return None;
@@ -1826,7 +1910,8 @@ fn stream_candidates(
         let inner = &nested[0];
         let has_cycle = functions.direct(inner, nodes).any(|node| direct_node(inner, node.span(), functions) && matches!(node.kind(), AstKind::BinaryExpression(binary) if binary.operator == BinaryOperator::Remainder && (numeric_literal(&binary.left).is_some() || numeric_literal(&binary.right).is_some())));
         let has_shift = functions.direct(inner, nodes).any(|node| direct_node(inner, node.span(), functions) && matches!(node.kind(), AstKind::BinaryExpression(binary) if matches!(binary.operator, BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight | BinaryOperator::ShiftRightZeroFill)));
-        let warmup = functions.direct(outer, nodes)
+        let warmup = functions
+            .direct(outer, nodes)
             .filter(|node| {
                 let AstKind::CallExpression(call) = node.kind() else {
                     return false;
@@ -1924,7 +2009,8 @@ fn stream_properties(
         }
     }
     let warmup_calls = cycle.as_ref().map(|inner| {
-        functions.direct(&site, nodes)
+        functions
+            .direct(&site, nodes)
             .filter(|node| {
                 let AstKind::CallExpression(call) = node.kind() else {
                     return false;
@@ -1937,7 +2023,8 @@ fn stream_properties(
     let captured_symbols: BTreeSet<SymbolId> = cycle
         .as_ref()
         .map(|inner| {
-            functions.direct(&site, nodes)
+            functions
+                .direct(&site, nodes)
                 .filter_map(|node| {
                     let AstKind::VariableDeclarator(declarator) = node.kind() else {
                         return None;
@@ -1971,7 +2058,8 @@ fn stream_properties(
         .iter()
         .filter(|parameter| parameter.slot)
         .find_map(|parameter| {
-            functions.direct(&site, nodes)
+            functions
+                .direct(&site, nodes)
                 .find_map(|node| {
                     if !direct_node(&site, node.span(), functions) {
                         return None;

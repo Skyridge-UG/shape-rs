@@ -1,10 +1,11 @@
 //! `WorkerRealmProfile`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `WorkerRealmProfile`. Card: [`CARD`].
 pub(crate) fn recognize_worker_realm_profile(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -18,7 +19,10 @@ pub(crate) fn recognize_worker_realm_profile(view: &SlotView, ctx: &FinderCtx) -
     .iter()
     .all(|api| any_api(&leaves, api));
     if reads && top_count_is(&view.shapes(), 5) {
-        return claim(&["five fields", "location.origin, navigator.userAgent/platform/hardwareConcurrency"]);
+        return claim(&[
+            "five fields",
+            "location.origin, navigator.userAgent/platform/hardwareConcurrency",
+        ]);
     }
     None
 }
@@ -29,7 +33,9 @@ pub(crate) fn bind_worker_realm_profile(
     ctx: &FinderCtx,
 ) -> Result<FieldBinding, BindRefusal> {
     let concurrency = |f: &Field| {
-        !f.is_plain(LeafKind::Number) && f.writes(LeafKind::Number) && f.api("navigator.hardwareConcurrency")
+        !f.is_plain(LeafKind::Number)
+            && f.writes(LeafKind::Number)
+            && f.api("navigator.hardwareConcurrency")
     };
     let count = |f: &Field| f.is_plain(LeafKind::Number) && !f.api("navigator.hardwareConcurrency");
     let origin = |f: &Field| f.is_plain(LeafKind::String) && f.api("location.origin");

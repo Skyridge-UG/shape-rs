@@ -26,24 +26,24 @@ use oxc_syntax::{operator::AssignmentOperator, scope::ScopeFlags};
 use super::super::index::SpanIndex;
 use crate::analysis;
 
-mod local_reads;
-mod scan;
-mod visit;
-mod prefixes;
 #[cfg(test)]
-mod tests;
+mod branch_version_tests;
+mod local_reads;
 #[cfg(test)]
 mod once_consumer_tests;
 #[cfg(test)]
 mod point_prefix_tests;
+mod prefixes;
+mod scan;
 #[cfg(test)]
-mod branch_version_tests;
+mod tests;
+mod visit;
 
 pub(crate) use local_reads::LocalReads;
-pub(crate) use prefixes::first_evaluated_identifier;
 pub(crate) use prefixes::begins_with_read;
-use visit::*;
+pub(crate) use prefixes::first_evaluated_identifier;
 use prefixes::*;
+use visit::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdjacentSsaResult {
@@ -156,4 +156,3 @@ struct Scan<'s> {
 
 // Type facts alone do not make reads stable: prefix_read separately checks
 // initialization and the absence of writes/captured mutations across the move.
-

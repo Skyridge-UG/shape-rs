@@ -279,7 +279,10 @@ pub(crate) fn simplify_thread_property_writes(
         };
         for index in same_block {
             let call = &calls[index];
-            edits.push(analysis::Edit::replace(call.span, direct_write(source, call)));
+            edits.push(analysis::Edit::replace(
+                call.span,
+                direct_write(source, call),
+            ));
             rewritten.insert(index);
             changed += 1;
         }
@@ -466,8 +469,8 @@ fn direct_write(source: &str, call: &CandidateCall) -> String {
     let receiver =
         &source[call.receiver_expr_span.start as usize..call.receiver_expr_span.end as usize];
     let key = &source[call.key.span.start as usize..call.key.span.end as usize];
-    let value = &source
-        [call.descriptor.value_span.start as usize..call.descriptor.value_span.end as usize];
+    let value =
+        &source[call.descriptor.value_span.start as usize..call.descriptor.value_span.end as usize];
     let value = if call.descriptor.value_needs_parentheses {
         format!("({value})")
     } else {

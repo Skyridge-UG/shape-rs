@@ -1,8 +1,8 @@
 //! Complete, distinct sparse callback notifier protocols. The closed typed AST
 //! projection retains every effect and alpha-renames only scoped local binders.
 //! No nested callable or unsupported syntax can donate notifier evidence.
-use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::analysis::roles::FinderClaim;
+use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::schema::Confidence;
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
@@ -326,8 +326,9 @@ fn project_function(scoping: &Scoping, function: &Function<'_>, strict: bool) ->
         parameters.push(proof.bind(&p.pattern)?);
     }
     let b = function.body.as_ref()?;
-    if !(b.directives.is_empty() || strict && b.directives.len() == 1
-        && b.directives[0].directive == "use strict") {
+    if !(b.directives.is_empty()
+        || strict && b.directives.len() == 1 && b.directives[0].directive == "use strict")
+    {
         return None;
     }
     Some(node(
@@ -417,7 +418,11 @@ const LOWERED_REVERSE_NOTIFY: &str = r#"notify(payload) {
     return accumulator;
 }"#;
 fn lowered_reverse_source() -> String {
-    format!("{}{}\n}}", REVERSE.split("notify(payload)").next().unwrap(), LOWERED_REVERSE_NOTIFY)
+    format!(
+        "{}{}\n}}",
+        REVERSE.split("notify(payload)").next().unwrap(),
+        LOWERED_REVERSE_NOTIFY
+    )
 }
 fn forward_source() -> String {
     format!(
@@ -445,7 +450,10 @@ fn grammar() -> &'static [(&'static str, Methods)] {
     GRAMMAR.get_or_init(|| {
         vec![
             ("owned_callback_notifier_reverse_class", reference(REVERSE)),
-            ("owned_callback_notifier_reverse_class", lowered_reverse_grammar().clone()),
+            (
+                "owned_callback_notifier_reverse_class",
+                lowered_reverse_grammar().clone(),
+            ),
             (
                 "owned_callback_notifier_forward_class",
                 reference(&forward_source()),
@@ -664,18 +672,22 @@ const INDEXED_DEFINITION_NOTIFY: &str = r#"notify(payload) {
 }"#;
 fn indexed_definition_grammar() -> &'static Methods {
     static DEFINITION: OnceLock<Methods> = OnceLock::new();
-    DEFINITION.get_or_init(|| reference(&format!(
-        "{}{}\n}}",
-        REVERSE.split("notify(payload)").next().unwrap(),
-        INDEXED_DEFINITION_NOTIFY,
-    )))
+    DEFINITION.get_or_init(|| {
+        reference(&format!(
+            "{}{}\n}}",
+            REVERSE.split("notify(payload)").next().unwrap(),
+            INDEXED_DEFINITION_NOTIFY,
+        ))
+    })
 }
 fn definition_claim(model: &Model<'_, '_>, class: &Class<'_>) -> Option<FinderClaim> {
     if class.r#type != ClassType::ClassDeclaration {
         return None;
     }
     let symbol = class.id.as_ref()?.symbol_id.get()?;
-    if !stable(model, symbol) || methods(model.scoping, class).as_ref() != Some(indexed_definition_grammar()) {
+    if !stable(model, symbol)
+        || methods(model.scoping, class).as_ref() != Some(indexed_definition_grammar())
+    {
         return None;
     }
     Some(FinderClaim::ClassBinding {
@@ -717,25 +729,44 @@ pub(crate) fn claims(model: &Model<'_, '_>) -> Vec<FinderClaim> {
 fn ordinary_base(model: &Model<'_, '_>, symbol: SymbolId) -> bool {
     use oxc_semantic::NodeId;
     fn statement_owner(model: &Model<'_, '_>, id: NodeId) -> Option<NodeId> {
-        if !matches!(model.nodes.kind(id), AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_) | AstKind::Function(_)) {
+        if !matches!(
+            model.nodes.kind(id),
+            AstKind::ExpressionStatement(_)
+                | AstKind::VariableDeclaration(_)
+                | AstKind::Function(_)
+        ) {
             return None;
         }
         let parent = model.nodes.parent_id(id);
-        matches!(model.nodes.kind(parent), AstKind::FunctionBody(_) | AstKind::Program(_)).then_some(parent)
+        matches!(
+            model.nodes.kind(parent),
+            AstKind::FunctionBody(_) | AstKind::Program(_)
+        )
+        .then_some(parent)
     }
     fn strict_tree(model: &Model<'_, '_>, symbol: SymbolId, owner: NodeId) -> Option<Tree> {
-        if !stable(model, symbol) { return None; }
+        if !stable(model, symbol) {
+            return None;
+        }
         let declaration = model.scoping.symbol_declaration(symbol);
-        if statement_owner(model, declaration) != Some(owner) { return None; }
-        let AstKind::Function(f) = model.nodes.kind(declaration) else { return None; };
+        if statement_owner(model, declaration) != Some(owner) {
+            return None;
+        }
+        let AstKind::Function(f) = model.nodes.kind(declaration) else {
+            return None;
+        };
         // Strictness is essential for the callback receiver and constructor
         // behavior to match a native class method.
         let b = f.body.as_ref()?;
-        if b.directives.len() != 1 || b.directives[0].directive != "use strict" { return None; }
+        if b.directives.len() != 1 || b.directives[0].directive != "use strict" {
+            return None;
+        }
         project_function(model.scoping, f, true)
     }
     fn constructed(model: &Model<'_, '_>, symbol: SymbolId, seen: &mut BTreeSet<SymbolId>) -> bool {
-        if !seen.insert(symbol) || seen.len() > 32 { return false; }
+        if !seen.insert(symbol) || seen.len() > 32 {
+            return false;
+        }
         model.scoping.get_resolved_references(symbol).any(|r| match model.nodes.parent_kind(r.node_id()) {
             AstKind::NewExpression(n) => matches!(&n.callee, Expression::Identifier(i) if symbol_of(model, i) == Some(symbol)),
             AstKind::VariableDeclarator(d) => match &d.id {
@@ -746,8 +777,12 @@ fn ordinary_base(model: &Model<'_, '_>, symbol: SymbolId) -> bool {
         })
     }
     let declaration = model.scoping.symbol_declaration(symbol);
-    let Some(owner) = statement_owner(model, declaration) else { return false; };
-    let Some(constructor) = strict_tree(model, symbol, owner) else { return false; };
+    let Some(owner) = statement_owner(model, declaration) else {
+        return false;
+    };
+    let Some(constructor) = strict_tree(model, symbol, owner) else {
+        return false;
+    };
     let mut own = BTreeMap::from([("constructor".to_string(), constructor)]);
     let mut aliases = BTreeSet::new();
     let mut pending = vec![symbol];
@@ -755,88 +790,192 @@ fn ordinary_base(model: &Model<'_, '_>, symbol: SymbolId) -> bool {
     let mut consumers = Vec::new();
     let mut method_symbols = BTreeMap::new();
     while let Some(current) = pending.pop() {
-        if !stable(model, current) || !aliases.insert(current) || aliases.len() > 32 { return false; }
+        if !stable(model, current) || !aliases.insert(current) || aliases.len() > 32 {
+            return false;
+        }
         for r in model.scoping.get_resolved_references(current) {
-            let AstKind::IdentifierReference(id) = model.nodes.kind(r.node_id()) else { return false; };
-            if id.span.start < model.scoping.symbol_span(current).end { return false; }
+            let AstKind::IdentifierReference(id) = model.nodes.kind(r.node_id()) else {
+                return false;
+            };
+            if id.span.start < model.scoping.symbol_span(current).end {
+                return false;
+            }
             let parent = model.nodes.parent_id(r.node_id());
             match model.nodes.kind(parent) {
-                AstKind::VariableDeclarator(d) if matches!(&d.init, Some(Expression::Identifier(i)) if i.span == id.span) => {
-                    let BindingPattern::BindingIdentifier(binding) = &d.id else { return false; };
-                    let Some(alias) = binding.symbol_id.get() else { return false; };
+                AstKind::VariableDeclarator(d) if matches!(&d.init, Some(Expression::Identifier(i)) if i.span == id.span) =>
+                {
+                    let BindingPattern::BindingIdentifier(binding) = &d.id else {
+                        return false;
+                    };
+                    let Some(alias) = binding.symbol_id.get() else {
+                        return false;
+                    };
                     let statement = model.nodes.parent_id(parent);
                     if statement_owner(model, statement) != Some(owner)
-                        || id.span.start < model.scoping.symbol_span(current).end { return false; }
+                        || id.span.start < model.scoping.symbol_span(current).end
+                    {
+                        return false;
+                    }
                     pending.push(alias);
                 }
-                AstKind::StaticMemberExpression(prototype) if !prototype.optional && prototype.property.name == "prototype" => {
+                AstKind::StaticMemberExpression(prototype)
+                    if !prototype.optional && prototype.property.name == "prototype" =>
+                {
                     let member_id = model.nodes.parent_id(parent);
                     let (value, key, end, statement) = match model.nodes.kind(member_id) {
                         AstKind::StaticMemberExpression(member) if !member.optional => {
                             let assignment_id = model.nodes.parent_id(member_id);
-                            let AstKind::AssignmentExpression(assignment) = model.nodes.kind(assignment_id) else { return false; };
-                            if assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign
-                                || !matches!(&assignment.left, AssignmentTarget::StaticMemberExpression(m) if m.span == member.span) { return false; }
-                            let Expression::Identifier(value) = &assignment.right else { return false; };
-                            (value, member.property.name.to_string(), assignment.span.end, model.nodes.parent_id(assignment_id))
+                            let AstKind::AssignmentExpression(assignment) =
+                                model.nodes.kind(assignment_id)
+                            else {
+                                return false;
+                            };
+                            if assignment.operator
+                                != oxc_syntax::operator::AssignmentOperator::Assign
+                                || !matches!(&assignment.left, AssignmentTarget::StaticMemberExpression(m) if m.span == member.span)
+                            {
+                                return false;
+                            }
+                            let Expression::Identifier(value) = &assignment.right else {
+                                return false;
+                            };
+                            (
+                                value,
+                                member.property.name.to_string(),
+                                assignment.span.end,
+                                model.nodes.parent_id(assignment_id),
+                            )
                         }
-                        AstKind::CallExpression(call) if !call.optional && call.type_arguments.is_none() && call.arguments.len() == 3 => {
-                            let Expression::StaticMemberExpression(callee) = &call.callee else { return false; };
-                            let Expression::Identifier(object) = &callee.object else { return false; };
-                            if callee.optional || callee.property.name != "defineProperty" || object.name != "Object"
+                        AstKind::CallExpression(call)
+                            if !call.optional
+                                && call.type_arguments.is_none()
+                                && call.arguments.len() == 3 =>
+                        {
+                            let Expression::StaticMemberExpression(callee) = &call.callee else {
+                                return false;
+                            };
+                            let Expression::Identifier(object) = &callee.object else {
+                                return false;
+                            };
+                            if callee.optional
+                                || callee.property.name != "defineProperty"
+                                || object.name != "Object"
                                 || symbol_of(model, object).is_some()
-                                || !matches!(call.arguments[0].as_expression(), Some(Expression::StaticMemberExpression(p)) if p.span == prototype.span) { return false; }
-                            let Some(Expression::StringLiteral(key)) = call.arguments[1].as_expression() else { return false; };
-                            let Some(Expression::ObjectExpression(descriptor)) = call.arguments[2].as_expression() else { return false; };
+                                || !matches!(call.arguments[0].as_expression(), Some(Expression::StaticMemberExpression(p)) if p.span == prototype.span)
+                            {
+                                return false;
+                            }
+                            let Some(Expression::StringLiteral(key)) =
+                                call.arguments[1].as_expression()
+                            else {
+                                return false;
+                            };
+                            let Some(Expression::ObjectExpression(descriptor)) =
+                                call.arguments[2].as_expression()
+                            else {
+                                return false;
+                            };
                             let mut fields = BTreeSet::new();
                             let mut value = None;
                             for field in &descriptor.properties {
-                                let ObjectPropertyKind::ObjectProperty(field) = field else { return false; };
-                                if field.computed || field.method || field.shorthand || field.kind != PropertyKind::Init { return false; }
-                                let Some(name) = property_key_name(&field.key) else { return false; };
-                                if !fields.insert(name.clone()) { return false; }
+                                let ObjectPropertyKind::ObjectProperty(field) = field else {
+                                    return false;
+                                };
+                                if field.computed
+                                    || field.method
+                                    || field.shorthand
+                                    || field.kind != PropertyKind::Init
+                                {
+                                    return false;
+                                }
+                                let Some(name) = property_key_name(&field.key) else {
+                                    return false;
+                                };
+                                if !fields.insert(name.clone()) {
+                                    return false;
+                                }
                                 match name.as_str() {
                                     "value" => {
-                                        let Expression::Identifier(id) = &field.value else { return false; };
+                                        let Expression::Identifier(id) = &field.value else {
+                                            return false;
+                                        };
                                         value = Some(id);
                                     }
-                                    "writable" | "configurable" if matches!(&field.value, Expression::BooleanLiteral(b) if b.value) => {}
-                                    "enumerable" if matches!(&field.value, Expression::BooleanLiteral(_)) => {}
+                                    "writable" | "configurable" if matches!(&field.value, Expression::BooleanLiteral(b) if b.value) =>
+                                        {}
+                                    "enumerable"
+                                        if matches!(
+                                            &field.value,
+                                            Expression::BooleanLiteral(_)
+                                        ) => {}
                                     _ => return false,
                                 }
                             }
-                            if fields.len() != 4 { return false; }
-                            let Some(value) = value else { return false; };
-                            (value, key.value.to_string(), call.span.end, model.nodes.parent_id(member_id))
+                            if fields.len() != 4 {
+                                return false;
+                            }
+                            let Some(value) = value else {
+                                return false;
+                            };
+                            (
+                                value,
+                                key.value.to_string(),
+                                call.span.end,
+                                model.nodes.parent_id(member_id),
+                            )
                         }
                         _ => return false,
                     };
-                    if statement_owner(model, statement) != Some(owner) { return false; }
-                    let Some(method) = symbol_of(model, value) else { return false; };
-                    let Some(tree) = strict_tree(model, method, owner) else { return false; };
+                    if statement_owner(model, statement) != Some(owner) {
+                        return false;
+                    }
+                    let Some(method) = symbol_of(model, value) else {
+                        return false;
+                    };
+                    let Some(tree) = strict_tree(model, method, owner) else {
+                        return false;
+                    };
                     if !matches!(key.as_str(), "register" | "unregister" | "clear" | "notify")
                         || own.insert(key, tree).is_some()
-                        || method_symbols.insert(method, value.span).is_some() { return false; }
+                        || method_symbols.insert(method, value.span).is_some()
+                    {
+                        return false;
+                    }
                     installed_end = installed_end.max(end);
                 }
                 AstKind::CallExpression(call) if superclass_transport(model, call, current) => {
                     let call_parent = model.nodes.parent_id(parent);
-                    let AstKind::VariableDeclarator(d) = model.nodes.kind(call_parent) else { return false; };
-                    let BindingPattern::BindingIdentifier(binding) = &d.id else { return false; };
-                    let Some(child) = binding.symbol_id.get() else { return false; };
+                    let AstKind::VariableDeclarator(d) = model.nodes.kind(call_parent) else {
+                        return false;
+                    };
+                    let BindingPattern::BindingIdentifier(binding) = &d.id else {
+                        return false;
+                    };
+                    let Some(child) = binding.symbol_id.get() else {
+                        return false;
+                    };
                     if !constructor_uses(model, child, &mut BTreeSet::new())
                         || !constructed(model, child, &mut BTreeSet::new())
-                        || statement_owner(model, model.nodes.parent_id(call_parent)) != Some(owner) { return false; }
+                        || statement_owner(model, model.nodes.parent_id(call_parent)) != Some(owner)
+                    {
+                        return false;
+                    }
                     consumers.push(call.span.start);
                 }
-                AstKind::NewExpression(n) if matches!(&n.callee, Expression::Identifier(i) if i.span == id.span) => {
+                AstKind::NewExpression(n) if matches!(&n.callee, Expression::Identifier(i) if i.span == id.span) =>
+                {
                     // Only a direct statement or declaration initializer is
                     // accepted; conditional/nested constructions are unsupported.
                     let outer = model.nodes.parent_id(parent);
-                    let statement = if matches!(model.nodes.kind(outer), AstKind::VariableDeclarator(_)) {
-                        model.nodes.parent_id(outer)
-                    } else { outer };
-                    if statement_owner(model, statement) != Some(owner) { return false; }
+                    let statement =
+                        if matches!(model.nodes.kind(outer), AstKind::VariableDeclarator(_)) {
+                            model.nodes.parent_id(outer)
+                        } else {
+                            outer
+                        };
+                    if statement_owner(model, statement) != Some(owner) {
+                        return false;
+                    }
                     consumers.push(n.span.start);
                 }
                 _ => return false,
@@ -847,9 +986,15 @@ fn ordinary_base(model: &Model<'_, '_>, symbol: SymbolId) -> bool {
     // another carrier. Only its single exact installation is owned here.
     for (method, span) in method_symbols {
         let refs: Vec<_> = model.scoping.get_resolved_references(method).collect();
-        if refs.len() != 1 || !matches!(model.nodes.kind(refs[0].node_id()), AstKind::IdentifierReference(i) if i.span == span) { return false; }
+        if refs.len() != 1
+            || !matches!(model.nodes.kind(refs[0].node_id()), AstKind::IdentifierReference(i) if i.span == span)
+        {
+            return false;
+        }
     }
-    if consumers.is_empty() || consumers.iter().any(|start| *start <= installed_end) { return false; }
+    if consumers.is_empty() || consumers.iter().any(|start| *start <= installed_end) {
+        return false;
+    }
     let last_consumer = *consumers.iter().max().unwrap();
     // A dead installation after an unconditional abrupt exit proves nothing.
     let statements = match model.nodes.kind(owner) {

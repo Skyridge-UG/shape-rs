@@ -109,7 +109,10 @@ impl Plan<'_, '_> {
                     .get_resolved_references(*owner)
                     .map(|reference| {
                         let span = self.span_of(reference.node_id());
-                        if gone.iter().any(|init| init.start <= span.start && span.end <= init.end) {
+                        if gone
+                            .iter()
+                            .any(|init| init.start <= span.start && span.end <= init.end)
+                        {
                             u32::MAX
                         } else {
                             span.start
@@ -126,12 +129,18 @@ impl Plan<'_, '_> {
             .collect();
         for (symbol, forward) in &self.forwarded {
             // Its other reads read the slot, so the slot's binding must stay.
-            let stored_in = forward.handoff.map(|(slot, _)| slot).or(forward.early.map(|(slot, ..)| slot));
+            let stored_in = forward
+                .handoff
+                .map(|(slot, _)| slot)
+                .or(forward.early.map(|(slot, ..)| slot));
             if stored_in.is_some_and(|slot| self.forwarded.contains_key(&slot)) {
                 broken.push(*symbol);
                 continue;
             }
-            if forward.early.is_some_and(|(slot, ..)| snapshotted.contains(&slot)) {
+            if forward
+                .early
+                .is_some_and(|(slot, ..)| snapshotted.contains(&slot))
+            {
                 broken.push(*symbol);
                 continue;
             }
@@ -152,12 +161,15 @@ impl Plan<'_, '_> {
                 }
             }
             if forward.early.is_some() {
-                let carried = self.scoping.get_resolved_references(*symbol).any(|reference| {
-                    let span = self.span_of(reference.node_id());
-                    gone.iter()
-                        .chain(&deleted_calls)
-                        .any(|init| init.start <= span.start && span.end <= init.end)
-                });
+                let carried = self
+                    .scoping
+                    .get_resolved_references(*symbol)
+                    .any(|reference| {
+                        let span = self.span_of(reference.node_id());
+                        gone.iter()
+                            .chain(&deleted_calls)
+                            .any(|init| init.start <= span.start && span.end <= init.end)
+                    });
                 if carried {
                     broken.push(*symbol);
                 }
@@ -165,11 +177,16 @@ impl Plan<'_, '_> {
             }
             if forward.snapshot || forward.handoff.is_some() {
                 let handed = forward.handoff.map(|(_, first)| first);
-                let carried = self.scoping.get_resolved_references(*symbol).any(|reference| {
-                    let span = self.span_of(reference.node_id());
-                    Some(reference.node_id()) != handed
-                        && gone.iter().any(|init| init.start <= span.start && span.end <= init.end)
-                });
+                let carried = self
+                    .scoping
+                    .get_resolved_references(*symbol)
+                    .any(|reference| {
+                        let span = self.span_of(reference.node_id());
+                        Some(reference.node_id()) != handed
+                            && gone
+                                .iter()
+                                .any(|init| init.start <= span.start && span.end <= init.end)
+                    });
                 if carried {
                     broken.push(*symbol);
                     continue;
@@ -186,7 +203,10 @@ impl Plan<'_, '_> {
                 continue;
             };
             let read_span = self.span_of(read);
-            if deleted_calls.iter().any(|call| call.start <= read_span.start && read_span.end <= call.end) {
+            if deleted_calls
+                .iter()
+                .any(|call| call.start <= read_span.start && read_span.end <= call.end)
+            {
                 broken.push(*symbol);
                 continue;
             }
@@ -199,7 +219,8 @@ impl Plan<'_, '_> {
                     || self.moved.contains_key(&between.span.start);
                 let still_moved = moved.get(&between.span.start);
                 let holds = vanishing.contains(&between.span.start)
-                    || (still_moved.is_some() && still_moved == self.moved.get(&between.span.start));
+                    || (still_moved.is_some()
+                        && still_moved == self.moved.get(&between.span.start));
                 if assumed && between.writes.is_none() && !holds {
                     broken.push(*symbol);
                     break;
@@ -209,7 +230,11 @@ impl Plan<'_, '_> {
         broken
     }
 
-    pub(super) fn decide_round(&mut self, order: &[usize], memo: &mut [Option<(Option<Forward>, Lookups)>]) {
+    pub(super) fn decide_round(
+        &mut self,
+        order: &[usize],
+        memo: &mut [Option<(Option<Forward>, Lookups)>],
+    ) {
         self.forwarded.clear();
         for index in order {
             let candidate = &self.scan.candidates[*index];
@@ -257,7 +282,10 @@ impl Plan<'_, '_> {
                 .iter()
                 .find(|s| s.span.start <= read_span.start && read_span.end <= s.span.end)
             {
-                moved.insert(candidate.statement.start, (statement.span.start, read_span.start));
+                moved.insert(
+                    candidate.statement.start,
+                    (statement.span.start, read_span.start),
+                );
             }
         }
         (vanishing, moved)
@@ -265,7 +293,10 @@ impl Plan<'_, '_> {
 
     pub(super) fn consider(&self, index: usize) -> Option<Forward> {
         let candidate = &self.scan.candidates[index];
-        if self.scoping.symbol_name(candidate.symbol).starts_with("$KEY_")
+        if self
+            .scoping
+            .symbol_name(candidate.symbol)
+            .starts_with("$KEY_")
             && !self.internal_key(candidate.symbol)
         {
             return None;
@@ -430,7 +461,8 @@ impl Plan<'_, '_> {
                 .init_reference
                 .and_then(|reference| self.scoping.get_reference(reference).symbol_id())
                 .is_some_and(|symbol| {
-                    self.stable_in(symbol, owner) && self.declared_before(symbol, candidate.statement)
+                    self.stable_in(symbol, owner)
+                        && self.declared_before(symbol, candidate.statement)
                 }),
             // A pure computation over stable names, read once, moves anywhere
             // it resolves.
@@ -438,12 +470,15 @@ impl Plan<'_, '_> {
                 candidate.pure
                     && !(candidate.named && reads.len() > 1 && !self.constant(candidate))
                     && !self.tested(candidate)
-                    && self.references_in(candidate.init).iter().all(|(reference, _)| {
-                        self.scoping
-                            .get_reference(*reference)
-                            .symbol_id()
-                            .is_none_or(|symbol| self.stable_in(symbol, owner))
-                    })
+                    && self
+                        .references_in(candidate.init)
+                        .iter()
+                        .all(|(reference, _)| {
+                            self.scoping
+                                .get_reference(*reference)
+                                .symbol_id()
+                                .is_none_or(|symbol| self.stable_in(symbol, owner))
+                        })
             }
         }) && !self.carries_move(candidate.init)
     }
@@ -456,14 +491,18 @@ impl Plan<'_, '_> {
             && !(candidate.named && reads.len() > 1 && !self.constant(candidate))
             && !self.tested(candidate)
             && !self.carries_move(candidate.init)
-            && self.references_in(candidate.init).iter().all(|(reference, _)| {
-                self.scoping
-                    .get_reference(*reference)
-                    .symbol_id()
-                    .is_none_or(|symbol| {
-                        self.stable_in(symbol, owner) || self.unchanged_until(symbol, candidate, reads, owner, false)
-                    })
-            })
+            && self
+                .references_in(candidate.init)
+                .iter()
+                .all(|(reference, _)| {
+                    self.scoping
+                        .get_reference(*reference)
+                        .symbol_id()
+                        .is_none_or(|symbol| {
+                            self.stable_in(symbol, owner)
+                                || self.unchanged_until(symbol, candidate, reads, owner, false)
+                        })
+                })
     }
 
     /// Rule 12: a property read where no code runs up to its last read.
@@ -476,14 +515,18 @@ impl Plan<'_, '_> {
     ) -> bool {
         candidate.property_read
             && !self.carries_move(candidate.init)
-            && self.references_in(candidate.init).iter().all(|(reference, _)| {
-                self.scoping
-                    .get_reference(*reference)
-                    .symbol_id()
-                    .is_none_or(|symbol| {
-                        self.stable_in(symbol, owner) || self.unchanged_until(symbol, candidate, reads, owner, true)
-                    })
-            })
+            && self
+                .references_in(candidate.init)
+                .iter()
+                .all(|(reference, _)| {
+                    self.scoping
+                        .get_reference(*reference)
+                        .symbol_id()
+                        .is_none_or(|symbol| {
+                            self.stable_in(symbol, owner)
+                                || self.unchanged_until(symbol, candidate, reads, owner, true)
+                        })
+                })
             && self.property_unchanged(candidate, reads, owner, composed)
     }
 
@@ -492,16 +535,21 @@ impl Plan<'_, '_> {
     fn fresh_moves(&self, candidate: &Candidate, read: NodeId, owner: u32) -> bool {
         candidate.fresh
             && !self.carries_move(candidate.init)
-            && self.references_in(candidate.init).iter().all(|(reference, _)| {
-                self.scoping
-                    .get_reference(*reference)
-                    .symbol_id()
-                    .is_none_or(|symbol| self.stable_in(symbol, owner))
-            })
+            && self
+                .references_in(candidate.init)
+                .iter()
+                .all(|(reference, _)| {
+                    self.scoping
+                        .get_reference(*reference)
+                        .symbol_id()
+                        .is_none_or(|symbol| self.stable_in(symbol, owner))
+                })
             && !self.nodes.ancestor_ids(read).any(|ancestor| {
                 let kind = self.nodes.kind(ancestor);
                 let span = kind.span();
-                is_loop(kind) && !(span.start <= candidate.statement.start && candidate.statement.end <= span.end)
+                is_loop(kind)
+                    && !(span.start <= candidate.statement.start
+                        && candidate.statement.end <= span.end)
             })
     }
 
@@ -514,19 +562,20 @@ impl Plan<'_, '_> {
     ) -> bool {
         let list = &self.scan.lists[candidate.list];
         let read_span = self.span_of(read);
-        let Some(offset) = list[candidate.position + 1..]
-            .iter()
-            .position(|statement| statement.span.start <= read_span.start && read_span.end <= statement.span.end)
-        else {
+        let Some(offset) = list[candidate.position + 1..].iter().position(|statement| {
+            statement.span.start <= read_span.start && read_span.end <= statement.span.end
+        }) else {
             return false;
         };
         let use_position = candidate.position + 1 + offset;
         let owner = list[candidate.position].owner;
         for between in &list[candidate.position + 1..use_position] {
             if self.assumed_vanishing(between.span.start)
-                || self.assumed_moved(between.span.start).is_some_and(|(into, at)| {
-                    *into == list[use_position].span.start && *at > read_span.start
-                })
+                || self
+                    .assumed_moved(between.span.start)
+                    .is_some_and(|(into, at)| {
+                        *into == list[use_position].span.start && *at > read_span.start
+                    })
             {
                 continue;
             }
@@ -597,9 +646,7 @@ impl Plan<'_, '_> {
                 AstKind::LogicalExpression(logical) if logical.left.span() != child_span => {
                     return false;
                 }
-                AstKind::AssignmentExpression(assignment)
-                    if assignment.operator.is_logical() =>
-                {
+                AstKind::AssignmentExpression(assignment) if assignment.operator.is_logical() => {
                     return false;
                 }
                 _ if is_statement(kind) => return false,
@@ -623,7 +670,10 @@ impl Plan<'_, '_> {
         moved_before: Option<u32>,
         mover: &Candidate,
     ) -> bool {
-        let start = self.scan.effects.partition_point(|(s, _, _)| *s < range.start);
+        let start = self
+            .scan
+            .effects
+            .partition_point(|(s, _, _)| *s < range.start);
         for (s, e, effect_owner) in &self.scan.effects[start..] {
             if *s >= range.end {
                 break;
@@ -637,7 +687,10 @@ impl Plan<'_, '_> {
                 return false;
             }
         }
-        let start = self.scan.idents.partition_point(|(s, _, _)| *s < range.start);
+        let start = self
+            .scan
+            .idents
+            .partition_point(|(s, _, _)| *s < range.start);
         for (s, reference, ident_owner) in &self.scan.idents[start..] {
             if *s >= range.end {
                 break;
@@ -662,7 +715,10 @@ impl Plan<'_, '_> {
                         && self.scan.candidates[forward.candidate].statement.start < before
                 })
             });
-            if !moved_earlier && !self.stable_in(symbol, owner) && !self.unwritable_by(symbol, owner, mover) {
+            if !moved_earlier
+                && !self.stable_in(symbol, owner)
+                && !self.unwritable_by(symbol, owner, mover)
+            {
                 return false;
             }
         }

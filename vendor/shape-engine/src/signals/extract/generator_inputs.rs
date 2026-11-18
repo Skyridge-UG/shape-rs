@@ -747,13 +747,8 @@ impl<'s, 'a> Visit<'a> for ProgramFacts<'s, 'a> {
     }
 
     fn visit_do_while_statement(&mut self, statement: &DoWhileStatement<'a>) {
-        let loop_index = self.new_loop(
-            statement.span,
-            None,
-            layout::LoopKind::DoWhile,
-            None,
-            false,
-        );
+        let loop_index =
+            self.new_loop(statement.span, None, layout::LoopKind::DoWhile, None, false);
         self.loop_stack.push(loop_index);
         walk::walk_do_while_statement(self, statement);
         self.loop_stack.pop();
@@ -2107,7 +2102,11 @@ fn table_aliases<'a>(
     facts: &'a ProgramFacts<'_, '_>,
     candidate: &'a CandidateFact,
 ) -> impl Iterator<Item = &'a TableInfo> + 'a {
-    let text = |table: &TableInfo| facts.source.get(table.span.start as usize..table.span.end as usize);
+    let text = |table: &TableInfo| {
+        facts
+            .source
+            .get(table.span.start as usize..table.span.end as usize)
+    };
     let mut seen: Vec<&'a str> = Vec::new();
     aliased_tables(facts, candidate).filter(move |table| match text(table) {
         Some(source) if seen.contains(&source) => false,

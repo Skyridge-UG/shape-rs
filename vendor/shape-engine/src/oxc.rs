@@ -100,7 +100,11 @@ impl Drop for OwnOutput {
 
 /// Parse with parenthesised expressions removed, so the AST is canonical.
 pub fn parse<'a>(allocator: &'a Allocator, source: &'a str) -> ParseOutput<'a> {
-    let violation = if OWN_OUTPUT.with(std::cell::Cell::get) { None } else { excessive_source_depth(source) };
+    let violation = if OWN_OUTPUT.with(std::cell::Cell::get) {
+        None
+    } else {
+        excessive_source_depth(source)
+    };
     if let Some(violation) = violation {
         // Oxc's parser is intentionally not entered for adversarial shapes
         // known to recurse before it can produce an AST.  Parse an empty
@@ -158,10 +162,7 @@ pub fn parse<'a>(allocator: &'a Allocator, source: &'a str) -> ParseOutput<'a> {
 }
 
 /// Parse a source string and retain the historical joined parse diagnostic.
-pub fn parse_program<'a>(
-    allocator: &'a Allocator,
-    source: &'a str,
-) -> Result<Program<'a>, String> {
+pub fn parse_program<'a>(allocator: &'a Allocator, source: &'a str) -> Result<Program<'a>, String> {
     let parsed = parse(allocator, source);
     if parsed.panicked || !parsed.errors.is_empty() {
         Err(parsed.errors.join("; "))

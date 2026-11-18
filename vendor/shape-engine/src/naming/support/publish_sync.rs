@@ -3,19 +3,14 @@ use oxc_semantic::SymbolId;
 
 pub(in crate::naming) type Symbol = SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<Symbol> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<Symbol> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
 // Only a plain var/let/const declaration creates an ordinary data binding;
 // `using`/`await using` resource declarations are refused everywhere an origin
 // is claimed.
-pub(in crate::naming) fn plain_variable_kind(
-    kind: VariableDeclarationKind,
-) -> bool {
+pub(in crate::naming) fn plain_variable_kind(kind: VariableDeclarationKind) -> bool {
     matches!(
         kind,
         VariableDeclarationKind::Var

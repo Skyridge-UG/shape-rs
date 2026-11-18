@@ -19,12 +19,12 @@
 use std::collections::{BTreeSet, HashMap};
 
 use oxc_ast::ast::{
-    ArrowFunctionExpression, AssignmentExpression, AssignmentTarget, BinaryOperator, BreakStatement, Class,
-    ConditionalExpression, ContinueStatement, DoWhileStatement, Expression, ForInStatement, ForOfStatement,
-    ForStatement, ForStatementInit, ForStatementLeft, Function, IdentifierReference, IfStatement,
-    LabeledStatement, LogicalExpression, LogicalOperator, ReturnStatement, SimpleAssignmentTarget, Statement,
-    SwitchStatement, ThrowStatement, TryStatement, UnaryOperator, UpdateExpression, VariableDeclarator,
-    WhileStatement,
+    ArrowFunctionExpression, AssignmentExpression, AssignmentTarget, BinaryOperator,
+    BreakStatement, Class, ConditionalExpression, ContinueStatement, DoWhileStatement, Expression,
+    ForInStatement, ForOfStatement, ForStatement, ForStatementInit, ForStatementLeft, Function,
+    IdentifierReference, IfStatement, LabeledStatement, LogicalExpression, LogicalOperator,
+    ReturnStatement, SimpleAssignmentTarget, Statement, SwitchStatement, ThrowStatement,
+    TryStatement, UnaryOperator, UpdateExpression, VariableDeclarator, WhileStatement,
 };
 use oxc_ast::AstKind;
 use oxc_ast_visit::{walk, Visit};
@@ -118,7 +118,10 @@ impl Flow<'_> {
 
     fn read(&mut self, node: NodeId) {
         if let Some(state) = &self.state {
-            self.reads.entry(node).or_default().extend(state.iter().cloned());
+            self.reads
+                .entry(node)
+                .or_default()
+                .extend(state.iter().cloned());
         }
     }
 
@@ -210,7 +213,9 @@ impl<'a> Visit<'a> for Flow<'_> {
             self.visit_expression(init);
         }
         let declares = match &it.id {
-            oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => identifier.symbol_id.get() == Some(self.symbol),
+            oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => {
+                identifier.symbol_id.get() == Some(self.symbol)
+            }
             _ => false,
         };
         if declares {
@@ -227,7 +232,9 @@ impl<'a> Visit<'a> for Flow<'_> {
     fn visit_assignment_expression(&mut self, it: &AssignmentExpression<'a>) {
         let node = it.node_id.get();
         match &it.left {
-            AssignmentTarget::AssignmentTargetIdentifier(identifier) if self.is_symbol(identifier) => {
+            AssignmentTarget::AssignmentTargetIdentifier(identifier)
+                if self.is_symbol(identifier) =>
+            {
                 if it.operator.is_assign() {
                     self.visit_expression(&it.right);
                     self.store(Store::Assign(node));
@@ -253,7 +260,9 @@ impl<'a> Visit<'a> for Flow<'_> {
 
     fn visit_update_expression(&mut self, it: &UpdateExpression<'a>) {
         match &it.argument {
-            SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) if self.is_symbol(identifier) => {
+            SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier)
+                if self.is_symbol(identifier) =>
+            {
                 self.read(identifier.node_id.get());
                 self.store(Store::Other(it.node_id.get()));
             }
@@ -369,7 +378,9 @@ impl<'a> Visit<'a> for Flow<'_> {
         let label = self.label.take();
         if let Some(init) = &it.init {
             match init {
-                ForStatementInit::VariableDeclaration(declaration) => self.visit_variable_declaration(declaration),
+                ForStatementInit::VariableDeclaration(declaration) => {
+                    self.visit_variable_declaration(declaration)
+                }
                 other => {
                     if let Some(expression) = other.as_expression() {
                         self.visit_expression(expression);
@@ -480,9 +491,16 @@ impl<'a> Visit<'a> for Flow<'_> {
 }
 
 impl Flow<'_> {
-    fn each_loop<'a>(&mut self, label: Option<String>, left: &ForStatementLeft<'a>, body: &Statement<'a>) {
+    fn each_loop<'a>(
+        &mut self,
+        label: Option<String>,
+        left: &ForStatementLeft<'a>,
+        body: &Statement<'a>,
+    ) {
         let left_store = match left {
-            ForStatementLeft::AssignmentTargetIdentifier(identifier) if self.is_symbol(identifier) => {
+            ForStatementLeft::AssignmentTargetIdentifier(identifier)
+                if self.is_symbol(identifier) =>
+            {
                 Some(identifier.node_id.get())
             }
             _ => None,
@@ -516,7 +534,10 @@ impl FinderCtx<'_, '_, '_> {
             if parent == child {
                 return child;
             }
-            if matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+            if matches!(
+                nodes.kind(parent),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            ) {
                 return parent;
             }
             child = parent;
@@ -549,7 +570,12 @@ impl FinderCtx<'_, '_, '_> {
                 }
                 AstKind::ArrowFunctionExpression(arrow) => flow.visit_function_body(&arrow.body),
                 AstKind::Program(program) => flow.visit_statements(&program.body),
-                _ => return Reaching { unsound: true, ..Reaching::default() },
+                _ => {
+                    return Reaching {
+                        unsound: true,
+                        ..Reaching::default()
+                    }
+                }
             }
             // Every write of the binding inside this function must be a
             // store the walk saw.
@@ -571,7 +597,10 @@ impl FinderCtx<'_, '_, '_> {
                     unsound = true;
                 }
             }
-            Reaching { reads: flow.reads, unsound }
+            Reaching {
+                reads: flow.reads,
+                unsound,
+            }
         })
     }
 
@@ -613,7 +642,9 @@ impl FinderCtx<'_, '_, '_> {
         let nodes = self.parse.nodes;
         let parent = nodes.parent_id(node);
         match nodes.kind(parent) {
-            AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => Store::Assign(parent),
+            AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => {
+                Store::Assign(parent)
+            }
             _ => Store::Other(parent),
         }
     }
@@ -732,11 +763,30 @@ impl Sym {
             Sym::Unary(op, value) => format!("{op}({})", value.render()),
             Sym::Bin(op, left, right) => format!("({} {op} {})", left.render(), right.render()),
             Sym::Cond(test, consequent, alternate) => {
-                format!("({} ? {} : {})", test.render(), consequent.render(), alternate.render())
+                format!(
+                    "({} ? {} : {})",
+                    test.render(),
+                    consequent.render(),
+                    alternate.render()
+                )
             }
-            Sym::Guard(test, polarity) => format!("guard{}({})", if *polarity { "" } else { "!" }, test.render()),
-            Sym::Phi(items) => format!("phi({})", items.iter().map(Sym::render).collect::<Vec<_>>().join(" | ")),
-            Sym::Array(items) => format!("[{}]", items.iter().map(Sym::render).collect::<Vec<_>>().join(", ")),
+            Sym::Guard(test, polarity) => format!(
+                "guard{}({})",
+                if *polarity { "" } else { "!" },
+                test.render()
+            ),
+            Sym::Phi(items) => format!(
+                "phi({})",
+                items
+                    .iter()
+                    .map(Sym::render)
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            ),
+            Sym::Array(items) => format!(
+                "[{}]",
+                items.iter().map(Sym::render).collect::<Vec<_>>().join(", ")
+            ),
             Sym::Object(entries) => format!(
                 "{{{}}}",
                 entries
@@ -795,9 +845,12 @@ impl Sym {
     /// A hop, cycle or size cut inside: the value depends on where the
     /// resolution started.
     fn has_cut(&self) -> bool {
-        self.nodes()
-            .iter()
-            .any(|node| matches!(node, Sym::Opaque("hops") | Sym::Opaque("cycle") | Sym::Opaque("size")))
+        self.nodes().iter().any(|node| {
+            matches!(
+                node,
+                Sym::Opaque("hops") | Sym::Opaque("cycle") | Sym::Opaque("size")
+            )
+        })
     }
 
     pub(crate) fn nodes(&self) -> Vec<&Sym> {
@@ -809,7 +862,8 @@ impl Sym {
     /// A value that carries no truth of its own (`false`, `0`, `undefined`,
     /// `null`): a flag stored as this is "not set".
     pub(crate) fn is_unset(&self) -> bool {
-        matches!(self, Sym::Bool(false) | Sym::Undef | Sym::Null) || matches!(self, Sym::Num(value) if *value == 0.0)
+        matches!(self, Sym::Bool(false) | Sym::Undef | Sym::Null)
+            || matches!(self, Sym::Num(value) if *value == 0.0)
     }
 
     /// The alternatives of a phi (nested phis flattened), unset ones
@@ -878,7 +932,9 @@ impl Sym {
     }
 
     pub(crate) fn has_global(&self, name: &str) -> bool {
-        self.nodes().iter().any(|node| matches!(node, Sym::Global(global) if global == name))
+        self.nodes()
+            .iter()
+            .any(|node| matches!(node, Sym::Global(global) if global == name))
     }
 }
 
@@ -923,7 +979,9 @@ impl FinderCtx<'_, '_, '_> {
             return Sym::Opaque("size");
         }
         match nodes.kind(node) {
-            AstKind::ParenthesizedExpression(inner) => self.sym_expression(&inner.expression, resolver),
+            AstKind::ParenthesizedExpression(inner) => {
+                self.sym_expression(&inner.expression, resolver)
+            }
             AstKind::NumericLiteral(literal) => Sym::Num(literal.value),
             AstKind::StringLiteral(literal) => Sym::Str(literal.value.to_string()),
             AstKind::BooleanLiteral(literal) => Sym::Bool(literal.value),
@@ -933,15 +991,28 @@ impl FinderCtx<'_, '_, '_> {
                 template
                     .quasis
                     .iter()
-                    .map(|quasi| quasi.value.cooked.as_ref().map_or("", |cooked| cooked.as_str()))
+                    .map(|quasi| {
+                        quasi
+                            .value
+                            .cooked
+                            .as_ref()
+                            .map_or("", |cooked| cooked.as_str())
+                    })
                     .collect(),
             ),
-            AstKind::IdentifierReference(identifier) => self.sym_identifier(node, identifier, resolver),
+            AstKind::IdentifierReference(identifier) => {
+                self.sym_identifier(node, identifier, resolver)
+            }
             AstKind::StaticMemberExpression(member) => {
-                if let Some(value) = self.sealed_literal(&member.object, member.property.name.as_str()) {
+                if let Some(value) =
+                    self.sealed_literal(&member.object, member.property.name.as_str())
+                {
                     return value;
                 }
-                Sym::Member(Box::new(self.sym_expression(&member.object, resolver)), member.property.name.to_string())
+                Sym::Member(
+                    Box::new(self.sym_expression(&member.object, resolver)),
+                    member.property.name.to_string(),
+                )
             }
             AstKind::ComputedMemberExpression(member) => {
                 // `t[k]` of the tracer's argument tuple (`t = [i, v, m];
@@ -951,9 +1022,15 @@ impl FinderCtx<'_, '_, '_> {
                 }
                 // `state[k]` of a local binding: an element slot whose
                 // stores are elsewhere (not the initial literal).
-                if let (Expression::Identifier(identifier), Expression::NumericLiteral(index), false) =
-                    (member.object.without_parentheses(), member.expression.without_parentheses(), resolver.reads)
-                {
+                if let (
+                    Expression::Identifier(identifier),
+                    Expression::NumericLiteral(index),
+                    false,
+                ) = (
+                    member.object.without_parentheses(),
+                    member.expression.without_parentheses(),
+                    resolver.reads,
+                ) {
                     if let Some(symbol) = self.identifier_symbol(identifier) {
                         if index.value.fract() == 0.0 && index.value >= 0.0 {
                             return Sym::Slot(symbol, index.value as u32);
@@ -1069,23 +1146,32 @@ impl FinderCtx<'_, '_, '_> {
     /// field no code can change).
     fn sealed_literal(&self, object: &Expression<'_>, key: &str) -> Option<Sym> {
         use oxc_ast::ast::{ObjectPropertyKind, PropertyKind};
-        let Expression::Identifier(_) = object.without_parentheses() else { return None };
+        let Expression::Identifier(_) = object.without_parentheses() else {
+            return None;
+        };
         let nodes = self.parse.nodes;
         let read = self.node_with_span(object.without_parentheses().span())?;
         let (symbol, stores) = self.reaching(read)?;
         let mut value: Option<Sym> = None;
         let mut made = BTreeSet::new();
         for store in &stores {
-            let (Store::Assign(node) | Store::Declare(node)) = store else { return None };
+            let (Store::Assign(node) | Store::Declare(node)) = store else {
+                return None;
+            };
             if let AstKind::AssignmentExpression(assignment) = nodes.kind(*node) {
                 if !assignment.operator.is_assign() {
                     return None;
                 }
             }
-            let AstKind::ObjectExpression(literal) = nodes.kind(self.definition_value(*node)?) else { return None };
+            let AstKind::ObjectExpression(literal) = nodes.kind(self.definition_value(*node)?)
+            else {
+                return None;
+            };
             let mut found = None;
             for property in &literal.properties {
-                let ObjectPropertyKind::ObjectProperty(property) = property else { return None };
+                let ObjectPropertyKind::ObjectProperty(property) = property else {
+                    return None;
+                };
                 let name = property.key.static_name()?;
                 if name == "__proto__" {
                     return None;
@@ -1127,7 +1213,9 @@ impl FinderCtx<'_, '_, '_> {
                 let may_hold = match self.reaching(use_node) {
                     Some((_, stores)) => stores.iter().any(|store| match store {
                         Store::Entry => true,
-                        Store::Assign(node) | Store::Declare(node) | Store::Other(node) => puts.contains(node),
+                        Store::Assign(node) | Store::Declare(node) | Store::Other(node) => {
+                            puts.contains(node)
+                        }
                     }),
                     None => true,
                 };
@@ -1140,7 +1228,9 @@ impl FinderCtx<'_, '_, '_> {
                 let use_span = nodes.kind(use_node).span();
                 let parent = nodes.parent_id(use_node);
                 let name = match nodes.kind(parent) {
-                    AstKind::StaticMemberExpression(it) if it.object.span() == use_span => it.property.name.to_string(),
+                    AstKind::StaticMemberExpression(it) if it.object.span() == use_span => {
+                        it.property.name.to_string()
+                    }
                     AstKind::ComputedMemberExpression(it) if it.object.span() == use_span => {
                         match it.expression.without_parentheses() {
                             Expression::StringLiteral(text) => text.value.to_string(),
@@ -1149,15 +1239,22 @@ impl FinderCtx<'_, '_, '_> {
                     }
                     // A copy into another binding: that binding holds it too.
                     AstKind::AssignmentExpression(assignment)
-                        if assignment.operator.is_assign() && assignment.right.span() == use_span =>
+                        if assignment.operator.is_assign()
+                            && assignment.right.span() == use_span =>
                     {
-                        let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else { return None };
+                        let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                        else {
+                            return None;
+                        };
                         let copy = self.identifier_symbol(target)?;
                         holders.push((copy, BTreeSet::from([parent])));
                         continue;
                     }
                     AstKind::VariableDeclarator(declarator)
-                        if declarator.init.as_ref().is_some_and(|init| init.span() == use_span) =>
+                        if declarator
+                            .init
+                            .as_ref()
+                            .is_some_and(|init| init.span() == use_span) =>
                     {
                         let copy = declarator.id.get_binding_identifier()?.symbol_id();
                         holders.push((copy, BTreeSet::from([parent])));
@@ -1168,8 +1265,14 @@ impl FinderCtx<'_, '_, '_> {
                 let member_span = nodes.kind(parent).span();
                 // A method call passes the object as `this`.
                 match nodes.kind(nodes.parent_id(parent)) {
-                    AstKind::CallExpression(call) if call.callee.without_parentheses().span() == member_span => return None,
-                    AstKind::NewExpression(_) | AstKind::TaggedTemplateExpression(_) => return None,
+                    AstKind::CallExpression(call)
+                        if call.callee.without_parentheses().span() == member_span =>
+                    {
+                        return None
+                    }
+                    AstKind::NewExpression(_) | AstKind::TaggedTemplateExpression(_) => {
+                        return None
+                    }
                     _ => {}
                 }
                 if name == key && !self.read_position(parent) {
@@ -1189,7 +1292,9 @@ impl FinderCtx<'_, '_, '_> {
         match nodes.kind(parent) {
             AstKind::ParenthesizedExpression(_) => self.read_position(parent),
             AstKind::UnaryExpression(unary) => unary.operator != UnaryOperator::Delete,
-            AstKind::AssignmentExpression(assignment) => assignment.right.without_parentheses().span() == span,
+            AstKind::AssignmentExpression(assignment) => {
+                assignment.right.without_parentheses().span() == span
+            }
             AstKind::BinaryExpression(_)
             | AstKind::LogicalExpression(_)
             | AstKind::ConditionalExpression(_)
@@ -1206,7 +1311,12 @@ impl FinderCtx<'_, '_, '_> {
         }
     }
 
-    fn sym_identifier(&self, node: NodeId, identifier: &IdentifierReference<'_>, resolver: &mut Resolver) -> Sym {
+    fn sym_identifier(
+        &self,
+        node: NodeId,
+        identifier: &IdentifierReference<'_>,
+        resolver: &mut Resolver,
+    ) -> Sym {
         let Some(symbol) = self.identifier_symbol(identifier) else {
             return match identifier.name.as_str() {
                 "undefined" => Sym::Undef,
@@ -1269,7 +1379,10 @@ impl FinderCtx<'_, '_, '_> {
         if stores.is_empty() {
             return Sym::Opaque("captured");
         }
-        let values = stores.iter().map(|store| self.sym_store(store, resolver)).collect();
+        let values = stores
+            .iter()
+            .map(|store| self.sym_store(store, resolver))
+            .collect();
         let value = Sym::phi(values);
         if !value.has_cut() {
             resolver.captured.insert((symbol, root), value.clone());
@@ -1314,7 +1427,11 @@ impl FinderCtx<'_, '_, '_> {
                         _ => Sym::Opaque("target"),
                     };
                     let right = self.sym_expression(&assignment.right, resolver);
-                    Sym::Bin(BinaryOperator::BitwiseOR.as_str(), Box::new(before), Box::new(right))
+                    Sym::Bin(
+                        BinaryOperator::BitwiseOR.as_str(),
+                        Box::new(before),
+                        Box::new(right),
+                    )
                 }
                 _ => Sym::Opaque("update"),
             },
@@ -1340,7 +1457,11 @@ impl FinderCtx<'_, '_, '_> {
                 AstKind::IfStatement(statement) => {
                     if statement.consequent.span() == span {
                         Some((&statement.test, true))
-                    } else if statement.alternate.as_ref().is_some_and(|alternate| alternate.span() == span) {
+                    } else if statement
+                        .alternate
+                        .as_ref()
+                        .is_some_and(|alternate| alternate.span() == span)
+                    {
                         Some((&statement.test, false))
                     } else {
                         None
@@ -1375,7 +1496,9 @@ impl FinderCtx<'_, '_, '_> {
     fn returned_formal(&self, function: NodeId) -> Option<usize> {
         let (params, statements) = match self.parse.nodes.kind(function) {
             AstKind::Function(function) => (&function.params, &function.body.as_ref()?.statements),
-            AstKind::ArrowFunctionExpression(arrow) if !arrow.expression => (&arrow.params, &arrow.body.statements),
+            AstKind::ArrowFunctionExpression(arrow) if !arrow.expression => {
+                (&arrow.params, &arrow.body.statements)
+            }
             _ => return None,
         };
         if params.rest.is_some() {
@@ -1383,7 +1506,8 @@ impl FinderCtx<'_, '_, '_> {
         }
         let mut formals = Vec::new();
         for parameter in &params.items {
-            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern else {
+            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern
+            else {
                 return None;
             };
             if parameter.initializer.is_some() {
@@ -1399,7 +1523,12 @@ impl FinderCtx<'_, '_, '_> {
         };
         let symbol = crate::oxc::identifier_symbol(returned, self.parse.scoping)?;
         let index = formals.iter().position(|formal| *formal == symbol)?;
-        if self.parse.scoping.get_resolved_references(symbol).any(|reference| reference.is_write()) {
+        if self
+            .parse
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
         struct Returns(bool);
@@ -1449,7 +1578,9 @@ fn fold_call(callee: Sym, args: Vec<Sym>) -> Sym {
         items
             .iter()
             .map(|item| match item {
-                Sym::Num(code) if *code >= 0.0 && *code < 65536.0 && code.fract() == 0.0 => char::from_u32(*code as u32),
+                Sym::Num(code) if *code >= 0.0 && *code < 65536.0 && code.fract() == 0.0 => {
+                    char::from_u32(*code as u32)
+                }
                 _ => None,
             })
             .collect()
@@ -1481,7 +1612,8 @@ fn fold_call(callee: Sym, args: Vec<Sym>) -> Sym {
 pub(crate) type SymTerms = std::collections::BTreeMap<u32, Vec<Option<Sym>>>;
 
 fn power_of_two(value: f64) -> Option<u32> {
-    (value >= 1.0 && value.fract() == 0.0 && (value as u64).is_power_of_two()).then(|| (value as u64).trailing_zeros())
+    (value >= 1.0 && value.fract() == 0.0 && (value as u64).is_power_of_two())
+        .then(|| (value as u64).trailing_zeros())
 }
 
 /// Split a packed value: `|` / `+` terms, `x << n`, `x * 2^n`,
@@ -1512,7 +1644,10 @@ fn split_into(sym: &Sym, shift: u32, out: &mut SymTerms) -> Result<(), String> {
             split_into(right, shift, &mut right_terms)?;
             for (bit, terms) in right_terms {
                 // `x | (x ? 1 : 0)`: the same boolean twice on one bit.
-                if left_terms.get(&bit).is_some_and(|known| *known == terms && terms.iter().all(Option::is_some)) {
+                if left_terms
+                    .get(&bit)
+                    .is_some_and(|known| *known == terms && terms.iter().all(Option::is_some))
+                {
                     continue;
                 }
                 if left_terms.contains_key(&bit) {
@@ -1534,19 +1669,27 @@ fn split_into(sym: &Sym, shift: u32, out: &mut SymTerms) -> Result<(), String> {
             // The shift count is taken mod 32; `x << (t ? 97 : 1)` shifts
             // by 1 either way.
             let count = |sym: &Sym| match sym {
-                Sym::Num(amount) if amount.fract() == 0.0 && *amount >= 0.0 && *amount < 4294967296.0 => {
+                Sym::Num(amount)
+                    if amount.fract() == 0.0 && *amount >= 0.0 && *amount < 4294967296.0 =>
+                {
                     Some((*amount as u64 & 31) as u32)
                 }
                 _ => None,
             };
             let amount = match amount.as_ref() {
                 Sym::Cond(test, consequent, alternate) if truth(test).is_some() => {
-                    count(if truth(test) == Some(true) { consequent } else { alternate })
+                    count(if truth(test) == Some(true) {
+                        consequent
+                    } else {
+                        alternate
+                    })
                 }
-                Sym::Cond(_, consequent, alternate) => match (count(consequent), count(alternate)) {
-                    (Some(a), Some(b)) if a == b => Some(a),
-                    _ => None,
-                },
+                Sym::Cond(_, consequent, alternate) => {
+                    match (count(consequent), count(alternate)) {
+                        (Some(a), Some(b)) if a == b => Some(a),
+                        _ => None,
+                    }
+                }
                 other => count(other),
             };
             match amount {
@@ -1586,13 +1729,22 @@ fn split_into(sym: &Sym, shift: u32, out: &mut SymTerms) -> Result<(), String> {
         unset if unset.is_unset() => Ok(()),
         // A test on literals only (`typeof false !== "object"`): the arm
         // it takes.
-        Sym::Cond(test, consequent, alternate) if truth(test).is_some() => {
-            split_into(if truth(test) == Some(true) { consequent } else { alternate }, shift, out)
-        }
+        Sym::Cond(test, consequent, alternate) if truth(test).is_some() => split_into(
+            if truth(test) == Some(true) {
+                consequent
+            } else {
+                alternate
+            },
+            shift,
+            out,
+        ),
         Sym::Cond(test, consequent, alternate) => match (consequent.as_ref(), alternate.as_ref()) {
             (Sym::Num(value), Sym::Num(zero)) if *zero == 0.0 && power_of_two(*value).is_some() => {
                 let bit = shift + power_of_two(*value).unwrap_or(0);
-                merge(out, SymTerms::from([(bit, vec![Some(test.as_ref().clone())])]));
+                merge(
+                    out,
+                    SymTerms::from([(bit, vec![Some(test.as_ref().clone())])]),
+                );
                 Ok(())
             }
             (Sym::Num(_), Sym::Num(_)) => Err("conditional constant".into()),
@@ -1604,9 +1756,10 @@ fn split_into(sym: &Sym, shift: u32, out: &mut SymTerms) -> Result<(), String> {
                 let mut alternate_terms = SymTerms::new();
                 let packed = split_into(consequent, shift, &mut consequent_terms).is_ok()
                     && split_into(alternate, shift, &mut alternate_terms).is_ok()
-                    && [&consequent_terms, &alternate_terms]
-                        .iter()
-                        .any(|terms| terms.keys().any(|bit| *bit != shift) || terms.values().any(|items| items.len() > 1));
+                    && [&consequent_terms, &alternate_terms].iter().any(|terms| {
+                        terms.keys().any(|bit| *bit != shift)
+                            || terms.values().any(|items| items.len() > 1)
+                    });
                 if packed {
                     merge(out, consequent_terms);
                     merge(out, alternate_terms);
@@ -1634,7 +1787,9 @@ fn split_into(sym: &Sym, shift: u32, out: &mut SymTerms) -> Result<(), String> {
             let mut terms = SymTerms::new();
             split_into(value, shift, &mut terms)?;
             let single = terms.len() == 1
-                && terms.get(&shift).is_some_and(|items| items.len() == 1 && items[0].is_some())
+                && terms
+                    .get(&shift)
+                    .is_some_and(|items| items.len() == 1 && items[0].is_some())
                 && !matches!(value.as_ref(), Sym::Bin(op, _, _) if matches!(*op, "|" | "+" | "<<" | "*"));
             if single {
                 merge(out, SymTerms::from([(shift, vec![Some(sym.clone())])]));
@@ -1662,7 +1817,9 @@ fn literal_value(sym: &Sym) -> Option<Sym> {
         _ => None,
     };
     match peel_reads(sym) {
-        value @ (Sym::Num(_) | Sym::Str(_) | Sym::Bool(_) | Sym::Undef | Sym::Null) => Some(value.clone()),
+        value @ (Sym::Num(_) | Sym::Str(_) | Sym::Bool(_) | Sym::Undef | Sym::Null) => {
+            Some(value.clone())
+        }
         Sym::Unary("typeof", value) => match literal_value(value) {
             Some(value) => Some(Sym::Str(typeof_name(&value)?.to_string())),
             None => is_boolean(value).then(|| Sym::Str("boolean".to_string())),
@@ -1709,7 +1866,10 @@ fn is_boolean(sym: &Sym) -> bool {
     match sym {
         Sym::Bool(_) | Sym::Guard(_, _) | Sym::Unary("!", _) => true,
         Sym::Bin(op, _, _) => {
-            matches!(*op, "===" | "!==" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "in" | "instanceof")
+            matches!(
+                *op,
+                "===" | "!==" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "in" | "instanceof"
+            )
         }
         Sym::Read(_, value) => is_boolean(value),
         Sym::Phi(items) => !items.is_empty() && items.iter().all(is_boolean),

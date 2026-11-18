@@ -1,15 +1,19 @@
 //! `LifecycleEntropySamples`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use std::collections::BTreeSet;
-use crate::signals::analysis::{top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use std::collections::BTreeSet;
+use value_facts::slot_facts;
 
 /// `LifecycleEntropySamples`. Card: [`CARD`].
-pub(crate) fn recognize_lifecycle_entropy_samples(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_lifecycle_entropy_samples(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if top_level_ops(view) != [LeafOp::Number]
         // One count and one repeated word per message (a message may be
         // emitted from more than one site).
@@ -27,11 +31,18 @@ pub(crate) fn recognize_lifecycle_entropy_samples(view: &SlotView, ctx: &FinderC
         .iter()
         .filter(|(phase, desc)| {
             matches!(*phase, "init" | "collection" | "last_chance")
-                && (desc.has_call("getRandomValues") || desc.has_call("random") || desc.program_call)
+                && (desc.has_call("getRandomValues")
+                    || desc.has_call("random")
+                    || desc.program_call)
         })
         .map(|(phase, _)| *phase)
         .collect();
-    (phases.len() >= 2).then(|| Claim::new(["one entropy word pushed per lifecycle step", "RAW4 NUMBER REPEAT{NUMBER}"]))
+    (phases.len() >= 2).then(|| {
+        Claim::new([
+            "one entropy word pushed per lifecycle step",
+            "RAW4 NUMBER REPEAT{NUMBER}",
+        ])
+    })
 }
 
 pub(crate) fn bind_lifecycle_entropy_samples(

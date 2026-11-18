@@ -415,7 +415,12 @@ impl Walk<'_> {
             return None;
         }
         let unpadded = self.learned.unpadded.clone();
-        if let Some((_, then, _)) = self.padded.iter().rev().find(|(padded, ..)| *padded == jump) {
+        if let Some((_, then, _)) = self
+            .padded
+            .iter()
+            .rev()
+            .find(|(padded, ..)| *padded == jump)
+        {
             self.learned = then.clone();
         }
         let learned = Arc::make_mut(&mut self.learned);
@@ -1837,8 +1842,7 @@ pub(super) fn fails_at_entry(preparation: &PrefixPreparation, report: &PrefixTra
                 // Its own bytecode jumps out of the image. An entry
                 // outside it is evidence only for the fork that patched
                 // it there (see `patched_junk_entry`).
-                diagnostic.code == TraceStopCode::PrefixTruncatedImage
-                    && !report.records.is_empty()
+                diagnostic.code == TraceStopCode::PrefixTruncatedImage && !report.records.is_empty()
             )
         })
 }

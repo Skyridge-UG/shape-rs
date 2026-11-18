@@ -25,7 +25,13 @@ pub(super) struct Holders {
     /// Per fresh helper: its span, parameter symbols, each return slot's
     /// identifier reference (if any), and whether the body is one return of
     /// identifiers and literals.
-    returns: Vec<(SymbolId, Span, Vec<Option<SymbolId>>, Vec<Option<ReferenceId>>, bool)>,
+    returns: Vec<(
+        SymbolId,
+        Span,
+        Vec<Option<SymbolId>>,
+        Vec<Option<ReferenceId>>,
+        bool,
+    )>,
     /// (holder, the helper callee's reference)
     holders: Vec<(SymbolId, ReferenceId)>,
 }
@@ -33,7 +39,11 @@ pub(super) struct Holders {
 impl Holders {
     /// The fresh-tuple helpers nothing reassigns.
     pub(super) fn fresh(&self, scoping: &Scoping) -> BTreeSet<SymbolId> {
-        self.helpers.keys().copied().filter(|helper| !scoping.symbol_is_mutated(*helper)).collect()
+        self.helpers
+            .keys()
+            .copied()
+            .filter(|helper| !scoping.symbol_is_mutated(*helper))
+            .collect()
     }
 
     /// Helpers whose slots return unwritten parameters, never reassigned.
@@ -50,12 +60,21 @@ impl Holders {
                     if scoping.symbol_is_mutated(symbol) {
                         return None;
                     }
-                    parameters.iter().position(|parameter| *parameter == Some(symbol))
+                    parameters
+                        .iter()
+                        .position(|parameter| *parameter == Some(symbol))
                 })
                 .collect();
             if slots.iter().any(Option::is_some) {
                 let shuffle = *shuffle && slots.iter().all(Option::is_some);
-                out.insert(*helper, PassThrough { slots, shuffle, span: *span });
+                out.insert(
+                    *helper,
+                    PassThrough {
+                        slots,
+                        shuffle,
+                        span: *span,
+                    },
+                );
             }
         }
         out
@@ -63,7 +82,11 @@ impl Holders {
 
     /// Holders whose helper is never reassigned and whose every reference is
     /// a plain read `x[k]` with an in-range literal `k`.
-    pub(super) fn read_only(&self, scoping: &Scoping, nodes: &AstNodes<'_>) -> BTreeMap<SymbolId, usize> {
+    pub(super) fn read_only(
+        &self,
+        scoping: &Scoping,
+        nodes: &AstNodes<'_>,
+    ) -> BTreeMap<SymbolId, usize> {
         let mut out = BTreeMap::new();
         for (holder, callee) in &self.holders {
             let Some(helper) = scoping.get_reference(*callee).symbol_id() else {
@@ -123,8 +146,10 @@ impl<'a> Visit<'a> for Holders {
     }
 
     fn visit_variable_declarator(&mut self, declarator: &VariableDeclarator<'a>) {
-        if let (BindingPattern::BindingIdentifier(binding), Some(Expression::CallExpression(call))) =
-            (&declarator.id, declarator.init.as_ref())
+        if let (
+            BindingPattern::BindingIdentifier(binding),
+            Some(Expression::CallExpression(call)),
+        ) = (&declarator.id, declarator.init.as_ref())
         {
             if let (Some(holder), Expression::Identifier(callee)) =
                 (binding.symbol_id.get(), &call.callee)
@@ -142,7 +167,13 @@ impl<'a> Visit<'a> for Holders {
 pub(super) fn return_slots(
     symbol: SymbolId,
     function: &Function<'_>,
-) -> Option<(SymbolId, Span, Vec<Option<SymbolId>>, Vec<Option<ReferenceId>>, bool)> {
+) -> Option<(
+    SymbolId,
+    Span,
+    Vec<Option<SymbolId>>,
+    Vec<Option<ReferenceId>>,
+    bool,
+)> {
     let body = function.body.as_ref()?;
     let Some(oxc_ast::ast::Statement::ReturnStatement(ret)) = body.statements.last() else {
         return None;

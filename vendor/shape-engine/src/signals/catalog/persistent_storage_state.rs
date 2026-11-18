@@ -1,23 +1,45 @@
 //! `PersistentStorageState`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `PersistentStorageState`. Card: [`CARD`].
-pub(crate) fn recognize_persistent_storage_state(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_persistent_storage_state(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     // One removed-value string and no numbers; the fresh traces also emit
     // the record from paths where the string arm is statically absent
     // (only the null-marker byte and the flags), so string-free emissions
     // are accepted next to at least one with the string.
-    let strings = |emission: &crate::signals::analysis::EmissionView| emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::String).count();
-    let numbers = |emission: &crate::signals::analysis::EmissionView| emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::Number).count();
+    let strings = |emission: &crate::signals::analysis::EmissionView| {
+        emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.op == LeafOp::String)
+            .count()
+    };
+    let numbers = |emission: &crate::signals::analysis::EmissionView| {
+        emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.op == LeafOp::Number)
+            .count()
+    };
     let counts_ok = !view.emissions().is_empty()
-        && view.emissions().iter().all(|emission| strings(emission) <= 1 && numbers(emission) == 0)
-        && view.emissions().iter().any(|emission| strings(emission) == 1);
+        && view
+            .emissions()
+            .iter()
+            .all(|emission| strings(emission) <= 1 && numbers(emission) == 0)
+        && view
+            .emissions()
+            .iter()
+            .any(|emission| strings(emission) == 1);
     if !counts_ok || view.has_repeat() || !leaf_transform(view, ".oldValue") {
         return None;
     }

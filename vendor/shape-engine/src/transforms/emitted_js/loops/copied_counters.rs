@@ -26,14 +26,20 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn step_copied_counters(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new(), rewritten: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+        rewritten: 0,
+    };
     scan.visit_program(&program);
     if scan.rewritten == 0 {
         return Ok((source.into(), 0));
@@ -91,7 +97,13 @@ impl Scan<'_, '_> {
             Expression::Identifier(copy) => copy,
             Expression::CallExpression(call) => match (&call.callee, call.arguments.as_slice()) {
                 (Expression::Identifier(number), [Argument::Identifier(copy)])
-                    if number.name == "Number" && self.scoping.get_reference(number.reference_id()).symbol_id().is_none() && !call.optional =>
+                    if number.name == "Number"
+                        && self
+                            .scoping
+                            .get_reference(number.reference_id())
+                            .symbol_id()
+                            .is_none()
+                        && !call.optional =>
                 {
                     copy
                 }
@@ -99,7 +111,10 @@ impl Scan<'_, '_> {
             },
             _ => return false,
         };
-        let (Some(counter_symbol), Some(copy_symbol)) = (symbol_of(self.scoping, counter), symbol_of(self.scoping, copy_read)) else {
+        let (Some(counter_symbol), Some(copy_symbol)) = (
+            symbol_of(self.scoping, counter),
+            symbol_of(self.scoping, copy_read),
+        ) else {
             return false;
         };
         // The body opens with `c = j;`.
@@ -112,7 +127,11 @@ impl Scan<'_, '_> {
         let Expression::AssignmentExpression(copy) = &first.expression else {
             return false;
         };
-        let (AssignmentTarget::AssignmentTargetIdentifier(copy_target), Expression::Identifier(copied)) = (&copy.left, &copy.right) else {
+        let (
+            AssignmentTarget::AssignmentTargetIdentifier(copy_target),
+            Expression::Identifier(copied),
+        ) = (&copy.left, &copy.right)
+        else {
             return false;
         };
         if copy.operator != AssignmentOperator::Assign
@@ -121,13 +140,16 @@ impl Scan<'_, '_> {
         {
             return false;
         }
-        if !self.counter_ok(counter_symbol, update.span) || !self.copy_ok(copy_symbol, first.span, update.span) {
+        if !self.counter_ok(counter_symbol, update.span)
+            || !self.copy_ok(copy_symbol, first.span, update.span)
+        {
             return false;
         }
         let Some(copy_declaration) = self.lone_declaration(copy_symbol) else {
             return false;
         };
-        if self.scoping.symbol_scope_id(counter_symbol) != self.scoping.symbol_scope_id(copy_symbol) {
+        if self.scoping.symbol_scope_id(counter_symbol) != self.scoping.symbol_scope_id(copy_symbol)
+        {
             return false;
         }
 
@@ -144,10 +166,14 @@ impl Scan<'_, '_> {
         if let Some(Statement::IfStatement(branch)) = body.body.get(1) {
             let breaks = match &branch.consequent {
                 Statement::BreakStatement(jump) => jump.label.is_none(),
-                Statement::BlockStatement(block) => matches!(block.body.as_slice(), [Statement::BreakStatement(jump)] if jump.label.is_none()),
+                Statement::BlockStatement(block) => {
+                    matches!(block.body.as_slice(), [Statement::BreakStatement(jump)] if jump.label.is_none())
+                }
                 _ => false,
             };
-            if let (true, None, Expression::UnaryExpression(not)) = (breaks, &branch.alternate, &branch.test) {
+            if let (true, None, Expression::UnaryExpression(not)) =
+                (breaks, &branch.alternate, &branch.test)
+            {
                 if not.operator == UnaryOperator::LogicalNot {
                     test = Some((branch.span, not.argument.without_parentheses().span()));
                 }
@@ -155,28 +181,47 @@ impl Scan<'_, '_> {
         }
         let substituted = |span: Span| {
             let mut text = self.text(span).to_string();
-            for read in reads.iter().rev().filter(|read| span.start <= read.start && read.end <= span.end) {
-                let (start, end) = ((read.start - span.start) as usize, (read.end - span.start) as usize);
+            for read in reads
+                .iter()
+                .rev()
+                .filter(|read| span.start <= read.start && read.end <= span.end)
+            {
+                let (start, end) = (
+                    (read.start - span.start) as usize,
+                    (read.end - span.start) as usize,
+                );
                 text.replace_range(start..end, counter_name);
             }
             text
         };
         let header = match test {
-            Some((_, condition)) => format!("for (; {}; {counter_name}++) ", substituted(condition)),
+            Some((_, condition)) => {
+                format!("for (; {}; {counter_name}++) ", substituted(condition))
+            }
             None => format!("for (;; {counter_name}++) "),
         };
-        self.edits.push(analysis::Edit::replace(Span::new(statement.span.start, statement.body.span().start), header));
-        self.edits.push(analysis::Edit::delete(whole_line(self.source, first.span)));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(statement.span.start, statement.body.span().start),
+            header,
+        ));
+        self.edits
+            .push(analysis::Edit::delete(whole_line(self.source, first.span)));
         if let Some((branch, _)) = test {
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, branch)));
+            self.edits
+                .push(analysis::Edit::delete(whole_line(self.source, branch)));
         }
-        self.edits.push(analysis::Edit::delete(whole_line(self.source, copy_declaration)));
+        self.edits.push(analysis::Edit::delete(whole_line(
+            self.source,
+            copy_declaration,
+        )));
         let skip = |read: &Span| {
             update.span.start <= read.start && read.end <= update.span.end
-                || test.is_some_and(|(branch, _)| branch.start <= read.start && read.end <= branch.end)
+                || test
+                    .is_some_and(|(branch, _)| branch.start <= read.start && read.end <= branch.end)
         };
         for read in reads.iter().filter(|read| !skip(read)) {
-            self.edits.push(analysis::Edit::replace(*read, counter_name.to_string()));
+            self.edits
+                .push(analysis::Edit::replace(*read, counter_name.to_string()));
         }
         self.rewritten += 1;
         true
@@ -184,22 +229,30 @@ impl Scan<'_, '_> {
 
     /// `let j = <number>`, written only by `update`.
     fn counter_ok(&self, symbol: SymbolId, update: Span) -> bool {
-        let AstKind::VariableDeclarator(declarator) = self.nodes.kind(self.scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            self.nodes.kind(self.scoping.symbol_declaration(symbol))
+        else {
             return false;
         };
         declarator.kind == VariableDeclarationKind::Let
             && matches!(&declarator.init, Some(Expression::NumericLiteral(_)))
-            && self.scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).all(|reference| {
-                let span = self.nodes.kind(reference.node_id()).span();
-                update.start <= span.start && span.end <= update.end
-            })
+            && self
+                .scoping
+                .get_resolved_references(symbol)
+                .filter(|reference| reference.is_write())
+                .all(|reference| {
+                    let span = self.nodes.kind(reference.node_id()).span();
+                    update.start <= span.start && span.end <= update.end
+                })
     }
 
     /// `let c;`, written only by the copy, read only after it (or by the
     /// update, which runs after it) and in no function the loop's function
     /// does not own.
     fn copy_ok(&self, symbol: SymbolId, copy: Span, update: Span) -> bool {
-        let AstKind::VariableDeclarator(declarator) = self.nodes.kind(self.scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            self.nodes.kind(self.scoping.symbol_declaration(symbol))
+        else {
             return false;
         };
         if declarator.kind != VariableDeclarationKind::Let || declarator.init.is_some() {
@@ -207,20 +260,24 @@ impl Scan<'_, '_> {
         }
         let function_of = |node| super::super::support::owner(self.nodes, node);
         let declared_in = function_of(self.scoping.symbol_declaration(symbol));
-        self.scoping.get_resolved_references(symbol).all(|reference| {
-            let span = self.nodes.kind(reference.node_id()).span();
-            let within = |outer: Span| outer.start <= span.start && span.end <= outer.end;
-            let read = reference.is_read() && !reference.is_write();
-            (within(copy) || (read && (span.start >= copy.end || within(update))))
-                && function_of(reference.node_id()) == declared_in
-        })
+        self.scoping
+            .get_resolved_references(symbol)
+            .all(|reference| {
+                let span = self.nodes.kind(reference.node_id()).span();
+                let within = |outer: Span| outer.start <= span.start && span.end <= outer.end;
+                let read = reference.is_read() && !reference.is_write();
+                (within(copy) || (read && (span.start >= copy.end || within(update))))
+                    && function_of(reference.node_id()) == declared_in
+            })
     }
 
     /// The `let c;` statement declaring only `c`.
     fn lone_declaration(&self, symbol: SymbolId) -> Option<Span> {
         let declarator = self.scoping.symbol_declaration(symbol);
         match self.nodes.parent_kind(declarator) {
-            AstKind::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => Some(declaration.span),
+            AstKind::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => {
+                Some(declaration.span)
+            }
             _ => None,
         }
     }

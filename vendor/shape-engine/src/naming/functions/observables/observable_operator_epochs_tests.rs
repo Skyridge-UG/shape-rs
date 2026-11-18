@@ -1,6 +1,7 @@
 use super::*;
-const ACTUAL: &str =
-    include_str!("../../../../tests/fixtures/joined_stream_state_and_cleanup/constructor-epoch-parent.js");
+const ACTUAL: &str = include_str!(
+    "../../../../tests/fixtures/joined_stream_state_and_cleanup/constructor-epoch-parent.js"
+);
 const MAP: &str = "$THREAD_2_113070";
 const INIT: &str = "if (branch) { Constructor = firstMaker(); } else { Constructor = secondMaker(); } Constructor = thirdMaker(); publish($THREAD_2_113070);";
 
@@ -307,11 +308,9 @@ fn native_fixture(source: &str, name: &str, expected: bool) {
 
 #[test]
 fn eager_decorator_refuses_native_and_all_five_roles() {
-    let control =
-        include_str!("../../../../tests/fixtures/observable-operator-epochs/control.js");
-    let bad = include_str!(
-        "../../../../tests/fixtures/observable-operator-epochs/eager-decorator.js"
-    );
+    let control = include_str!("../../../../tests/fixtures/observable-operator-epochs/control.js");
+    let bad =
+        include_str!("../../../../tests/fixtures/observable-operator-epochs/eager-decorator.js");
     assert_eq!(
         control.replacen(
             "static of()",

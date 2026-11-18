@@ -1,21 +1,26 @@
 //! `DomElementStatistics`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView, ValueSlice};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView, ValueSlice,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `DomElementStatistics`. Card: [`CARD`].
 pub(crate) fn recognize_dom_element_statistics(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let leaves = leaves_of(view);
     // The census call is an API root (`doc.querySelectorAll()`) or, when the
     // provenance roots at the document itself, a call transform on it.
-    let census = (any_api(&leaves, "querySelectorAll()") || any_transform(&leaves, ".querySelectorAll()"))
+    let census = (any_api(&leaves, "querySelectorAll()")
+        || any_transform(&leaves, ".querySelectorAll()"))
         && any_transform(&leaves, ".childElementCount")
         && any_transform(&leaves, ".tagName");
     if census && max_top_count(&view.shapes()) >= 10 {
-        return claim(&["10+ fields", "querySelectorAll census of tagName / childElementCount"]);
+        return claim(&[
+            "10+ fields",
+            "querySelectorAll census of tagName / childElementCount",
+        ]);
     }
     None
 }
@@ -37,12 +42,20 @@ pub(crate) fn bind_dom_element_statistics(
         ("STYLE", "styleCount"),
         ("IFRAME", "iframeCount"),
     ];
-    const REGIONS: &[(&str, &str)] = &[("HEAD", "headDistinctTagCount"), ("BODY", "bodyDistinctTagCount")];
+    const REGIONS: &[(&str, &str)] = &[
+        ("HEAD", "headDistinctTagCount"),
+        ("BODY", "bodyDistinctTagCount"),
+    ];
     let lookup = |table: &[(&str, &'static str)], tags: &[String]| -> Option<&'static str> {
         // Every guarding tag must map, and all to the same card name.
         let mut names: Vec<&'static str> = tags
             .iter()
-            .map(|tag| table.iter().find(|(t, _)| t.eq_ignore_ascii_case(tag)).map(|(_, name)| *name))
+            .map(|tag| {
+                table
+                    .iter()
+                    .find(|(t, _)| t.eq_ignore_ascii_case(tag))
+                    .map(|(_, name)| *name)
+            })
             .collect::<Option<Vec<_>>>()?;
         names.sort_unstable();
         names.dedup();
@@ -54,10 +67,16 @@ pub(crate) fn bind_dom_element_statistics(
     let mut binding = FieldBinding::new();
     for message in 0..layout.messages.len() {
         let fields = message_fields(view, layout, message)?;
-        let slices: Vec<ValueSlice> = fields.iter().map(|field| field_slice(ctx, field, 2)).collect();
+        let slices: Vec<ValueSlice> = fields
+            .iter()
+            .map(|field| field_slice(ctx, field, 2))
+            .collect();
         let mut names: Vec<Option<&'static str>> = Vec::new();
         for (field, slice) in fields.iter().zip(&slices) {
-            let value = field.leaves.first().and_then(|leaf| ctx.caller_value_node(leaf));
+            let value = field
+                .leaves
+                .first()
+                .and_then(|leaf| ctx.caller_value_node(leaf));
             // The value once always-truthy list tests are decided and a
             // register's one live definition is followed (junk spellings).
             let live = value.map(|value| dom::live_value(ctx, value, 4));
@@ -65,12 +84,16 @@ pub(crate) fn bind_dom_element_statistics(
                 Some("bodyFirstChildIdPrefix")
             } else if !field.writes(LeafKind::Number) {
                 None
-            } else if let Some(tags) = value.and_then(|value| dom::stepped_counter_tags(ctx, value)) {
+            } else if let Some(tags) = value.and_then(|value| dom::stepped_counter_tags(ctx, value))
+            {
                 // A counter first: a junk arm may copy another value into it
                 // (`if (!list) { counter = elements; }`), which its slice
                 // would otherwise read.
                 lookup(TAGS, &tags)
-            } else if live.filter(|live| Some(*live) != value).is_some_and(|live| dom::reads_member(ctx, live, "childElementCount")) {
+            } else if live
+                .filter(|live| Some(*live) != value)
+                .is_some_and(|live| dom::reads_member(ctx, live, "childElementCount"))
+            {
                 // The register's one live definition, past a junk arm's copy.
                 Some("bodyChildElementCount")
             } else if slice.calls_method("reduce")
@@ -82,11 +105,18 @@ pub(crate) fn bind_dom_element_statistics(
                 Some("elementCount")
             } else if slice.nearest_members() == ["childElementCount"] {
                 Some("bodyChildElementCount")
-            } else if let Some(tags) = value.and_then(|value| dom::pushed_list_regions(ctx, value)) {
+            } else if let Some(tags) = value.and_then(|value| dom::pushed_list_regions(ctx, value))
+            {
                 lookup(REGIONS, &tags)
-            } else if let Some(tags) = live.filter(|live| Some(*live) != value).and_then(|live| dom::stepped_counter_tags(ctx, live)) {
+            } else if let Some(tags) = live
+                .filter(|live| Some(*live) != value)
+                .and_then(|live| dom::stepped_counter_tags(ctx, live))
+            {
                 lookup(TAGS, &tags)
-            } else if let Some(tags) = live.filter(|live| Some(*live) != value).and_then(|live| dom::pushed_list_regions(ctx, live)) {
+            } else if let Some(tags) = live
+                .filter(|live| Some(*live) != value)
+                .and_then(|live| dom::pushed_list_regions(ctx, live))
+            {
                 lookup(REGIONS, &tags)
             } else if live.is_some_and(|live| dom::reads_member(ctx, live, "childElementCount")) {
                 Some("bodyChildElementCount")
@@ -132,14 +162,24 @@ mod dom {
 
     /// `x === <literal>` / `<literal> === x` (`==` too): the compared side
     /// and the literal.
-    fn equality<'e, 'a>(test: &'e Expression<'a>) -> Option<(&'e Expression<'a>, &'e Expression<'a>)> {
+    fn equality<'e, 'a>(
+        test: &'e Expression<'a>,
+    ) -> Option<(&'e Expression<'a>, &'e Expression<'a>)> {
         let Expression::BinaryExpression(binary) = test.without_parentheses() else {
             return None;
         };
-        if !matches!(binary.operator, BinaryOperator::StrictEquality | BinaryOperator::Equality) {
+        if !matches!(
+            binary.operator,
+            BinaryOperator::StrictEquality | BinaryOperator::Equality
+        ) {
             return None;
         }
-        let literal = |e: &Expression| matches!(e.without_parentheses(), Expression::StringLiteral(_) | Expression::NumericLiteral(_));
+        let literal = |e: &Expression| {
+            matches!(
+                e.without_parentheses(),
+                Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+            )
+        };
         if literal(&binary.right) {
             Some((&binary.left, &binary.right))
         } else if literal(&binary.left) {
@@ -152,7 +192,10 @@ mod dom {
     /// The equality tests guarding `node` inside its function, innermost
     /// first: `(compared side, literal)` of every `if` whose consequent holds
     /// the node, and every `case` literal.
-    fn guards<'a>(ctx: &FinderCtx<'_, '_, 'a>, node: NodeId) -> Vec<(&'a Expression<'a>, &'a Expression<'a>)> {
+    fn guards<'a>(
+        ctx: &FinderCtx<'_, '_, 'a>,
+        node: NodeId,
+    ) -> Vec<(&'a Expression<'a>, &'a Expression<'a>)> {
         let nodes = ctx.parse.nodes;
         let span = nodes.kind(node).span();
         let mut out = Vec::new();
@@ -199,7 +242,9 @@ mod dom {
 
     /// The nearest string literal an enclosing `if` compares against.
     fn guard_string(ctx: &FinderCtx, node: NodeId) -> Option<String> {
-        guards(ctx, node).into_iter().find_map(|(_, literal)| string_literal(literal))
+        guards(ctx, node)
+            .into_iter()
+            .find_map(|(_, literal)| string_literal(literal))
     }
 
     /// For a counter value `c`: the tag literal guarding every `++c` /
@@ -237,13 +282,16 @@ mod dom {
     pub(crate) fn pushed_list_regions(ctx: &FinderCtx, value: NodeId) -> Option<Vec<String>> {
         let nodes = ctx.parse.nodes;
         let member_object = match nodes.kind(value) {
-            AstKind::StaticMemberExpression(member) if member.property.name == "length" => &member.object,
+            AstKind::StaticMemberExpression(member) if member.property.name == "length" => {
+                &member.object
+            }
             // `list[list ? "length" : junk]`: an array binding is always
             // truthy, so the key is "length".
             AstKind::ComputedMemberExpression(member) => {
                 // The key decided by a list test.
                 let key = live_value(ctx, ctx.node_with_span(member.expression.span())?, 3);
-                if !matches!(nodes.kind(key), AstKind::StringLiteral(literal) if literal.value == "length") {
+                if !matches!(nodes.kind(key), AstKind::StringLiteral(literal) if literal.value == "length")
+                {
                     return None;
                 }
                 &member.object
@@ -253,7 +301,9 @@ mod dom {
         // `(list || junk).length`: an array binding is always truthy, so the
         // left operand is the list read.
         let object = match member_object.without_parentheses() {
-            Expression::LogicalExpression(logical) if logical.operator == oxc_syntax::operator::LogicalOperator::Or => {
+            Expression::LogicalExpression(logical)
+                if logical.operator == oxc_syntax::operator::LogicalOperator::Or =>
+            {
                 &logical.left
             }
             other => other,
@@ -271,7 +321,9 @@ mod dom {
             None => {
                 let read = ctx.node_with_span(object.span())?;
                 let live = live_value(ctx, read, 4);
-                ctx.reference_symbol(live).filter(|copied| list_binding_symbol(ctx, *copied).is_some()).unwrap_or(list)
+                ctx.reference_symbol(live)
+                    .filter(|copied| list_binding_symbol(ctx, *copied).is_some())
+                    .unwrap_or(list)
             }
         };
         let mut regions = Vec::new();
@@ -335,13 +387,22 @@ mod dom {
         if scoping.symbol_declarations(symbol).count() != 1 {
             return None;
         }
-        let AstKind::VariableDeclarator(declarator) = ctx.parse.nodes.kind(scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            ctx.parse.nodes.kind(scoping.symbol_declaration(symbol))
+        else {
             return None;
         };
-        if scoping.get_resolved_references(symbol).any(|reference| reference.is_write()) {
+        if scoping
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
-        match declarator.init.as_ref().map(|init| init.without_parentheses()) {
+        match declarator
+            .init
+            .as_ref()
+            .map(|init| init.without_parentheses())
+        {
             Some(Expression::ArrayExpression(_)) => Some(symbol),
             Some(copied @ Expression::Identifier(_)) if hops > 0 => {
                 list_binding_hops(ctx, identifier_symbol(ctx, copied)?, hops - 1)
@@ -357,7 +418,9 @@ mod dom {
     fn nullish(expression: &Expression) -> bool {
         match expression.without_parentheses() {
             Expression::NullLiteral(_) => true,
-            Expression::UnaryExpression(unary) => unary.operator == oxc_syntax::operator::UnaryOperator::Void,
+            Expression::UnaryExpression(unary) => {
+                unary.operator == oxc_syntax::operator::UnaryOperator::Void
+            }
             Expression::Identifier(identifier) => identifier.name == "undefined",
             _ => false,
         }
@@ -382,7 +445,9 @@ mod dom {
                 let read = ctx.node_with_span(expression.span())?;
                 list_test_hops(ctx, one_live_definition(ctx, read)?, hops - 1)
             }
-            Expression::UnaryExpression(unary) if unary.operator == oxc_syntax::operator::UnaryOperator::LogicalNot => {
+            Expression::UnaryExpression(unary)
+                if unary.operator == oxc_syntax::operator::UnaryOperator::LogicalNot =>
+            {
                 list_test_hops(ctx, &unary.argument, hops).map(|taken| !taken)
             }
             Expression::BinaryExpression(binary) if nullish(&binary.right) => {
@@ -408,7 +473,11 @@ mod dom {
 
     /// Some statement before `span` in `statements` is `if (L) { …; return; }`
     /// with `L` a list binding: everything after it is unreachable.
-    fn after_taken_exit(ctx: &FinderCtx, statements: &[oxc_ast::ast::Statement], span: oxc_span::Span) -> bool {
+    fn after_taken_exit(
+        ctx: &FinderCtx,
+        statements: &[oxc_ast::ast::Statement],
+        span: oxc_span::Span,
+    ) -> bool {
         statements.iter().take_while(|statement| statement.span().end <= span.start).any(|statement| {
             matches!(statement, oxc_ast::ast::Statement::IfStatement(branch)
                 if list_test_hops(ctx, &branch.test, 0) == Some(true) && ends_in_exit(&branch.consequent))
@@ -435,14 +504,21 @@ mod dom {
                         if !taken && contains(statement.consequent.span(), span) {
                             return true;
                         }
-                        if taken && statement.alternate.as_ref().is_some_and(|alternate| contains(alternate.span(), span)) {
+                        if taken
+                            && statement
+                                .alternate
+                                .as_ref()
+                                .is_some_and(|alternate| contains(alternate.span(), span))
+                        {
                             return true;
                         }
                     }
                 }
                 AstKind::ConditionalExpression(choice) => {
                     if let Some(taken) = list_test_hops(ctx, &choice.test, 0) {
-                        if (!taken && contains(choice.consequent.span(), span)) || (taken && contains(choice.alternate.span(), span)) {
+                        if (!taken && contains(choice.consequent.span(), span))
+                            || (taken && contains(choice.alternate.span(), span))
+                        {
                             return true;
                         }
                     }
@@ -462,10 +538,12 @@ mod dom {
     }
 
     fn function_of(ctx: &FinderCtx, node: NodeId) -> Option<NodeId> {
-        ctx.parse
-            .nodes
-            .ancestor_ids(node)
-            .find(|id| matches!(ctx.parse.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+        ctx.parse.nodes.ancestor_ids(node).find(|id| {
+            matches!(
+                ctx.parse.nodes.kind(*id),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            )
+        })
     }
 
     /// The value `node` denotes once list tests are decided (`L ? a : b`,
@@ -483,11 +561,14 @@ mod dom {
                 None => None,
             },
             AstKind::LogicalExpression(logical)
-                if logical.operator == oxc_syntax::operator::LogicalOperator::Or && list_binding(ctx, &logical.left).is_some() =>
+                if logical.operator == oxc_syntax::operator::LogicalOperator::Or
+                    && list_binding(ctx, &logical.left).is_some() =>
             {
                 node_of(&logical.left)
             }
-            AstKind::IdentifierReference(_) if hops > 0 => one_live_definition(ctx, node).and_then(node_of),
+            AstKind::IdentifierReference(_) if hops > 0 => {
+                one_live_definition(ctx, node).and_then(node_of)
+            }
             _ => None,
         };
         match next {
@@ -501,11 +582,16 @@ mod dom {
     /// may assign it later; else its one live non-literal definition (a
     /// callback's assignment over a literal initialiser). `None` for a list
     /// binding, a binding updated in place, or several candidates.
-    fn one_live_definition<'a>(ctx: &FinderCtx<'_, '_, 'a>, read: NodeId) -> Option<&'a Expression<'a>> {
+    fn one_live_definition<'a>(
+        ctx: &FinderCtx<'_, '_, 'a>,
+        read: NodeId,
+    ) -> Option<&'a Expression<'a>> {
         let nodes = ctx.parse.nodes;
         let scoping = ctx.parse.scoping;
         let symbol = ctx.reference_symbol(read)?;
-        if list_binding_symbol(ctx, symbol).is_some() || scoping.symbol_declarations(symbol).count() != 1 {
+        if list_binding_symbol(ctx, symbol).is_some()
+            || scoping.symbol_declarations(symbol).count() != 1
+        {
             return None;
         }
         let read_at = nodes.kind(read).span().start;
@@ -530,10 +616,13 @@ mod dom {
             if dead(ctx, at) {
                 continue;
             }
-            let assignment = nodes.ancestor_ids(at).take(3).find_map(|id| match nodes.kind(id) {
-                AstKind::AssignmentExpression(assignment) => Some((id, assignment)),
-                _ => None,
-            });
+            let assignment = nodes
+                .ancestor_ids(at)
+                .take(3)
+                .find_map(|id| match nodes.kind(id) {
+                    AstKind::AssignmentExpression(assignment) => Some((id, assignment)),
+                    _ => None,
+                });
             let Some((id, assignment)) = assignment.filter(|(_, assignment)| {
                 assignment.operator == oxc_syntax::operator::AssignmentOperator::Assign
             }) else {
@@ -547,22 +636,36 @@ mod dom {
             values.push((assignment.span.end, id, same, &assignment.right));
         }
         let literal = |expression: &Expression| {
-            matches!(expression.without_parentheses(), Expression::NumericLiteral(_) | Expression::StringLiteral(_))
+            matches!(
+                expression.without_parentheses(),
+                Expression::NumericLiteral(_) | Expression::StringLiteral(_)
+            )
         };
         // The latest same-function definition whose enclosing statement list
         // also holds the read runs on every path to it.
-        let latest = values.iter().filter(|value| value.2).max_by_key(|value| value.0);
+        let latest = values
+            .iter()
+            .filter(|value| value.2)
+            .max_by_key(|value| value.0);
         if let Some((end, node, _, value)) = latest {
             let block = nodes.ancestor_ids(*node).find(|id| {
-                matches!(nodes.kind(*id), AstKind::BlockStatement(_) | AstKind::FunctionBody(_))
+                matches!(
+                    nodes.kind(*id),
+                    AstKind::BlockStatement(_) | AstKind::FunctionBody(_)
+                )
             });
-            let dominates = block.is_some_and(|block| contains(nodes.kind(block).span(), nodes.kind(read).span()));
+            let dominates = block
+                .is_some_and(|block| contains(nodes.kind(block).span(), nodes.kind(read).span()));
             let later_callback = values.iter().any(|other| !other.2 && other.0 > *end);
             if dominates && !later_callback {
                 return (!literal(value)).then_some(*value);
             }
         }
-        let live: Vec<&'a Expression<'a>> = values.iter().map(|value| value.3).filter(|value| !literal(value)).collect();
+        let live: Vec<&'a Expression<'a>> = values
+            .iter()
+            .map(|value| value.3)
+            .filter(|value| !literal(value))
+            .collect();
         match (live.as_slice(), values.as_slice()) {
             ([value], _) => Some(*value),
             // One live definition, a literal (`if (L) { k = "length"; } else
@@ -579,13 +682,15 @@ mod dom {
         let AstKind::CallExpression(call) = nodes.kind(node) else {
             return false;
         };
-        let named = |member: NodeId| match nodes.kind(member) {
+        let named = |member: NodeId| {
+            match nodes.kind(member) {
             AstKind::StaticMemberExpression(read) => read.property.name == "reduce",
             AstKind::ComputedMemberExpression(read) => ctx.node_with_span(read.expression.span()).is_some_and(|key| {
                 let key = live_value(ctx, key, 3);
                 matches!(nodes.kind(key), AstKind::StringLiteral(literal) if literal.value == "reduce")
             }),
             _ => false,
+        }
         };
         let Some(callee) = ctx.node_with_span(call.callee.without_parentheses().span()) else {
             return false;
@@ -609,7 +714,9 @@ mod dom {
             return true;
         }
         match nodes.kind(node) {
-            AstKind::BinaryExpression(division) if division.operator == BinaryOperator::Division => {
+            AstKind::BinaryExpression(division)
+                if division.operator == BinaryOperator::Division =>
+            {
                 matches!(division.right.without_parentheses(), Expression::StaticMemberExpression(length) if length.property.name == "length")
                     && ctx
                         .node_with_span(division.left.span())
@@ -623,7 +730,6 @@ mod dom {
     pub(crate) fn reads_member(ctx: &FinderCtx, node: NodeId, member: &str) -> bool {
         matches!(ctx.parse.nodes.kind(node), AstKind::StaticMemberExpression(read) if read.property.name == member)
     }
-
 }
 
 // ===========================================================================

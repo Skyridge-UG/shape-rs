@@ -43,10 +43,10 @@ use oxc_semantic::{NodeId, SymbolId};
 use oxc_span::GetSpan;
 
 use crate::signals::analysis::roles;
-use crate::signals::extract::wiring::LifecycleRole;
-use crate::signals::schema::SourceSpan;
 use crate::signals::analysis::slot_view::generated;
 use crate::signals::analysis::{FinderCtx, LeafOp, SlotView};
+use crate::signals::extract::wiring::LifecycleRole;
+use crate::signals::schema::SourceSpan;
 
 /// What one written value is made of.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -278,7 +278,9 @@ fn build_program_index(parse: &roles::FinderCtx<'_, '_>) -> ProgramIndex {
                 by_start.entry(assignment.span.start).or_default().push(id);
             }
             AstKind::ObjectExpression(object) => objects.push((object.span.start, id)),
-            AstKind::StaticMemberExpression(member) => members.push((member.span.start, member.property.name.to_string())),
+            AstKind::StaticMemberExpression(member) => {
+                members.push((member.span.start, member.property.name.to_string()))
+            }
             _ => {}
         }
     }
@@ -351,9 +353,12 @@ fn strip<'e, 'a>(expression: &'e Expression<'a>) -> &'e Expression<'a> {
     expression.without_parentheses()
 }
 
-
 impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
-    fn new(view: &'v SlotView, parse: &'x roles::FinderCtx<'x, 'a>, index: &'x ProgramIndex) -> Self {
+    fn new(
+        view: &'v SlotView,
+        parse: &'x roles::FinderCtx<'x, 'a>,
+        index: &'x ProgramIndex,
+    ) -> Self {
         Self {
             view,
             parse,
@@ -370,7 +375,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     }
 
     fn inside_slot(&self, offset: u32) -> bool {
-        self.spans.iter().any(|span| offset >= span.start && offset < span.end)
+        self.spans
+            .iter()
+            .any(|span| offset >= span.start && offset < span.end)
     }
 
     fn function_of(&self, node: NodeId) -> Option<NodeId> {
@@ -384,7 +391,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
 
     /// `t[k]` where the one definition of `t` reaching `at` is an array
     /// literal: its element `k`; otherwise `expression`.
-    fn through_tuple(&self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>) -> &'a Expression<'a> {
+    fn through_tuple(
+        &self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> &'a Expression<'a> {
         let Expression::ComputedMemberExpression(member) = strip(expression) else {
             return expression;
         };
@@ -396,11 +408,15 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         };
         match self.reaching(tuple, at, func).as_slice() {
             [def] if !def.update => match def.rhs.map(strip) {
-                Some(Expression::ArrayExpression(array)) if index.value.fract() == 0.0 && index.value >= 0.0 => array
-                    .elements
-                    .get(index.value as usize)
-                    .and_then(|element| element.as_expression())
-                    .unwrap_or(expression),
+                Some(Expression::ArrayExpression(array))
+                    if index.value.fract() == 0.0 && index.value >= 0.0 =>
+                {
+                    array
+                        .elements
+                        .get(index.value as usize)
+                        .and_then(|element| element.as_expression())
+                        .unwrap_or(expression)
+                }
                 _ => expression,
             },
             _ => expression,
@@ -435,7 +451,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             }
             let node = reference.node_id();
             let mut parent = nodes.parent_id(node);
-            if !matches!(nodes.kind(parent), AstKind::AssignmentExpression(_) | AstKind::UpdateExpression(_)) {
+            if !matches!(
+                nodes.kind(parent),
+                AstKind::AssignmentExpression(_) | AstKind::UpdateExpression(_)
+            ) {
                 parent = nodes.parent_id(parent);
             }
             match nodes.kind(parent) {
@@ -471,7 +490,8 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     fn reaching(&self, symbol: SymbolId, at: u32, func: Option<NodeId>) -> Vec<Def<'a>> {
         let mut defs = self.defs(symbol);
         defs.sort_by_key(|def| def.end);
-        let precedes = |def: &Def<'a>| def.func == func && def.end <= at && !self.exclusive(def.node, at);
+        let precedes =
+            |def: &Def<'a>| def.func == func && def.end <= at && !self.exclusive(def.node, at);
         // Walk back from the read: assignments in branches that do not
         // hold the read may or may not have run, so keep collecting
         // until an assignment that always runs before the read.
@@ -564,12 +584,18 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let AstKind::IfStatement(statement) = nodes.kind(outer?) else {
             return None;
         };
-        (statement.span.end <= at && self.always_assigns_if(statement, symbol)).then_some(statement.span.start)
+        (statement.span.end <= at && self.always_assigns_if(statement, symbol))
+            .then_some(statement.span.start)
     }
 
-    fn always_assigns_if(&self, statement: &oxc_ast::ast::IfStatement<'a>, symbol: SymbolId) -> bool {
+    fn always_assigns_if(
+        &self,
+        statement: &oxc_ast::ast::IfStatement<'a>,
+        symbol: SymbolId,
+    ) -> bool {
         statement.alternate.as_ref().is_some_and(|alternate| {
-            self.always_assigns(&statement.consequent, symbol) && self.always_assigns(alternate, symbol)
+            self.always_assigns(&statement.consequent, symbol)
+                && self.always_assigns(alternate, symbol)
         })
     }
 
@@ -579,7 +605,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     fn always_assigns(&self, statement: &oxc_ast::ast::Statement<'a>, symbol: SymbolId) -> bool {
         use oxc_ast::ast::Statement;
         match statement {
-            Statement::BlockStatement(block) => block.body.iter().any(|inner| self.always_assigns(inner, symbol)),
+            Statement::BlockStatement(block) => block
+                .body
+                .iter()
+                .any(|inner| self.always_assigns(inner, symbol)),
             Statement::IfStatement(inner) => self.always_assigns_if(inner, symbol),
             Statement::ExpressionStatement(expression) => match strip(&expression.expression) {
                 Expression::AssignmentExpression(assignment) => {
@@ -629,12 +658,14 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         for ancestor in nodes.ancestor_ids(def) {
             let (consequent, alternate) = match nodes.kind(ancestor) {
                 AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => return false,
-                AstKind::IfStatement(statement) => {
-                    (statement.consequent.span(), statement.alternate.as_ref().map(GetSpan::span))
-                }
-                AstKind::ConditionalExpression(conditional) => {
-                    (conditional.consequent.span(), Some(conditional.alternate.span()))
-                }
+                AstKind::IfStatement(statement) => (
+                    statement.consequent.span(),
+                    statement.alternate.as_ref().map(GetSpan::span),
+                ),
+                AstKind::ConditionalExpression(conditional) => (
+                    conditional.consequent.span(),
+                    Some(conditional.alternate.span()),
+                ),
                 _ => continue,
             };
             let Some(alternate) = alternate else {
@@ -662,7 +693,11 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             Some((LifecycleRole::Cleanup, _)) => "cleanup",
             Some(_) => "callback",
             None => {
-                if self.view.producer_span().is_some_and(|span| offset >= span.start && offset < span.end) {
+                if self
+                    .view
+                    .producer_span()
+                    .is_some_and(|span| offset >= span.start && offset < span.end)
+                {
                     "setup"
                 } else {
                     "outer"
@@ -672,7 +707,13 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     }
 
     /// The expression is `symbol` or a copy of it reaching `at`.
-    fn is_symbol(&self, expression: &Expression<'a>, symbol: SymbolId, at: u32, func: Option<NodeId>) -> bool {
+    fn is_symbol(
+        &self,
+        expression: &Expression<'a>,
+        symbol: SymbolId,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> bool {
         let Some(found) = self.symbol_of(expression) else {
             return false;
         };
@@ -705,11 +746,13 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                             let left = self.is_symbol(&test.left, symbol, at, def.func);
                             let right = self.is_symbol(&test.right, symbol, at, def.func);
                             match (op, left, right) {
-                                (">" | ">=", false, true) | ("<" | "<=", true, false) => return Some(Guard::Max),
-                                ("<" | "<=", false, true) | (">" | ">=", true, false) => return Some(Guard::Min),
-                                (">" | ">=", false, false)
-                                    if matches!(strip(&test.left), Expression::BinaryExpression(inner) if inner.operator.as_str() == "-") =>
-                                {
+                                (">" | ">=", false, true) | ("<" | "<=", true, false) => {
+                                    return Some(Guard::Max)
+                                }
+                                ("<" | "<=", false, true) | (">" | ">=", true, false) => {
+                                    return Some(Guard::Min)
+                                }
+                                (">" | ">=", false, false) if matches!(strip(&test.left), Expression::BinaryExpression(inner) if inner.operator.as_str() == "-") => {
                                     return Some(Guard::Throttle)
                                 }
                                 _ => {}
@@ -759,22 +802,33 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         desc
     }
 
-    fn literal_value(&self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>, hop: usize) -> Option<f64> {
+    fn literal_value(
+        &self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+        hop: usize,
+    ) -> Option<f64> {
         match strip(expression) {
             Expression::NumericLiteral(literal) => Some(literal.value),
-            Expression::UnaryExpression(unary) if unary.operator.as_str() == "-" => {
-                self.literal_value(&unary.argument, at, func, hop).map(|v| -v)
-            }
+            Expression::UnaryExpression(unary) if unary.operator.as_str() == "-" => self
+                .literal_value(&unary.argument, at, func, hop)
+                .map(|v| -v),
             Expression::Identifier(_) if hop < 3 => {
                 let symbol = self.symbol_of(expression)?;
                 let defs = self.reaching(symbol, at, func);
                 let values: Vec<Option<f64>> = defs
                     .iter()
-                    .map(|def| def.rhs.and_then(|rhs| self.literal_value(rhs, def.start, def.func, hop + 1)))
+                    .map(|def| {
+                        def.rhs
+                            .and_then(|rhs| self.literal_value(rhs, def.start, def.func, hop + 1))
+                    })
                     .collect();
                 match values.as_slice() {
                     [Some(value)] => Some(*value),
-                    [first, rest @ ..] if first.is_some() && rest.iter().all(|v| v == first) => *first,
+                    [first, rest @ ..] if first.is_some() && rest.iter().all(|v| v == first) => {
+                        *first
+                    }
                     _ => None,
                 }
             }
@@ -782,7 +836,14 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         }
     }
 
-    fn expr(&mut self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>, depth: usize, desc: &mut Desc) {
+    fn expr(
+        &mut self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+        depth: usize,
+        desc: &mut Desc,
+    ) {
         if self.budget == 0 || depth > 40 {
             desc.nonliteral = true;
             return;
@@ -797,7 +858,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 desc.strings.insert(literal.value.to_string());
             }
             Expression::Identifier(identifier) => {
-                let Some(symbol) = crate::analysis::identifier_symbol(identifier, self.parse.scoping) else {
+                let Some(symbol) =
+                    crate::analysis::identifier_symbol(identifier, self.parse.scoping)
+                else {
                     if identifier.name != "undefined" && !generated(&identifier.name) {
                         desc.globals.insert(identifier.name.to_string());
                         desc.nonliteral = true;
@@ -825,7 +888,11 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                         continue;
                     }
                     if let Some(rhs) = def.rhs {
-                        if matches!(strip(rhs), Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_)) {
+                        if matches!(
+                            strip(rhs),
+                            Expression::FunctionExpression(_)
+                                | Expression::ArrowFunctionExpression(_)
+                        ) {
                             desc.nonliteral = true;
                             continue;
                         }
@@ -855,7 +922,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                         desc.members.insert(key.value.to_string());
                         self.expr(&member.object, at, func, depth + 1, desc);
                     }
-                    Expression::NumericLiteral(_) if !std::ptr::eq(self.through_tuple(expression, at, func), expression) => {
+                    Expression::NumericLiteral(_)
+                        if !std::ptr::eq(self.through_tuple(expression, at, func), expression) =>
+                    {
                         // A tuple element (`t = [buf, i, v]; .. t[2] ..`).
                         let element = self.through_tuple(expression, at, func);
                         self.expr(element, at, func, depth + 1, desc);
@@ -904,7 +973,11 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 self.callee(&call.callee, at, func, depth, desc);
                 for argument in &call.arguments {
                     if let Some(argument) = argument.as_expression() {
-                        if matches!(strip(argument), Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_)) {
+                        if matches!(
+                            strip(argument),
+                            Expression::FunctionExpression(_)
+                                | Expression::ArrowFunctionExpression(_)
+                        ) {
                             continue;
                         }
                         self.expr(argument, at, func, depth + 1, desc);
@@ -935,7 +1008,8 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                     self.visiting = visiting.clone();
                     self.expr(&binary.right, at, func, depth + 1, &mut right);
                     self.visiting = visiting;
-                    let both: Vec<String> = left.atoms().intersection(&right.atoms()).cloned().collect();
+                    let both: Vec<String> =
+                        left.atoms().intersection(&right.atoms()).cloned().collect();
                     desc.squared.extend(both);
                     desc.merge(left);
                     desc.merge(right);
@@ -961,8 +1035,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             }
             Expression::UpdateExpression(update) => {
                 desc.counter = true;
-                if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument {
-                    if let Some(symbol) = crate::analysis::identifier_symbol(identifier, self.parse.scoping) {
+                if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) =
+                    &update.argument
+                {
+                    if let Some(symbol) =
+                        crate::analysis::identifier_symbol(identifier, self.parse.scoping)
+                    {
                         desc.symbols.insert(symbol);
                     }
                 }
@@ -996,7 +1074,14 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         }
     }
 
-    fn callee(&mut self, callee: &'a Expression<'a>, at: u32, func: Option<NodeId>, depth: usize, desc: &mut Desc) {
+    fn callee(
+        &mut self,
+        callee: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+        depth: usize,
+        desc: &mut Desc,
+    ) {
         match strip(callee) {
             Expression::StaticMemberExpression(member) => {
                 let name = member.property.name.to_string();
@@ -1009,7 +1094,8 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                     }
                 } else {
                     desc.calls.insert(name);
-                    desc.containers.extend(self.aliases(&member.object, at, func));
+                    desc.containers
+                        .extend(self.aliases(&member.object, at, func));
                 }
                 self.expr(&member.object, at, func, depth + 1, desc);
             }
@@ -1032,7 +1118,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     /// A host name for a callee or constructor: a global name, a member
     /// name, or the member a local alias was assigned from
     /// (`D = context.global.Date`).
-    fn host_name(&self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>) -> Option<String> {
+    fn host_name(
+        &self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> Option<String> {
         match strip(expression) {
             Expression::Identifier(identifier) => {
                 match crate::analysis::identifier_symbol(identifier, self.parse.scoping) {
@@ -1044,10 +1135,16 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                             .iter()
                             .filter_map(|def| def.rhs)
                             .filter_map(|rhs| match strip(rhs) {
-                                Expression::StaticMemberExpression(member) => Some(member.property.name.to_string()),
+                                Expression::StaticMemberExpression(member) => {
+                                    Some(member.property.name.to_string())
+                                }
                                 Expression::Identifier(inner)
                                     if !generated(&inner.name)
-                                        && crate::analysis::identifier_symbol(inner, self.parse.scoping).is_none() =>
+                                        && crate::analysis::identifier_symbol(
+                                            inner,
+                                            self.parse.scoping,
+                                        )
+                                        .is_none() =>
                                 {
                                     Some(inner.name.to_string())
                                 }
@@ -1065,7 +1162,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
 
     /// The binding `expression` names and the bindings it is a plain
     /// copy of (`r = ring` -> {r, ring}).
-    fn aliases(&self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>) -> BTreeSet<SymbolId> {
+    fn aliases(
+        &self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> BTreeSet<SymbolId> {
         let mut out = BTreeSet::new();
         let mut current = self.symbol_of(expression).map(|symbol| (symbol, at, func));
         let mut hops = 0;
@@ -1108,9 +1210,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         };
         receiver_of(span, object, &mut out);
         let holder = match nodes.kind(nodes.parent_id(object)) {
-            AstKind::VariableDeclarator(declarator) => {
-                declarator.id.get_binding_identifier().and_then(|binding| binding.symbol_id.get())
-            }
+            AstKind::VariableDeclarator(declarator) => declarator
+                .id
+                .get_binding_identifier()
+                .and_then(|binding| binding.symbol_id.get()),
             AstKind::AssignmentExpression(assignment) => match &assignment.left {
                 AssignmentTarget::AssignmentTargetIdentifier(identifier) => {
                     crate::analysis::identifier_symbol(identifier, scoping)
@@ -1145,12 +1248,21 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             return false;
         };
         let defs = self.reaching(symbol, at, func);
-        !defs.is_empty() && defs.iter().all(|def| def.rhs.is_some_and(|rhs| element(rhs)))
+        !defs.is_empty()
+            && defs
+                .iter()
+                .all(|def| def.rhs.is_some_and(|rhs| element(rhs)))
     }
 
     /// `object.name` where `object` is (a copy of) an object literal with a
     /// static property `name`.
-    fn object_property(&self, object: &'a Expression<'a>, name: &str, at: u32, func: Option<NodeId>) -> Option<&'a Expression<'a>> {
+    fn object_property(
+        &self,
+        object: &'a Expression<'a>,
+        name: &str,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> Option<&'a Expression<'a>> {
         let symbol = self.symbol_of(object)?;
         let defs = self.reaching(symbol, at, func);
         let [def] = defs.as_slice() else {
@@ -1159,12 +1271,17 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let Expression::ObjectExpression(literal) = strip(def.rhs?) else {
             return None;
         };
-        literal.properties.iter().find_map(|property| match property {
-            ObjectPropertyKind::ObjectProperty(property) if property.key.static_name().as_deref() == Some(name) => {
-                Some(&property.value)
-            }
-            _ => None,
-        })
+        literal
+            .properties
+            .iter()
+            .find_map(|property| match property {
+                ObjectPropertyKind::ObjectProperty(property)
+                    if property.key.static_name().as_deref() == Some(name) =>
+                {
+                    Some(&property.value)
+                }
+                _ => None,
+            })
     }
 
     // ---- write sites ----
@@ -1194,15 +1311,24 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     /// argument tuple of a register it reuses (`t = [w, v, buf, t]; t =
     /// t[0].call(void 0, t[1], t[2], t[3])`): a tuple carries the
     /// register's old value or a buffer binding as an element.
-    fn prefix_literal(&self, array: &oxc_ast::ast::ArrayExpression<'a>, symbol: SymbolId, nested: bool) -> bool {
+    fn prefix_literal(
+        &self,
+        array: &oxc_ast::ast::ArrayExpression<'a>,
+        symbol: SymbolId,
+        nested: bool,
+    ) -> bool {
         array.elements.len() == 4
             && (nested
-                || !array.elements.iter().filter_map(|element| element.as_expression()).any(|element| {
-                    matches!(strip(element), Expression::Identifier(_))
-                        && self
-                            .symbol_of(element)
-                            .is_some_and(|held| held == symbol || self.is_buffer_in(held, true))
-                }))
+                || !array
+                    .elements
+                    .iter()
+                    .filter_map(|element| element.as_expression())
+                    .any(|element| {
+                        matches!(strip(element), Expression::Identifier(_))
+                            && self
+                                .symbol_of(element)
+                                .is_some_and(|held| held == symbol || self.is_buffer_in(held, true))
+                    }))
     }
 
     /// The binding gets the rest of its raw prefix, `b[from] = ..`
@@ -1211,7 +1337,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let nodes = self.parse.nodes;
         let mut indices = BTreeSet::new();
         for reference in self.parse.scoping.get_resolved_references(symbol) {
-            let AstKind::ComputedMemberExpression(member) = nodes.kind(nodes.parent_id(reference.node_id())) else {
+            let AstKind::ComputedMemberExpression(member) =
+                nodes.kind(nodes.parent_id(reference.node_id()))
+            else {
                 continue;
             };
             let Expression::NumericLiteral(index) = strip(&member.expression) else {
@@ -1219,7 +1347,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             };
             let target = nodes.parent_id(nodes.parent_id(reference.node_id()));
             let stored = matches!(nodes.kind(target), AstKind::AssignmentExpression(_))
-                || matches!(nodes.kind(nodes.parent_id(target)), AstKind::AssignmentExpression(_));
+                || matches!(
+                    nodes.kind(nodes.parent_id(target)),
+                    AstKind::AssignmentExpression(_)
+                );
             if stored && index.value < 4.0 {
                 indices.insert(index.value as u32);
             }
@@ -1260,14 +1391,21 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     /// or a copy of a buffer binding).
     fn overwritten_buffer(&self, symbol: SymbolId, at: u32, func: Option<NodeId>) -> bool {
         let reaching = self.reaching(symbol, at, func);
-        let local: Vec<&Def<'a>> = reaching.iter().filter(|def| def.func == func && def.end <= at).collect();
+        let local: Vec<&Def<'a>> = reaching
+            .iter()
+            .filter(|def| def.func == func && def.end <= at)
+            .collect();
         !local.is_empty()
             && local.iter().all(|def| {
                 // An update (`++r`) holds a number, never a buffer.
                 def.rhs.is_none_or(|rhs| match strip(rhs) {
-                    Expression::ArrayExpression(array) => !self.prefix_literal(array, symbol, false),
+                    Expression::ArrayExpression(array) => {
+                        !self.prefix_literal(array, symbol, false)
+                    }
                     // A copy of a buffer binding still holds a buffer.
-                    Expression::Identifier(_) => self.symbol_of(rhs).is_none_or(|copied| copied != symbol && !self.is_buffer(copied)),
+                    Expression::Identifier(_) => self
+                        .symbol_of(rhs)
+                        .is_none_or(|copied| copied != symbol && !self.is_buffer(copied)),
                     _ => true,
                 })
             })
@@ -1275,7 +1413,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
 
     /// The buffer a payload binding holds: its one reaching definition
     /// in this function is `[[], buffer]`.
-    fn payload_buffer(&self, expression: &'a Expression<'a>, at: u32, func: Option<NodeId>) -> Option<SymbolId> {
+    fn payload_buffer(
+        &self,
+        expression: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> Option<SymbolId> {
         let symbol = self.symbol_of(expression)?;
         let reaching = self.reaching(symbol, at, func);
         let [def] = reaching.as_slice() else {
@@ -1290,7 +1433,12 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let [Some(first), Some(second)] = [array.elements.first(), array.elements.get(1)] else {
             return None;
         };
-        if array.elements.len() != 2 || !matches!(first.as_expression().map(strip), Some(Expression::ArrayExpression(_))) {
+        if array.elements.len() != 2
+            || !matches!(
+                first.as_expression().map(strip),
+                Some(Expression::ArrayExpression(_))
+            )
+        {
             return None;
         }
         let inner = self.symbol_of(second.as_expression()?)?;
@@ -1305,7 +1453,11 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let nodes = self.parse.nodes;
         let mut out = Vec::new();
         let mut buffers: HashMap<SymbolId, bool> = HashMap::new();
-        let mut is_buffer = |symbol: SymbolId, this: &Self| *buffers.entry(symbol).or_insert_with(|| this.is_buffer(symbol));
+        let mut is_buffer = |symbol: SymbolId, this: &Self| {
+            *buffers
+                .entry(symbol)
+                .or_insert_with(|| this.is_buffer(symbol))
+        };
         let mut buffer = |symbol: SymbolId, this: &Self, at: u32, func: Option<NodeId>| {
             if is_buffer(symbol, this) {
                 Some(symbol)
@@ -1340,7 +1492,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                                 .find_map(|symbol| buffer(symbol, self, at, func))
                                 .map(|symbol| (symbol, *argument)),
                             // `p = [[], buffer]; next.call(recv, p)`.
-                            Expression::Identifier(_) => self.payload_buffer(argument, at, func).map(|symbol| (symbol, *argument)),
+                            Expression::Identifier(_) => self
+                                .payload_buffer(argument, at, func)
+                                .map(|symbol| (symbol, *argument)),
                             _ => None,
                         });
                         if let Some((symbol, argument)) = sent {
@@ -1360,13 +1514,16 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                         // a writer's cursor (`b = write(s, v, buf, b)`) is
                         // not the buffer at this call.
                         let holds = |argument: &&'a Expression<'a>, this: &Self| {
-                            this.symbol_of(argument).is_some_and(|symbol| !this.overwritten_buffer(symbol, at, func))
+                            this.symbol_of(argument)
+                                .is_some_and(|symbol| !this.overwritten_buffer(symbol, at, func))
                         };
                         let candidates: Vec<usize> = arguments
                             .iter()
                             .enumerate()
                             .filter(|(_, argument)| {
-                                self.symbol_of(argument).and_then(|symbol| buffer(symbol, self, at, func)).is_some()
+                                self.symbol_of(argument)
+                                    .and_then(|symbol| buffer(symbol, self, at, func))
+                                    .is_some()
                             })
                             .map(|(position, _)| position)
                             .collect();
@@ -1379,8 +1536,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                         let Some(position) = position.filter(|p| *p > 0) else {
                             continue;
                         };
-                        let Some(symbol) =
-                            self.symbol_of(arguments[position]).and_then(|symbol| buffer(symbol, self, at, func))
+                        let Some(symbol) = self
+                            .symbol_of(arguments[position])
+                            .and_then(|symbol| buffer(symbol, self, at, func))
                         else {
                             continue;
                         };
@@ -1397,20 +1555,25 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                         });
                     }
                     AstKind::AssignmentExpression(assignment) => {
-                        let AssignmentTarget::ComputedMemberExpression(target) = &assignment.left else {
+                        let AssignmentTarget::ComputedMemberExpression(target) = &assignment.left
+                        else {
                             continue;
                         };
                         // `b[0..3] = ..` fills the raw prefix, not a value.
-                        if matches!(strip(&target.expression), Expression::NumericLiteral(index) if index.value < 4.0) {
+                        if matches!(strip(&target.expression), Expression::NumericLiteral(index) if index.value < 4.0)
+                        {
                             continue;
                         }
                         // `t = [buf, i, v]; t[0][t[1]] = ..`: the tuple's
                         // element is the buffer.
-                        let object = self.through_tuple(&target.object, assignment.span.start, self.function_of(*id));
-                        let Some(symbol) = self
-                            .symbol_of(object)
-                            .and_then(|symbol| buffer(symbol, self, assignment.span.start, self.function_of(*id)))
-                        else {
+                        let object = self.through_tuple(
+                            &target.object,
+                            assignment.span.start,
+                            self.function_of(*id),
+                        );
+                        let Some(symbol) = self.symbol_of(object).and_then(|symbol| {
+                            buffer(symbol, self, assignment.span.start, self.function_of(*id))
+                        }) else {
                             continue;
                         };
                         out.push(Write {
@@ -1466,9 +1629,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 .leaves
                 .iter()
                 .map(|leaf| {
-                    let mut found = writes
-                        .iter()
-                        .filter(|write| write.kind != WriteKind::Site && write.value.span() == leaf.write.value_span);
+                    let mut found = writes.iter().filter(|write| {
+                        write.kind != WriteKind::Site && write.value.span() == leaf.write.value_span
+                    });
                     let first = found.next()?;
                     found.next().is_none().then_some(first)
                 })
@@ -1484,7 +1647,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             let ops: Vec<LeafOp> = emission.leaves.iter().map(|leaf| leaf.op).collect();
             // Groups some emission site sends first: a buffer never
             // sent here is another slot's (or a helper's) writes.
-            let mut sent_only: Vec<bool> = (0..groups.len()).map(|index| used[index] || !closed.contains(&index)).collect();
+            let mut sent_only: Vec<bool> = (0..groups.len())
+                .map(|index| used[index] || !closed.contains(&index))
+                .collect();
             let matched = match match_groups(&ops, &groups, &mut sent_only) {
                 Some(chosen) => {
                     for index in &chosen {
@@ -1535,7 +1700,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let producer = self.view.producer_span();
         let mut pushes: Vec<(u32, &'a Expression<'a>, Option<NodeId>)> = Vec::new();
         for list in lists {
-            let declared = nodes.get_node(scoping.symbol_declaration(list)).span().start;
+            let declared = nodes
+                .get_node(scoping.symbol_declaration(list))
+                .span()
+                .start;
             if !producer.is_some_and(|span| declared >= span.start && declared < span.end) {
                 continue;
             }
@@ -1551,7 +1719,11 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 let AstKind::CallExpression(call_expression) = nodes.kind(call) else {
                     continue;
                 };
-                if let Some(argument) = call_expression.arguments.first().and_then(Argument::as_expression) {
+                if let Some(argument) = call_expression
+                    .arguments
+                    .first()
+                    .and_then(Argument::as_expression)
+                {
                     pushes.push((call_expression.span.start, argument, self.function_of(call)));
                 }
             }
@@ -1590,7 +1762,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             })
             .collect();
         let touched = |span: oxc_span::Span| {
-            sites.iter().any(|site| *site >= span.start && *site < span.end)
+            sites
+                .iter()
+                .any(|site| *site >= span.start && *site < span.end)
                 || state.iter().any(|symbol| {
                     scoping.get_resolved_references(*symbol).any(|reference| {
                         let at = nodes.get_node(reference.node_id()).span().start;
@@ -1599,7 +1773,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 })
         };
         for span in &self.spans {
-            let first = self.index.calls.partition_point(|(start, _)| *start < span.start);
+            let first = self
+                .index
+                .calls
+                .partition_point(|(start, _)| *start < span.start);
             for (start, id) in &self.index.calls[first..] {
                 if *start >= span.end {
                     break;
@@ -1607,10 +1784,16 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 let AstKind::CallExpression(call) = nodes.kind(*id) else {
                     continue;
                 };
-                let arguments: Vec<&'a Expression<'a>> = call.arguments.iter().filter_map(Argument::as_expression).collect();
+                let arguments: Vec<&'a Expression<'a>> = call
+                    .arguments
+                    .iter()
+                    .filter_map(Argument::as_expression)
+                    .collect();
                 let func = self.function_of(*id);
                 let name = match strip(&call.callee) {
-                    Expression::StaticMemberExpression(member) if member.property.name == "call" => {
+                    Expression::StaticMemberExpression(member)
+                        if member.property.name == "call" =>
+                    {
                         self.host_name(&member.object, *start, func)
                     }
                     other => self.host_name(other, *start, func),
@@ -1620,7 +1803,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 };
                 let (label, handler) = match name.as_str() {
                     "addEventListener" => {
-                        let Some(event) = arguments.iter().position(|a| matches!(strip(a), Expression::StringLiteral(_))) else {
+                        let Some(event) = arguments
+                            .iter()
+                            .position(|a| matches!(strip(a), Expression::StringLiteral(_)))
+                        else {
                             continue;
                         };
                         let Expression::StringLiteral(literal) = strip(arguments[event]) else {
@@ -1654,7 +1840,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                     }
                     let read = facts.handler_members.entry(label.clone()).or_default();
                     for span in &functions {
-                        let first = self.index.members.partition_point(|(start, _)| *start < span.start);
+                        let first = self
+                            .index
+                            .members
+                            .partition_point(|(start, _)| *start < span.start);
                         read.extend(
                             self.index.members[first..]
                                 .iter()
@@ -1675,10 +1864,16 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
 
     /// Function spans a handler argument denotes, plus the program
     /// functions those call directly (a recorder behind a thin handler).
-    fn handler_functions(&self, handler: &'a Expression<'a>, at: u32, func: Option<NodeId>) -> Vec<oxc_span::Span> {
+    fn handler_functions(
+        &self,
+        handler: &'a Expression<'a>,
+        at: u32,
+        func: Option<NodeId>,
+    ) -> Vec<oxc_span::Span> {
         let nodes = self.parse.nodes;
         let mut out = Vec::new();
-        let mut pending: Vec<(&'a Expression<'a>, u32, Option<NodeId>, usize)> = vec![(handler, at, func, 0)];
+        let mut pending: Vec<(&'a Expression<'a>, u32, Option<NodeId>, usize)> =
+            vec![(handler, at, func, 0)];
         let mut function_nodes: Vec<NodeId> = Vec::new();
         while let Some((expression, at, func, hop)) = pending.pop() {
             match strip(expression) {
@@ -1712,7 +1907,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         // One level of direct calls to program functions.
         let mut called = Vec::new();
         for span in &out {
-            let first = self.index.calls.partition_point(|(start, _)| *start < span.start);
+            let first = self
+                .index
+                .calls
+                .partition_point(|(start, _)| *start < span.start);
             for (start, id) in &self.index.calls[first..] {
                 if *start >= span.end {
                     break;
@@ -1734,7 +1932,10 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
 
     /// Object literals of the slot spans keyed by any label the leaves read.
     fn literals(&mut self, facts: &mut SlotFacts) {
-        let labels: BTreeSet<String> = facts.descs().flat_map(|desc| desc.labels.iter().cloned()).collect();
+        let labels: BTreeSet<String> = facts
+            .descs()
+            .flat_map(|desc| desc.labels.iter().cloned())
+            .collect();
         if labels.is_empty() {
             return;
         }
@@ -1742,12 +1943,18 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
         let mut out = Vec::new();
         let mut spans = self.spans.clone();
         for handler in &self.handlers {
-            if !spans.iter().any(|span| handler.start >= span.start && handler.end <= span.end) {
+            if !spans
+                .iter()
+                .any(|span| handler.start >= span.start && handler.end <= span.end)
+            {
                 spans.push(*handler);
             }
         }
         for span in &spans {
-            let first = self.index.objects.partition_point(|(start, _)| *start < span.start);
+            let first = self
+                .index
+                .objects
+                .partition_point(|(start, _)| *start < span.start);
             let objects: Vec<(u32, NodeId)> = self.index.objects[first..]
                 .iter()
                 .take_while(|(start, _)| *start < span.end)
@@ -1777,7 +1984,9 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
                 let mut held = BTreeSet::new();
                 for (key, value, at) in keys {
                     if let Expression::Identifier(identifier) = strip(value) {
-                        if let Some(symbol) = crate::analysis::identifier_symbol(identifier, self.parse.scoping) {
+                        if let Some(symbol) =
+                            crate::analysis::identifier_symbol(identifier, self.parse.scoping)
+                        {
                             held.insert(symbol);
                         }
                     }
@@ -1805,13 +2014,18 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
     /// `holder.k = v` statements completing an object literal held in a
     /// binding (`r = {a, b}; r.c = ...; r.d = ...`), up to the holder's
     /// next definition in the same function.
-    fn member_assignments(&self, object: NodeId, span: oxc_span::Span) -> Vec<(String, &'a Expression<'a>, u32)> {
+    fn member_assignments(
+        &self,
+        object: NodeId,
+        span: oxc_span::Span,
+    ) -> Vec<(String, &'a Expression<'a>, u32)> {
         let nodes = self.parse.nodes;
         let scoping = self.parse.scoping;
         let holder = match nodes.kind(nodes.parent_id(object)) {
-            AstKind::VariableDeclarator(declarator) => {
-                declarator.id.get_binding_identifier().and_then(|binding| binding.symbol_id.get())
-            }
+            AstKind::VariableDeclarator(declarator) => declarator
+                .id
+                .get_binding_identifier()
+                .and_then(|binding| binding.symbol_id.get()),
             AstKind::AssignmentExpression(assignment) => match &assignment.left {
                 AssignmentTarget::AssignmentTargetIdentifier(identifier) => {
                     crate::analysis::identifier_symbol(identifier, scoping)
@@ -1842,11 +2056,17 @@ impl<'v, 'x, 'a> Builder<'v, 'x, 'a> {
             let AstKind::StaticMemberExpression(member_expression) = nodes.kind(member) else {
                 continue;
             };
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(nodes.parent_id(member)) else {
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(nodes.parent_id(member))
+            else {
                 continue;
             };
-            if matches!(&assignment.left, AssignmentTarget::StaticMemberExpression(left) if left.span == member_expression.span) {
-                out.push((member_expression.property.name.to_string(), &assignment.right, assignment.span.start));
+            if matches!(&assignment.left, AssignmentTarget::StaticMemberExpression(left) if left.span == member_expression.span)
+            {
+                out.push((
+                    member_expression.property.name.to_string(),
+                    &assignment.right,
+                    assignment.span.start,
+                ));
             }
         }
         out
@@ -1879,8 +2099,10 @@ fn positional_callbacks(
         .find_map(|(_, id)| {
             nodes.ancestor_ids(*id).find(|ancestor| {
                 let span = nodes.kind(*ancestor).span();
-                matches!(nodes.kind(*ancestor), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_))
-                    && span.start == producer.start
+                matches!(
+                    nodes.kind(*ancestor),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                ) && span.start == producer.start
                     && span.end == producer.end
             })
         });
@@ -1895,11 +2117,19 @@ fn positional_callbacks(
     let formals: Vec<Option<SymbolId>> = params
         .items
         .iter()
-        .map(|param| param.pattern.get_binding_identifier().and_then(|binding| binding.symbol_id.get()))
+        .map(|param| {
+            param
+                .pattern
+                .get_binding_identifier()
+                .and_then(|binding| binding.symbol_id.get())
+        })
         .collect();
     let emitters_indexed = formals.first().copied().flatten().is_some_and(|symbol| {
         scoping.get_resolved_references(symbol).any(|reference| {
-            matches!(nodes.kind(nodes.parent_id(reference.node_id())), AstKind::ComputedMemberExpression(_))
+            matches!(
+                nodes.kind(nodes.parent_id(reference.node_id())),
+                AstKind::ComputedMemberExpression(_)
+            )
         })
     });
     if !emitters_indexed {
@@ -1917,10 +2147,12 @@ fn positional_callbacks(
             continue;
         };
         for reference in scoping.get_resolved_references(symbol) {
-            let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(reference.node_id())) else {
+            let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(reference.node_id()))
+            else {
                 continue;
             };
-            if !matches!(strip(&call.callee), Expression::Identifier(id) if id.span == nodes.get_node(reference.node_id()).span()) {
+            if !matches!(strip(&call.callee), Expression::Identifier(id) if id.span == nodes.get_node(reference.node_id()).span())
+            {
                 continue;
             }
             for argument in call.arguments.iter().filter_map(Argument::as_expression) {
@@ -1929,7 +2161,13 @@ fn positional_callbacks(
                     Expression::ArrowFunctionExpression(arrow) => arrow.span,
                     _ => continue,
                 };
-                out.push((role, SourceSpan { start: span.start, end: span.end }));
+                out.push((
+                    role,
+                    SourceSpan {
+                        start: span.start,
+                        end: span.end,
+                    },
+                ));
             }
         }
     }
@@ -1965,7 +2203,11 @@ fn unmask<'e, 'a>(expression: &'e Expression<'a>) -> &'e Expression<'a> {
 }
 
 /// Pick consecutive unused groups whose writes match the leaf ops.
-fn match_groups(ops: &[LeafOp], groups: &[(SymbolId, Vec<&Write<'_>>)], used: &mut [bool]) -> Option<Vec<usize>> {
+fn match_groups(
+    ops: &[LeafOp],
+    groups: &[(SymbolId, Vec<&Write<'_>>)],
+    used: &mut [bool],
+) -> Option<Vec<usize>> {
     let fits = |write: &Write<'_>, op: LeafOp| match write.kind {
         WriteKind::Store => op == LeafOp::Byte,
         WriteKind::Call => op != LeafOp::Byte,

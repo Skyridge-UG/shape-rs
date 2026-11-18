@@ -94,9 +94,9 @@ impl LocalReads {
         let ordinary_number = nodes
             .iter()
             .find_map(|node| match node.kind() {
-                AstKind::Program(program) => {
-                    Some(super::super::super::numeric_coercions::ordinary_number(program, scoping))
-                }
+                AstKind::Program(program) => Some(
+                    super::super::super::numeric_coercions::ordinary_number(program, scoping),
+                ),
                 _ => None,
             })
             .unwrap_or(false);
@@ -118,7 +118,9 @@ impl LocalReads {
                     return None;
                 };
                 let symbol = id.symbol_id.get()?;
-                candidates.contains(&symbol).then_some((symbol, declaration))
+                candidates
+                    .contains(&symbol)
+                    .then_some((symbol, declaration))
             })
             .collect();
         self.numeric_inputs = candidates.clone();
@@ -193,8 +195,7 @@ impl LocalReads {
                 _ => None,
             })
             .collect();
-        self
-            .locals
+        self.locals
             .keys()
             .copied()
             .filter(|s| !self.iteration_bindings.contains(s))

@@ -13,7 +13,13 @@ impl TraceSession {
         widened: &BTreeSet<TraceCell>,
     ) -> Result<(TraceFork, TracePath, TracePath), TraceJoinError> {
         let every = self.concrete_cells();
-        self.fork_try_with(widened, &BTreeMap::new(), &BTreeMap::new(), &every, &BTreeSet::new())
+        self.fork_try_with(
+            widened,
+            &BTreeMap::new(),
+            &BTreeMap::new(),
+            &every,
+            &BTreeSet::new(),
+        )
     }
 
     /// [`Self::fork_try`], with the values the driver saw the body assign
@@ -260,11 +266,10 @@ impl TraceSession {
         let mut values: BTreeMap<TraceCell, Option<Vec<SymbolicValue>>> =
             names.keys().map(|cell| (*cell, Some(Vec::new()))).collect();
         let statements = &executor.arena.statements;
-        let mut blocks: Vec<&[TraceStatementId]> =
-            match &statements[fork.statement as usize].kind {
-                TraceStatementKind::Try { body, .. } => vec![body.as_slice()],
-                _ => Vec::new(),
-            };
+        let mut blocks: Vec<&[TraceStatementId]> = match &statements[fork.statement as usize].kind {
+            TraceStatementKind::Try { body, .. } => vec![body.as_slice()],
+            _ => Vec::new(),
+        };
         let mut assigns = Vec::new();
         while let Some(block) = blocks.pop() {
             for (index, &id) in block.iter().enumerate() {
@@ -344,13 +349,18 @@ impl TraceSession {
         names: &BTreeMap<TraceCell, String>,
     ) -> BTreeMap<TraceCell, bool> {
         let arena = &self.executor.arena;
-        let TraceStatementKind::Try { body, .. } = &arena.statements[fork.statement as usize].kind else {
+        let TraceStatementKind::Try { body, .. } = &arena.statements[fork.statement as usize].kind
+        else {
             return names.keys().map(|cell| (*cell, true)).collect();
         };
         names
             .iter()
             .map(|(cell, name)| {
-                let mut walk = EntryWalk { arena, name, exposed: false };
+                let mut walk = EntryWalk {
+                    arena,
+                    name,
+                    exposed: false,
+                };
                 walk.block(body, true);
                 (*cell, walk.exposed)
             })
@@ -838,7 +848,11 @@ impl EntryWalk<'_> {
                 None
             }
             TraceStatementKind::Continue { .. } | TraceStatementKind::Break { .. } => None,
-            TraceStatementKind::If { test, taken, fall_through } => {
+            TraceStatementKind::If {
+                test,
+                taken,
+                fall_through,
+            } => {
                 self.exposed |= entry && !pure(*test);
                 let taken = self.block(taken, entry);
                 let fall_through = self.block(fall_through, entry);
@@ -850,9 +864,19 @@ impl EntryWalk<'_> {
                 self.block(body, entry);
                 Some(entry)
             }
-            TraceStatementKind::Try { body, handler, catches, finalizer, .. } => {
+            TraceStatementKind::Try {
+                body,
+                handler,
+                catches,
+                finalizer,
+                ..
+            } => {
                 // The body's throws go to its own handler.
-                let mut inner = EntryWalk { arena, name: self.name, exposed: false };
+                let mut inner = EntryWalk {
+                    arena,
+                    name: self.name,
+                    exposed: false,
+                };
                 let after_body = inner.block(body, entry);
                 let handler_entry = inner.exposed;
                 let after_handler = self.block(handler, handler_entry);

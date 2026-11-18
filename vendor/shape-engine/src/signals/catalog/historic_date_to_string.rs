@@ -1,16 +1,19 @@
 //! `HistoricDateToString`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafView, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{leaf_checks::*, shape_text::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `HistoricDateToString` evidence: one STRING, the plain date rendering.
 pub(crate) fn is_historic_date(shapes: &[&str], leaves: &[&LeafView]) -> bool {
     top_count_is(shapes, 1)
         && !leaves.is_empty()
-        && leaves.iter().all(|leaf| date_to_string(leaf) && !shuffled(leaf))
+        && leaves
+            .iter()
+            .all(|leaf| date_to_string(leaf) && !shuffled(leaf))
 }
 
 /// `HistoricDateToString`. Card: [`CARD`].

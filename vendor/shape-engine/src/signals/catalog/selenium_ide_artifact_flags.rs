@@ -1,16 +1,25 @@
 //! `SeleniumIdeArtifactFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::analysis::{leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `SeleniumIdeArtifactFlags`. Card: [`CARD`].
-pub(crate) fn recognize_selenium_ide_artifact_flags(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_selenium_ide_artifact_flags(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     let artifacts = ["sideexplayingflag", "prompt\\.js", "from-page-runscript"];
-    (one_byte(view) && artifacts.iter().filter(|needle| census.string_containing(needle)).count() >= 2)
+    (one_byte(view)
+        && artifacts
+            .iter()
+            .filter(|needle| census.string_containing(needle))
+            .count()
+            >= 2)
         .then(|| Claim::new(["SideeX / Selenium IDE page artifacts", "one flag byte"]))
 }
 

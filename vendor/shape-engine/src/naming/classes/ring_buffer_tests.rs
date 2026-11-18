@@ -1,5 +1,5 @@
-use crate::signals::schema::ProgramPropertiesLimits;
 use super::*;
+use crate::signals::schema::ProgramPropertiesLimits;
 
 fn prove(source: &str) -> Vec<FinderClaim> {
     let wrapped = format!("function bootstrap() {{\n{source}\n}} bootstrap();");
@@ -378,7 +378,9 @@ fn ring_buffer_assignment_epoch_closed_epoch_nearest_misses() {
     }
 }
 
-const ASSIGNMENT_EPOCH_SOURCE: &str = include_str!("../../../tests/fixtures/program/ring-buffer-constructor-epochs/constructor-epoch-parent.js");
+const ASSIGNMENT_EPOCH_SOURCE: &str = include_str!(
+    "../../../tests/fixtures/program/ring-buffer-constructor-epochs/constructor-epoch-parent.js"
+);
 
 #[test]
 fn ring_buffer_assignment_epoch_whole_actual_model_legacy_guard_and_epoch_contract() {
@@ -419,7 +421,8 @@ fn ring_buffer_assignment_epoch_whole_actual_model_legacy_guard_and_epoch_contra
                 "candidate {:?}: legacy fails at {:?}: {}",
                 class.span,
                 nodes.parent_kind(reference.node_id()).span(),
-                &ASSIGNMENT_EPOCH_SOURCE[nodes.parent_kind(reference.node_id()).span().start as usize
+                &ASSIGNMENT_EPOCH_SOURCE[nodes.parent_kind(reference.node_id()).span().start
+                    as usize
                     ..nodes.parent_kind(reference.node_id()).span().end as usize]
             );
         }
@@ -521,7 +524,11 @@ fn ring_buffer_constructor_entry_helper_source(kind: &str) -> String {
         "postinit" => "function reviewCalledAfter(){ new $KEY_441(2); } $KEY_441 = $THREAD_0_89535; reviewCalledAfter();",
         _ => panic!("unknown helper control"),
     };
-    changed(ASSIGNMENT_EPOCH_SOURCE, "$KEY_441 = $THREAD_0_89535;", replacement)
+    changed(
+        ASSIGNMENT_EPOCH_SOURCE,
+        "$KEY_441 = $THREAD_0_89535;",
+        replacement,
+    )
 }
 
 fn ring_buffer_constructor_entry_actual_claims(source: &str) -> Vec<FinderClaim> {
@@ -566,15 +573,24 @@ fn ring_buffer_constructor_entry_actual_claims(source: &str) -> Vec<FinderClaim>
 
 #[test]
 fn ring_buffer_constructor_entry_model_controls() {
-    assert_eq!(ring_buffer_constructor_entry_actual_claims(ASSIGNMENT_EPOCH_SOURCE).len(), 4);
+    assert_eq!(
+        ring_buffer_constructor_entry_actual_claims(ASSIGNMENT_EPOCH_SOURCE).len(),
+        4
+    );
     for kind in ["inert", "postinit"] {
         assert_eq!(
-            ring_buffer_constructor_entry_actual_claims(&ring_buffer_constructor_entry_helper_source(kind)).len(),
+            ring_buffer_constructor_entry_actual_claims(
+                &ring_buffer_constructor_entry_helper_source(kind)
+            )
+            .len(),
             4,
             "{kind}"
         );
     }
-    assert!(ring_buffer_constructor_entry_actual_claims(&ring_buffer_constructor_entry_helper_source("early")).is_empty());
+    assert!(ring_buffer_constructor_entry_actual_claims(
+        &ring_buffer_constructor_entry_helper_source("early")
+    )
+    .is_empty());
     eprintln!("producer readiness Model: inert=4, postinit=4, early=0, original=4; all four producer grammars retained");
 }
 
@@ -891,8 +907,9 @@ fn ring_buffer_compact_source_preserves_names_and_references() {
     use crate::naming::name_threads;
     // Exact accepted own factory body, with explicit opaque captured callable
     // ports. These ports' external behavior is not part of the factory claim.
-    let mixed_factory_parent =
-        include_str!("../../../tests/fixtures/program/observable-mixed-factories/mixed-factory-parent.js");
+    let mixed_factory_parent = include_str!(
+        "../../../tests/fixtures/program/observable-mixed-factories/mixed-factory-parent.js"
+    );
     let factory = &mixed_factory_parent[118549..123659];
     let compact_star = format!("function main() {{ function observerPort() {{}} function subscriptionPort() {{}} function teardownPort() {{}} function mapPort() {{}} function flatPort() {{}} const $KEY_107=observerPort; const $KEY_74=subscriptionPort; const $KEY_219=teardownPort; const $KEY_115=mapPort; const $KEY_198=flatPort; {factory} let Constructor=$THREAD_2_33189(); publish(Constructor); }} main();");
     let registry_parent = include_str!(

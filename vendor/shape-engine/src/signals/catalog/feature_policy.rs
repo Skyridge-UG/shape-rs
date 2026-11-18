@@ -1,10 +1,12 @@
 //! `FeaturePolicy`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView, ValueSlice};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout,
+    SlotView, ValueSlice,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
 
 /// `FeaturePolicy`. Card: [`CARD`].
 pub(crate) fn recognize_feature_policy(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -35,25 +37,36 @@ pub(crate) fn recognize_feature_policy(view: &SlotView, ctx: &FinderCtx) -> Opti
         leaves.iter().any(|leaf| {
             leaf.op == LeafOp::Number
                 && has_api(leaf, "document.featurePolicy")
-                && ctx.value_slice(leaf, 1).map(|slice| with_sibling_arms(ctx, slice)).is_some_and(|slice| {
-                    slice.members.get("length") == Some(&0)
-                        && slice.members.get(list) == Some(&1)
-                        && slice.members.get(other).is_none_or(|depth| *depth > 1)
-                })
+                && ctx
+                    .value_slice(leaf, 1)
+                    .map(|slice| with_sibling_arms(ctx, slice))
+                    .is_some_and(|slice| {
+                        slice.members.get("length") == Some(&0)
+                            && slice.members.get(list) == Some(&1)
+                            && slice.members.get(other).is_none_or(|depth| *depth > 1)
+                    })
         })
     };
-    let counts = (count_of("features", "allowedFeatures") || sliced_count("features", "allowedFeatures"))
+    let counts = (count_of("features", "allowedFeatures")
+        || sliced_count("features", "allowedFeatures"))
         && (count_of("allowedFeatures", "features") || sliced_count("allowedFeatures", "features"));
     let digest = leaves.iter().any(|leaf| {
-        leaf.op == LeafOp::Number && has_transform(leaf, ".join()") && calls(leaf, "features") && calls(leaf, "allowedFeatures")
+        leaf.op == LeafOp::Number
+            && has_transform(leaf, ".join()")
+            && calls(leaf, "features")
+            && calls(leaf, "allowedFeatures")
     });
     // Family A has four fields, family B five (sampling seed). Companion
     // slots sharing registers can pick up featurePolicy provenance, so the
     // field count is part of the evidence.
     let shapes = view.shapes();
-    let fields = (top_count_is(&shapes, 4) || top_count_is(&shapes, 5)) && max_top_count(&shapes) <= 5;
+    let fields =
+        (top_count_is(&shapes, 4) || top_count_is(&shapes, 5)) && max_top_count(&shapes) <= 5;
     if lists && digest && counts && fields {
-        return claim(&["4-5 fields", "counts and digest of document.featurePolicy features()/allowedFeatures()"]);
+        return claim(&[
+            "4-5 fields",
+            "counts and digest of document.featurePolicy features()/allowedFeatures()",
+        ]);
     }
     None
 }
@@ -70,7 +83,12 @@ pub(crate) fn bind_feature_policy(
     // `features()` / `allowedFeatures()`, the seed does neither.
     // The digest joins in its own expression or in the strings it hashes
     // (`hash(a + b)` with `a = list.join("|") + "||"`).
-    let joins = |slice: &ValueSlice| slice.calls.iter().any(|((method, _, _), depth)| method == "join" && *depth <= 1);
+    let joins = |slice: &ValueSlice| {
+        slice
+            .calls
+            .iter()
+            .any(|((method, _, _), depth)| method == "join" && *depth <= 1)
+    };
     let length = |slice: &ValueSlice| slice.members.get("length") == Some(&0);
     let hash = |f: &Field, slice: &ValueSlice| f.is_plain(LeafKind::Number) && joins(slice);
     let count = |list: &'static str, other: &'static str| {
@@ -86,7 +104,9 @@ pub(crate) fn bind_feature_policy(
     let allowed = count("allowedFeatures", "features");
     let features = count("features", "allowedFeatures");
     let entry = |f: &Field, _: &ValueSlice| f.writes(LeafKind::String);
-    let seed = |f: &Field, slice: &ValueSlice| f.is_plain(LeafKind::Number) && !joins(slice) && !length(slice);
+    let seed = |f: &Field, slice: &ValueSlice| {
+        f.is_plain(LeafKind::Number) && !joins(slice) && !length(slice)
+    };
     solve_by_slices(
         view,
         layout,
@@ -123,25 +143,38 @@ fn with_sibling_arms(ctx: &FinderCtx, mut slice: ValueSlice) -> ValueSlice {
             if let AstKind::IfStatement(statement) = nodes.kind(parent) {
                 let child_span = nodes.kind(child).span();
                 other = match &statement.alternate {
-                    Some(alternate) if statement.consequent.span() == child_span => Some(alternate.span()),
-                    Some(alternate) if alternate.span() == child_span => Some(statement.consequent.span()),
+                    Some(alternate) if statement.consequent.span() == child_span => {
+                        Some(alternate.span())
+                    }
+                    Some(alternate) if alternate.span() == child_span => {
+                        Some(statement.consequent.span())
+                    }
                     _ => None,
                 };
                 break;
             }
-            if matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+            if matches!(
+                nodes.kind(parent),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            ) {
                 break;
             }
             child = parent;
         }
         let Some(other) = other else { continue };
         for id in ctx.nodes_within(other) {
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(id) else { continue };
-            let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(id) else {
+                continue;
+            };
+            let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                continue;
+            };
             if !assignment.operator.is_assign() || ctx.identifier_symbol(target) != Some(symbol) {
                 continue;
             }
-            let Some(right) = ctx.node_with_span(assignment.right.span()) else { continue };
+            let Some(right) = ctx.node_with_span(assignment.right.span()) else {
+                continue;
+            };
             let arm = ctx.slice_of(right, 0);
             for (name, inner) in arm.members {
                 let entry = extra.members.entry(name).or_insert(depth + inner);

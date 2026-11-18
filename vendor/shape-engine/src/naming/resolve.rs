@@ -3,10 +3,7 @@ use super::*;
 use oxc_semantic::SymbolId;
 use oxc_span::GetSpan;
 
-pub(super) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<SymbolId> {
+pub(super) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 

@@ -1,10 +1,11 @@
 //! `AnchorProperties`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 // ===========================================================================
 // Signals
@@ -13,8 +14,13 @@ use crate::signals::catalog::card::{Card, CardBody, CardField};
 /// `AnchorProperties`. Card: [`CARD`].
 pub(crate) fn recognize_anchor_properties(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let census = census(view, ctx);
-    (one_number(view) && anchor_key_walk(&census) && !census.frame_realm)
-        .then(|| Claim::new(["createElement(\"a\") in the producer document", "for-in key walk", "one hash"]))
+    (one_number(view) && anchor_key_walk(&census) && !census.frame_realm).then(|| {
+        Claim::new([
+            "createElement(\"a\") in the producer document",
+            "for-in key walk",
+            "one hash",
+        ])
+    })
 }
 
 pub(crate) fn bind_anchor_properties(

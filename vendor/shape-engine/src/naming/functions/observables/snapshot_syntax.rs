@@ -1,6 +1,6 @@
 //! Bounded scoped syntax extracted from stopped A solely for snapshot proofs.
 use super::*;
-use oxc_semantic::{Scoping,SymbolId};
+use oxc_semantic::{Scoping, SymbolId};
 #[derive(Clone, Debug, PartialEq)]
 enum Tree {
     Node(String, Vec<Tree>),
@@ -69,7 +69,13 @@ impl Syntax<'_> {
         ))
     }
     fn statements(&mut self, statements: &[Statement<'_>]) -> Option<Tree> {
-        Some(node("statements", statements.iter().map(|s|self.statement(s)).collect::<Option<_>>()?))
+        Some(node(
+            "statements",
+            statements
+                .iter()
+                .map(|s| self.statement(s))
+                .collect::<Option<_>>()?,
+        ))
     }
     fn statement(&mut self, s: &Statement<'_>) -> Option<Tree> {
         self.tick()?;
@@ -107,24 +113,60 @@ impl Syntax<'_> {
                     .collect::<Option<_>>()?,
             ),
             Statement::BlockStatement(s) => node("block", vec![self.statements(&s.body)?]),
-            Statement::WhileStatement(s) => node("while", vec![self.expression(&s.test)?, self.statement(&s.body)?]),
+            Statement::WhileStatement(s) => node(
+                "while",
+                vec![self.expression(&s.test)?, self.statement(&s.body)?],
+            ),
             Statement::ForStatement(s) => {
                 let init = match &s.init {
                     None => node("init", vec![]),
-                    Some(ForStatementInit::VariableDeclaration(d)) if matches!(d.kind, VariableDeclarationKind::Var | VariableDeclarationKind::Let | VariableDeclarationKind::Const) => {
-                        let entries = d.declarations.iter().map(|v| {
-                            let mut fields = vec![self.binding(&v.id)?];
-                            if let Some(e) = &v.init { fields.push(self.expression(e)?); }
-                            Some(node("binding", fields))
-                        }).collect::<Option<Vec<_>>>()?;
-                        node("init", vec![node(format!("variable:{:?}", d.kind), entries)])
-                    },
+                    Some(ForStatementInit::VariableDeclaration(d))
+                        if matches!(
+                            d.kind,
+                            VariableDeclarationKind::Var
+                                | VariableDeclarationKind::Let
+                                | VariableDeclarationKind::Const
+                        ) =>
+                    {
+                        let entries = d
+                            .declarations
+                            .iter()
+                            .map(|v| {
+                                let mut fields = vec![self.binding(&v.id)?];
+                                if let Some(e) = &v.init {
+                                    fields.push(self.expression(e)?);
+                                }
+                                Some(node("binding", fields))
+                            })
+                            .collect::<Option<Vec<_>>>()?;
+                        node(
+                            "init",
+                            vec![node(format!("variable:{:?}", d.kind), entries)],
+                        )
+                    }
                     _ => return None,
                 };
-                node("for", vec![init,
-                    node("test", s.test.iter().map(|e|self.expression(e)).collect::<Option<_>>()?),
-                    node("update", s.update.iter().map(|e|self.expression(e)).collect::<Option<_>>()?),
-                    self.statement(&s.body)?])
+                node(
+                    "for",
+                    vec![
+                        init,
+                        node(
+                            "test",
+                            s.test
+                                .iter()
+                                .map(|e| self.expression(e))
+                                .collect::<Option<_>>()?,
+                        ),
+                        node(
+                            "update",
+                            s.update
+                                .iter()
+                                .map(|e| self.expression(e))
+                                .collect::<Option<_>>()?,
+                        ),
+                        self.statement(&s.body)?,
+                    ],
+                )
             }
             Statement::IfStatement(s) => {
                 let mut parts = vec![self.expression(&s.test)?, self.statement(&s.consequent)?];
@@ -243,8 +285,13 @@ impl Syntax<'_> {
                 )
             }
             Expression::UpdateExpression(u) => {
-                let SimpleAssignmentTarget::AssignmentTargetIdentifier(i) = &u.argument else { return None; };
-                node(format!("update:{}:{}", u.operator.as_str(), u.prefix), vec![self.identifier(i)])
+                let SimpleAssignmentTarget::AssignmentTargetIdentifier(i) = &u.argument else {
+                    return None;
+                };
+                node(
+                    format!("update:{}:{}", u.operator.as_str(), u.prefix),
+                    vec![self.identifier(i)],
+                )
             }
             Expression::AssignmentExpression(a) => {
                 let target = match &a.left {
@@ -325,7 +372,8 @@ impl Match {
                 true
             }
             (Tree::Node(a, ac), Tree::Node(b, bc))
-                if matches!(a.as_str(), "string:BUILD_TOKEN" | "string:DESCRIPTOR") => {
+                if matches!(a.as_str(), "string:BUILD_TOKEN" | "string:DESCRIPTOR") =>
+            {
                 b.starts_with("string:") && ac.is_empty() && bc.is_empty()
             }
             (Tree::Node(a, ac), Tree::Node(b, bc)) => {
@@ -362,21 +410,39 @@ fn compile(source: &str, expression: bool) -> Tree {
     result.expect("packing proof specification uses supported grammar")
 }
 
-
-
 pub(in crate::naming) struct CompleteSpec(Tree);
-pub(in crate::naming) fn compile_complete(source: &str) -> CompleteSpec { CompleteSpec(compile(source, false)) }
+pub(in crate::naming) fn compile_complete(source: &str) -> CompleteSpec {
+    CompleteSpec(compile(source, false))
+}
 pub(in crate::naming) fn complete_capture_specs(
-    model: &Model<'_, '_>, site: FunctionSite, specifications: &[CompleteSpec],
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    specifications: &[CompleteSpec],
 ) -> bool {
-    let AstKind::Function(function) = model.nodes.kind(site.node_id) else { return false; };
-    let Some(actual) = (Syntax { scopes: model.scoping, remaining: 4096 }).function(function) else { return false; };
+    let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+        return false;
+    };
+    let Some(actual) = (Syntax {
+        scopes: model.scoping,
+        remaining: 4096,
+    })
+    .function(function) else {
+        return false;
+    };
     specifications.iter().any(|expected| {
         let mut matched = Match::default();
-        if !matched.tree(&expected.0, &actual, model, site) { return false; }
+        if !matched.tree(&expected.0, &actual, model, site) {
+            return false;
+        }
         matched.captures.values().all(|id| {
-            if !model.scoping.symbol_redeclarations(*id).is_empty() { return false; }
-            let AstKind::VariableDeclarator(v) = model.nodes.kind(model.scoping.symbol_declaration(*id)) else { return false; };
+            if !model.scoping.symbol_redeclarations(*id).is_empty() {
+                return false;
+            }
+            let AstKind::VariableDeclarator(v) =
+                model.nodes.kind(model.scoping.symbol_declaration(*id))
+            else {
+                return false;
+            };
             matches!(&v.id, BindingPattern::BindingIdentifier(i) if i.symbol_id.get() == Some(*id))
         })
     })

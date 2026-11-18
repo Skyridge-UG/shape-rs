@@ -7,11 +7,13 @@ use oxc_allocator::Allocator;
 use oxc_span::GetSpan;
 use serde::{Deserialize, Serialize};
 
+use crate::naming::program::{transform_program, ProgramBindingRename, ProgramTransformOptions};
 use crate::signals::extract::bindings::Model;
 pub use crate::signals::extract::scanner::grouped_registry::GroupedRegistration;
 use crate::signals::extract::wiring::{collector_wiring, WiringError, WiringProperties};
-use crate::signals::schema::{BindingRef, FunctionRef, ProgramPropertiesLimits, SourceIdentity, SourceSpan};
-use crate::naming::program::{transform_program, ProgramBindingRename, ProgramTransformOptions};
+use crate::signals::schema::{
+    BindingRef, FunctionRef, ProgramPropertiesLimits, SourceIdentity, SourceSpan,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThreadIdentity {
@@ -81,10 +83,16 @@ pub(crate) fn proven_group_positions<'a>(
     wiring: &'a WiringProperties,
     registered: &'a [GroupedRegistration],
 ) -> impl Iterator<Item = (&'a FunctionRef, usize)> {
-    wiring.groups.iter().map(|g| (&g.function, g.group_index)).chain(
-        registered.iter().filter(|g| g.unresolved.is_empty())
-            .filter_map(|g| g.function.as_ref().map(|f| (f, g.slot))),
-    )
+    wiring
+        .groups
+        .iter()
+        .map(|g| (&g.function, g.group_index))
+        .chain(
+            registered
+                .iter()
+                .filter(|g| g.unresolved.is_empty())
+                .filter_map(|g| g.function.as_ref().map(|f| (f, g.slot))),
+        )
 }
 
 /// Exact transformed bytes plus a report anchored to the ORIGINAL source.
@@ -139,11 +147,26 @@ pub fn identify_collectors(source: &str, rename: bool) -> Result<FocusedCollecto
     }).collect();
     let registered_groups = crate::signals::extract::scanner::grouped_registry::discover(&model);
     let dynamic_scope = crate::naming::program::has_dynamic_scope(&parsed.program);
-    let anonymous_candidates: BTreeMap<_, _> = registered_groups.iter()
-        .filter_map(|g| g.function.as_ref().filter(|f| f.binding.is_none()).map(|f| (g, f)))
-        .map(|(group, function)| (function.span, anonymous_identity_edits(
-            &model, function, &format!("waveCollector{}", group.slot + 1), dynamic_scope, &registered_groups,
-        )))
+    let anonymous_candidates: BTreeMap<_, _> = registered_groups
+        .iter()
+        .filter_map(|g| {
+            g.function
+                .as_ref()
+                .filter(|f| f.binding.is_none())
+                .map(|f| (g, f))
+        })
+        .map(|(group, function)| {
+            (
+                function.span,
+                anonymous_identity_edits(
+                    &model,
+                    function,
+                    &format!("waveCollector{}", group.slot + 1),
+                    dynamic_scope,
+                    &registered_groups,
+                ),
+            )
+        })
         .collect();
     let properties = crate::signals::extract::scanner::collector_properties(&model, limits)?;
     let payload_routing =
@@ -288,7 +311,11 @@ pub fn identify_collectors(source: &str, rename: bool) -> Result<FocusedCollecto
         } else {
             let grouped = grouped_spans.contains(&span);
             if grouped {
-                match anonymous_candidates.get(&span).cloned().unwrap_or_else(|| Err("anonymous registry identity has no safe plan".into())) {
+                match anonymous_candidates
+                    .get(&span)
+                    .cloned()
+                    .unwrap_or_else(|| Err("anonymous registry identity has no safe plan".into()))
+                {
                     Ok(edits) => {
                         anonymous_naming_edits.extend(edits);
                         None

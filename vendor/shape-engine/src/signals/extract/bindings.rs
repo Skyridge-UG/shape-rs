@@ -203,15 +203,20 @@ impl<'s, 'a> Model<'s, 'a> {
             by_type
         });
         let nodes = self.nodes;
-        by_type[ty as usize].iter().map(move |id| nodes.get_node(*id))
+        by_type[ty as usize]
+            .iter()
+            .map(move |id| nodes.get_node(*id))
     }
 
     /// The nodes for which [`Self::node_within`]`(node, site)` holds, in node
     /// order: what a whole-program scan filtered on it visits.
     pub(crate) fn nodes_within(&self, site: FunctionSite) -> Vec<&'a oxc_semantic::AstNode<'a>> {
         let by_start = self.by_start.get_or_init(|| {
-            let mut all: Vec<(u32, oxc_semantic::NodeId)> =
-                self.nodes.iter().map(|node| (node.span().start, node.id())).collect();
+            let mut all: Vec<(u32, oxc_semantic::NodeId)> = self
+                .nodes
+                .iter()
+                .map(|node| (node.span().start, node.id()))
+                .collect();
             all.sort_unstable();
             all
         });
@@ -813,9 +818,11 @@ pub(crate) fn proven_function_node<'a>(
     }
 }
 
-
 /// The callable (function, arrow, or program) that lexically owns a node.
-fn enclosing_callable(nodes: &AstNodes<'_>, mut node: oxc_semantic::NodeId) -> Option<oxc_semantic::NodeId> {
+fn enclosing_callable(
+    nodes: &AstNodes<'_>,
+    mut node: oxc_semantic::NodeId,
+) -> Option<oxc_semantic::NodeId> {
     loop {
         match nodes.kind(node) {
             AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => return Some(node),
@@ -918,7 +925,8 @@ pub(crate) fn proven_function_at_read<'a>(
     if !scoping.symbol_redeclarations(symbol).is_empty() {
         return Err("the binding is declared more than once".to_string());
     }
-    if let AstKind::VariableDeclarator(declarator) = nodes.kind(scoping.symbol_declaration(symbol)) {
+    if let AstKind::VariableDeclarator(declarator) = nodes.kind(scoping.symbol_declaration(symbol))
+    {
         if declarator.init.is_some() {
             return Err("the binding has an initializer and a write".to_string());
         }

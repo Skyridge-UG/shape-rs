@@ -100,8 +100,13 @@ fn fold_assignments(source: &str, prefixes: bool) -> Result<(String, usize), Str
                 {
                     return None;
                 }
-                let yes =
-                    assigned_value(&branch.consequent, symbol, self.scoping, self.source, self.prefixes)?;
+                let yes = assigned_value(
+                    &branch.consequent,
+                    symbol,
+                    self.scoping,
+                    self.source,
+                    self.prefixes,
+                )?;
                 let no = assigned_value(
                     branch.alternate.as_ref()?,
                     symbol,
@@ -537,7 +542,9 @@ pub(crate) fn fold_multi_branch_values(source: &str) -> Result<BranchValueResult
         edits: Vec::new(),
         folded: 0,
         dynamic: false,
-        taken_tests: std::cell::RefCell::new(super::super::inline_tuple_helpers::taken_numbers(source, "$SSA_t")),
+        taken_tests: std::cell::RefCell::new(super::super::inline_tuple_helpers::taken_numbers(
+            source, "$SSA_t",
+        )),
     };
     scan.visit_program(&program);
     if scan.dynamic || scan.edits.is_empty() {
@@ -580,16 +587,21 @@ struct MultiScan<'s, 'a> {
 impl MultiScan<'_, '_> {
     fn list(&mut self, statements: &[Statement<'_>]) {
         for pair in statements.windows(2) {
-            let (Statement::VariableDeclaration(declaration), Statement::IfStatement(branch)) = (&pair[0], &pair[1])
+            let (Statement::VariableDeclaration(declaration), Statement::IfStatement(branch)) =
+                (&pair[0], &pair[1])
             else {
                 continue;
             };
-            if declaration.kind != VariableDeclarationKind::Let || declaration.declarations.len() < 2 {
+            if declaration.kind != VariableDeclarationKind::Let
+                || declaration.declarations.len() < 2
+            {
                 continue;
             }
             let mut carries = Vec::new();
             for declarator in &declaration.declarations {
-                let (BindingPattern::BindingIdentifier(id), None) = (&declarator.id, &declarator.init) else {
+                let (BindingPattern::BindingIdentifier(id), None) =
+                    (&declarator.id, &declarator.init)
+                else {
                     carries.clear();
                     break;
                 };
@@ -611,21 +623,26 @@ impl MultiScan<'_, '_> {
             };
             // Every write is one of the tree's leaf assignments.
             let leaves = count_leaves(&tree);
-            if symbols
-                .iter()
-                .any(|symbol| self.scoping.get_resolved_references(*symbol).filter(|r| r.is_write()).count() != leaves)
-            {
+            if symbols.iter().any(|symbol| {
+                self.scoping
+                    .get_resolved_references(*symbol)
+                    .filter(|r| r.is_write())
+                    .count()
+                    != leaves
+            }) {
                 continue;
             }
             // A read of a carry inside the tree would read a `let` before its
             // initializer once split.
             if symbols.iter().any(|symbol| {
-                self.scoping.get_resolved_references(*symbol).any(|reference| {
-                    reference.is_read() && {
-                        let at = self.reference_start(reference.node_id());
-                        branch.span.start <= at && at < branch.span.end
-                    }
-                })
+                self.scoping
+                    .get_resolved_references(*symbol)
+                    .any(|reference| {
+                        reference.is_read() && {
+                            let at = self.reference_start(reference.node_id());
+                            branch.span.start <= at && at < branch.span.end
+                        }
+                    })
             }) {
                 continue;
             }
@@ -638,24 +655,42 @@ impl MultiScan<'_, '_> {
             let mut lines: Vec<String> = Vec::new();
             let test_name = (!top_repeatable).then(|| self.fresh_test_name());
             if let Some(name) = &test_name {
-                lines.push(format!("let {name} = {};", self.source_text(branch.test.span())));
+                lines.push(format!(
+                    "let {name} = {};",
+                    self.source_text(branch.test.span())
+                ));
             }
             lines.extend(order.iter().map(|index| {
                 let (_, name_span) = carries[*index];
                 let name = &self.source[name_span.start as usize..name_span.end as usize];
-                format!("let {name} = {};", self.render_top(&tree, *index, test_name.as_deref()))
+                format!(
+                    "let {name} = {};",
+                    self.render_top(&tree, *index, test_name.as_deref())
+                )
             }));
-            self.edits.push(analysis::Edit::replace(span, lines.join(&format!("\n{indent}"))));
+            self.edits.push(analysis::Edit::replace(
+                span,
+                lines.join(&format!("\n{indent}")),
+            ));
             self.folded += carries.len();
         }
     }
 
     /// The tree under `branch`, and the carry order every leaf shares.
-    fn tree(&self, branch: &IfStatement<'_>, carries: &[SymbolId]) -> Option<(CarryTree, Vec<usize>)> {
+    fn tree(
+        &self,
+        branch: &IfStatement<'_>,
+        carries: &[SymbolId],
+    ) -> Option<(CarryTree, Vec<usize>)> {
         self.tree_with(branch, carries, false)
     }
 
-    fn tree_with(&self, branch: &IfStatement<'_>, carries: &[SymbolId], top: bool) -> Option<(CarryTree, Vec<usize>)> {
+    fn tree_with(
+        &self,
+        branch: &IfStatement<'_>,
+        carries: &[SymbolId],
+        top: bool,
+    ) -> Option<(CarryTree, Vec<usize>)> {
         if !top && !self.repeatable(&branch.test) {
             return None;
         }
@@ -730,7 +765,11 @@ impl MultiScan<'_, '_> {
     fn render_top(&self, tree: &CarryTree, index: usize, test: Option<&str>) -> String {
         match (tree, test) {
             (CarryTree::Branch(_, yes, no), Some(name)) => {
-                format!("{name} ? {} : {}", self.render(yes, index), self.render(no, index))
+                format!(
+                    "{name} ? {} : {}",
+                    self.render(yes, index),
+                    self.render(no, index)
+                )
             }
             _ => self.render(tree, index),
         }
@@ -741,7 +780,12 @@ impl MultiScan<'_, '_> {
         match tree {
             CarryTree::Leaf(values) => format!("({})", text(&values[index])),
             CarryTree::Branch(test, yes, no) => {
-                format!("({}) ? {} : {}", text(test), self.render(yes, index), self.render(no, index))
+                format!(
+                    "({}) ? {} : {}",
+                    text(test),
+                    self.render(yes, index),
+                    self.render(no, index)
+                )
             }
         }
     }
@@ -753,11 +797,15 @@ impl MultiScan<'_, '_> {
             | Expression::StringLiteral(_)
             | Expression::BooleanLiteral(_)
             | Expression::NullLiteral(_) => true,
-            Expression::Identifier(identifier) => analysis::identifier_symbol(identifier, self.scoping)
-                .is_some_and(|symbol| !self.scoping.symbol_is_mutated(symbol)),
+            Expression::Identifier(identifier) => {
+                analysis::identifier_symbol(identifier, self.scoping)
+                    .is_some_and(|symbol| !self.scoping.symbol_is_mutated(symbol))
+            }
             Expression::UnaryExpression(unary) => {
-                matches!(unary.operator, UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void)
-                    && self.repeatable(&unary.argument)
+                matches!(
+                    unary.operator,
+                    UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void
+                ) && self.repeatable(&unary.argument)
             }
             Expression::BinaryExpression(binary) => match binary.operator {
                 BinaryOperator::StrictEquality | BinaryOperator::StrictInequality => {
@@ -814,8 +862,20 @@ mod multi_tests {
         let source = "function f(t, u, x) {\n  let $CARRY_a, $CARRY_b;\n  if (t) {\n    if (u === null) {\n      $CARRY_a = x.p;\n      $CARRY_b = 1;\n    } else {\n      $CARRY_a = 2;\n      $CARRY_b = x.q;\n    }\n  } else {\n    $CARRY_a = 3;\n    $CARRY_b = 4;\n  }\n  return [$CARRY_a, $CARRY_b];\n}";
         let result = fold_multi_branch_values(source).unwrap();
         assert_eq!(result.replaced_carries, 2, "{}", result.code);
-        assert!(result.code.contains("let $CARRY_a = (t) ? (u === null) ? (x.p) : (2) : (3);"), "{}", result.code);
-        assert!(result.code.contains("let $CARRY_b = (t) ? (u === null) ? (1) : (x.q) : (4);"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("let $CARRY_a = (t) ? (u === null) ? (x.p) : (2) : (3);"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result
+                .code
+                .contains("let $CARRY_b = (t) ? (u === null) ? (1) : (x.q) : (4);"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -823,7 +883,13 @@ mod multi_tests {
         // a top test that is not repeatable runs once into a temporary
         let top = "function f(t, x) {\n  let $CARRY_a, $CARRY_b;\n  if (t()) {\n    $CARRY_a = 1;\n    $CARRY_b = 2;\n  } else {\n    $CARRY_a = 3;\n    $CARRY_b = 4;\n  }\n}";
         let result = fold_multi_branch_values(top).unwrap();
-        assert!(result.code.contains("let $SSA_t1 = t();\n  let $CARRY_a = $SSA_t1 ? (1) : (3);"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("let $SSA_t1 = t();\n  let $CARRY_a = $SSA_t1 ? (1) : (3);"),
+            "{}",
+            result.code
+        );
         for source in [
             // a nested test that is not repeatable
             "function f(t, x) {\n  let $CARRY_a, $CARRY_b;\n  if (t) {\n    if (x()) {\n      $CARRY_a = 1;\n      $CARRY_b = 2;\n    } else {\n      $CARRY_a = 5;\n      $CARRY_b = 6;\n    }\n  } else {\n    $CARRY_a = 3;\n    $CARRY_b = 4;\n  }\n}",

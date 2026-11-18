@@ -420,8 +420,12 @@ pending=service.generateKey(algorithm,true,["encrypt","decrypt"]).then(key=>key)
     // framing can only prove when it really derives from that exact IV.
     let buffered = |source: &str| source.replace("let nonce=iv;", "let nonce=iv.buffer;");
     let originals = vec![
-        ENCRYPT.to_string(), expanded.clone(), without_service.clone(),
-        buffered(ENCRYPT), buffered(&expanded), buffered(&without_service),
+        ENCRYPT.to_string(),
+        expanded.clone(),
+        without_service.clone(),
+        buffered(ENCRYPT),
+        buffered(&expanded),
+        buffered(&without_service),
     ];
     let mut trees = Vec::new();
     for source in originals {
@@ -433,7 +437,6 @@ pending=service.generateKey(algorithm,true,["encrypt","decrypt"]).then(key=>key)
         trees.push((legacy, explicit_iv));
     }
     trees
-
 });
 static DECRYPT_TREES: LazyLock<Vec<Tree>> = LazyLock::new(|| {
     // Both direct slices and the recovered receiver-preserving `.call` form
@@ -574,9 +577,10 @@ pub(in crate::naming) fn evaluate(
         return preparation;
     }
     let mut claims = Vec::new();
-    if legacy_encrypt || ENCRYPT_TREES
-        .iter()
-        .any(|(_, explicit_iv)| prove(model, site, explicit_iv, &actual))
+    if legacy_encrypt
+        || ENCRYPT_TREES
+            .iter()
+            .any(|(_, explicit_iv)| prove(model, site, explicit_iv, &actual))
     {
         claims.push(proposal("encryptStringAesGcm","shared_packing_algorithm","complete TextEncoder / AES-GCM-128 / random 12-byte IV / raw-key export / key-IV-ciphertext packing proof, including every owned callback and stable captured crypto identity",f));
     }
@@ -597,10 +601,21 @@ pub(in crate::naming) fn evaluate(
 /// captures. Every parameter, declaration, nested callback and effect is still
 /// matched bijectively; unbound globals must retain exact identity.
 pub(in crate::naming) fn complete_uncaptured(
-    model: &Model<'_, '_>, site: FunctionSite, specification: &str,
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    specification: &str,
 ) -> bool {
-    let AstKind::Function(function) = model.nodes.kind(site.node_id) else { return false; };
-    let Some(actual) = (Syntax { scopes: model.scoping, remaining: 4096 }).function(function) else { return false; };
+    let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+        return false;
+    };
+    let Some(actual) = (Syntax {
+        scopes: model.scoping,
+        remaining: 4096,
+    })
+    .function(function) else {
+        return false;
+    };
     let mut matched = Match::default();
-    matched.tree(&compile(specification, false), &actual, model, site) && matched.captures.is_empty()
+    matched.tree(&compile(specification, false), &actual, model, site)
+        && matched.captures.is_empty()
 }

@@ -1,14 +1,19 @@
 //! `GlobalPropertyChecks`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp,
+    SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, property_census::*};
 use crate::signals::analysis::{LayoutNode, LeafKind};
-use crate::signals::analysis::{property_census::*, census_probes::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 fn probe_count(view: &SlotView, census: &Census, names: &[&str]) -> usize {
-    names.iter().filter(|name| probes(view, census, name)).count()
+    names
+        .iter()
+        .filter(|name| probes(view, census, name))
+        .count()
 }
 
 /// The flags of the global presence tests (a sample of the card list).
@@ -34,7 +39,12 @@ pub(crate) fn recognize_global_property_checks(view: &SlotView, ctx: &FinderCtx)
     (ops.len() >= 5
         && ops.iter().all(|op| *op == LeafOp::Byte)
         && probe_count(view, &census, PRESENCE_TESTS) >= 6)
-        .then(|| Claim::new(["automation / legacy global presence tests", "packed presence bytes"]))
+        .then(|| {
+            Claim::new([
+                "automation / legacy global presence tests",
+                "packed presence bytes",
+            ])
+        })
 }
 
 pub(crate) fn bind_global_property_checks(
@@ -56,7 +66,10 @@ pub(crate) fn bind_global_property_checks(
         "presenceBits8",
         "presenceBits9",
     ];
-    let message = layout.messages.first().ok_or_else(|| BindRefusal::new("no message layout"))?;
+    let message = layout
+        .messages
+        .first()
+        .ok_or_else(|| BindRefusal::new("no message layout"))?;
     let bytes = message
         .fields
         .iter()

@@ -11,14 +11,14 @@ use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod declarations;
 mod scan;
 mod successors;
-mod declarations;
 #[cfg(test)]
 mod tests;
 
-use successors::*;
 use declarations::*;
+use successors::*;
 
 pub(crate) fn recycle_last_inputs(
     source: &str,
@@ -93,4 +93,3 @@ fn generated(name: &str) -> bool {
 // Only actual statement-list declarations may lend storage. A for-header's
 // update is textually before its body but executes afterward, so textual last
 // use alone would be an invalid proof for those bindings.
-

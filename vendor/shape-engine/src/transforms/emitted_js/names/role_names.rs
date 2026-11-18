@@ -79,7 +79,10 @@ pub(crate) fn name_generated_roles(source: &str) -> Result<RoleNamesResult, Stri
                 renamed: 0,
             });
         }
-        edits.push(analysis::Edit::replace(scoping.symbol_span(symbol), new_name.clone()));
+        edits.push(analysis::Edit::replace(
+            scoping.symbol_span(symbol),
+            new_name.clone(),
+        ));
         for reference in scoping.get_resolved_references(symbol) {
             let span = nodes.kind(reference.node_id()).span();
             edits.push(analysis::Edit::replace(span, new_name.clone()));
@@ -170,12 +173,21 @@ pub fn role_of(scoping: &Scoping, nodes: &AstNodes<'_>, symbol: SymbolId) -> Rol
         .filter(|reference| reference.is_write())
         .map(|reference| reference.node_id())
         .collect();
-    let reads = references.iter().filter(|reference| reference.is_read()).count();
+    let reads = references
+        .iter()
+        .filter(|reference| reference.is_read())
+        .count();
     if !writes.is_empty() {
-        if writes.iter().any(|write| enters(nodes, declaration, *write, is_loop)) {
+        if writes
+            .iter()
+            .any(|write| enters(nodes, declaration, *write, is_loop))
+        {
             return Role::Loop;
         }
-        if writes.iter().any(|write| enters(nodes, declaration, *write, is_branch)) {
+        if writes
+            .iter()
+            .any(|write| enters(nodes, declaration, *write, is_branch))
+        {
             return Role::Join;
         }
         return Role::Var;
@@ -209,7 +221,12 @@ fn statement_span(nodes: &AstNodes<'_>, node: NodeId) -> Span {
 
 /// `write` sits under a construct matching `kind` that does not also
 /// contain the declaration.
-fn enters(nodes: &AstNodes<'_>, declaration: NodeId, write: NodeId, kind: fn(AstKind<'_>) -> bool) -> bool {
+fn enters(
+    nodes: &AstNodes<'_>,
+    declaration: NodeId,
+    write: NodeId,
+    kind: fn(AstKind<'_>) -> bool,
+) -> bool {
     let declared = statement_span(nodes, declaration);
     nodes.ancestor_ids(write).any(|ancestor| {
         kind(nodes.kind(ancestor)) && {
@@ -239,10 +256,22 @@ mod tests {
         let source = "function f(o, c) {\n  let $CARRY_1 = 0;\n  for (;;) {\n    $CARRY_1 = $CARRY_1 + 1;\n  }\n  let $CARRY_2;\n  if (c) {\n    $CARRY_2 = 1;\n  } else {\n    $CARRY_2 = 2;\n  }\n  let [$SSA_3, $SSA_4] = g();\n  let $SSA_5 = $KEY_1;\n  let $SSA_6 = o.p;\n  h();\n  let $SSA_7 = o.q;\n  return [$CARRY_2, $SSA_3, $SSA_4, $SSA_5, $SSA_6, $SSA_7, $SSA_7];\n}";
         let result = name_generated_roles(source).unwrap();
         assert_eq!(result.renamed, 7, "{}", result.code);
-        for name in ["$LOOP_1", "$JOIN_2", "$TUPLE_3", "$TUPLE_4", "$SNAP_5", "$ONCE_6", "$REUSED_7"] {
+        for name in [
+            "$LOOP_1",
+            "$JOIN_2",
+            "$TUPLE_3",
+            "$TUPLE_4",
+            "$SNAP_5",
+            "$ONCE_6",
+            "$REUSED_7",
+        ] {
             assert!(result.code.contains(name), "{name}: {}", result.code);
         }
-        assert!(!result.code.contains("$SSA_") && !result.code.contains("$CARRY_"), "{}", result.code);
+        assert!(
+            !result.code.contains("$SSA_") && !result.code.contains("$CARRY_"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]

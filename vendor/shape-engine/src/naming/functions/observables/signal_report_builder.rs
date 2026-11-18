@@ -1,5 +1,5 @@
 use super::*;
-#[path="options_envelope.rs"]
+#[path = "options_envelope.rs"]
 mod options_envelope;
 
 use crate::naming::support::media_entropy::*;
@@ -29,12 +29,8 @@ pub(super) fn inline_snapshot_cursor(
     // Only the holder form is added here. Reading `.push` and reading the
     // descriptor/value payload can invoke getters, so do not treat their
     // relative order as interchangeable merely because the final locals agree.
-    let [
-        _,
-        Statement::VariableDeclaration(holders),
-        Statement::IfStatement(partition),
-        _,
-    ] = block(&scan.body)?
+    let [_, Statement::VariableDeclaration(holders), Statement::IfStatement(partition), _] =
+        block(&scan.body)?
     else {
         return None;
     };
@@ -48,11 +44,8 @@ pub(super) fn inline_snapshot_cursor(
         (block(&partition.consequent)?, true),
         (block(partition.alternate.as_ref()?)?, false),
     ] {
-        let [
-            Statement::ExpressionStatement(first),
-            Statement::ExpressionStatement(second),
-            Statement::ExpressionStatement(last),
-        ] = branch
+        let [Statement::ExpressionStatement(first), Statement::ExpressionStatement(second), Statement::ExpressionStatement(last)] =
+            branch
         else {
             return None;
         };
@@ -60,9 +53,7 @@ pub(super) fn inline_snapshot_cursor(
         let second_assignment = assignment_in(second)?;
         let second = assigned_symbol(model, &second_assignment.left)?;
         let last = assigned_symbol(model, &assignment_in(last)?.left)?;
-        if named
-            && symbol(model, member(&second_assignment.right, "push")?) != Some(target)
-        {
+        if named && symbol(model, member(&second_assignment.right, "push")?) != Some(target) {
             return None;
         }
         if last != payload
@@ -115,19 +106,8 @@ fn signal_report(
     let [input] = params.as_slice() else {
         return None;
     };
-    let [
-        options_statement,
-        filter_statement,
-        Statement::IfStatement(notify),
-        values_statement,
-        Statement::IfStatement(include),
-        signals_statement,
-        positional_statement,
-        keyed_statement,
-        index_statement,
-        Statement::ForStatement(scan),
-        end,
-    ] = body.statements.as_slice()
+    let [options_statement, filter_statement, Statement::IfStatement(notify), values_statement, Statement::IfStatement(include), signals_statement, positional_statement, keyed_statement, index_statement, Statement::ForStatement(scan), end] =
+        body.statements.as_slice()
     else {
         return None;
     };
@@ -362,12 +342,8 @@ fn signal_report(
         return None;
     }
     let loop_body = block(&scan.body)?;
-    let [
-        record_statement,
-        sinks_statement,
-        Statement::IfStatement(found),
-        Statement::ExpressionStatement(call_statement),
-    ] = loop_body
+    let [record_statement, sinks_statement, Statement::IfStatement(found), Statement::ExpressionStatement(call_statement)] =
+        loop_body
     else {
         return None;
     };
@@ -409,11 +385,8 @@ fn signal_report(
         return None;
     }
     let named = block(&found.consequent)?;
-    let [
-        Statement::ExpressionStatement(set_sink),
-        Statement::ExpressionStatement(set_push),
-        Statement::ExpressionStatement(set_item),
-    ] = named
+    let [Statement::ExpressionStatement(set_sink), Statement::ExpressionStatement(set_push), Statement::ExpressionStatement(set_item)] =
+        named
     else {
         return None;
     };
@@ -445,11 +418,8 @@ fn signal_report(
         return None;
     }
     let positional_found = block(found.alternate.as_ref()?)?;
-    let [
-        Statement::ExpressionStatement(set_push),
-        Statement::ExpressionStatement(set_sink),
-        Statement::ExpressionStatement(set_item),
-    ] = positional_found
+    let [Statement::ExpressionStatement(set_push), Statement::ExpressionStatement(set_sink), Statement::ExpressionStatement(set_item)] =
+        positional_found
     else {
         return None;
     };

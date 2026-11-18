@@ -22,8 +22,8 @@ use oxc_span::{GetSpan, Span};
 use oxc_syntax::{operator::AssignmentOperator, scope::ScopeFlags};
 
 use super::super::index::SpanIndex;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CarryCoalesceResult {

@@ -44,8 +44,14 @@ fn stops_at_code_that_could_see_the_class_half_built() {
     let source = "function f(g) {\n\tfunction $THREAD_1() {\n\t\t\"use strict\";\n\t}\n\tfunction $THREAD_2() {\n\t\t\"use strict\";\n\t}\n\t$THREAD_1[\"prototype\"][\"a\"] = $THREAD_2;\n\tg();\n\tfunction $THREAD_3() {\n\t\t\"use strict\";\n\t}\n\t$THREAD_1[\"prototype\"][\"b\"] = $THREAD_3;\n\treturn new $THREAD_1();\n}\n";
     let (code, count) = rebuild(source);
     assert_eq!(count, 1);
-    assert!(code.contains("\t\ta() {\n\t\t}\n\t}\n\tg();\n\tfunction $THREAD_3()"), "{code}");
-    assert!(code.contains("$THREAD_1[\"prototype\"][\"b\"] = $THREAD_3;"), "{code}");
+    assert!(
+        code.contains("\t\ta() {\n\t\t}\n\t}\n\tg();\n\tfunction $THREAD_3()"),
+        "{code}"
+    );
+    assert!(
+        code.contains("$THREAD_1[\"prototype\"][\"b\"] = $THREAD_3;"),
+        "{code}"
+    );
 }
 #[test]
 fn reads_an_inlined_create_class_block_as_accessors() {
@@ -62,7 +68,10 @@ fn rebuilds_a_typescript_subclass_and_then_its_base() {
     assert_eq!(count, 2, "{code}");
     assert!(code.contains("class $THREAD_1 {\n\tconstructor() {\n\t\tthis[\"a\"] = 1;\n\t}\n\tget() {\n\t\treturn this[\"a\"];\n\t}\n}\n"), "{code}");
     assert!(code.contains("\tclass $THREAD_4 extends $KEY_0 {\n\t\tconstructor() {\n\t\t\tsuper(...arguments);\n\t\t}\n\t\tget() {\n\t\t\treturn super.get() + 1;\n\t\t}\n\t}\n"), "{code}");
-    assert!(!code.contains("Object[\"create\"]") && !code.contains("$KEY_376($THREAD_4"), "{code}");
+    assert!(
+        !code.contains("Object[\"create\"]") && !code.contains("$KEY_376($THREAD_4"),
+        "{code}"
+    );
     assert!(!code.contains("let $KEY_3 = $KEY_0;"), "{code}");
 }
 const CREATE_CLASS: &str = "function $THREAD_60() {\n\tfunction $THREAD_61() {\n\t\tif (arguments[1]) {\n\t\t\tlet j = 0;\n\t\t\tfor (; j < arguments[1][\"length\"]; j++) {\n\t\t\t\targuments[1][j][\"enumerable\"] = arguments[1][j][\"enumerable\"] || false;\n\t\t\t\targuments[1][j][\"configurable\"] = true;\n\t\t\t\tif (\"value\" in arguments[1][j]) {\n\t\t\t\t\targuments[1][j][\"writable\"] = true;\n\t\t\t\t}\n\t\t\t\tObject[\"defineProperty\"](arguments[0][\"prototype\"], arguments[1][j][\"key\"], arguments[1][j]);\n\t\t\t}\n\t\t}\n\t\tif (arguments[2]) {\n\t\t\tlet i = 0;\n\t\t\tfor (; i < arguments[2][\"length\"]; i++) {\n\t\t\t\targuments[2][i][\"enumerable\"] = arguments[2][i][\"enumerable\"] || false;\n\t\t\t\targuments[2][i][\"configurable\"] = true;\n\t\t\t\tif (\"value\" in arguments[2][i]) {\n\t\t\t\t\targuments[2][i][\"writable\"] = true;\n\t\t\t\t}\n\t\t\t\tObject[\"defineProperty\"](arguments[0], arguments[2][i][\"key\"], arguments[2][i]);\n\t\t\t}\n\t\t}\n\t\treturn arguments[0];\n\t}\n\treturn $THREAD_61;\n}\nlet $KEY_51 = $THREAD_60();\n";

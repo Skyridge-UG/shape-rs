@@ -3,12 +3,17 @@
 //! function index / role graph inventory, class proofs and the program
 //! rewrite engine. Readable bindings are retained except for authoritative
 //! proven grouped registry positions.
-use crate::signals::extract::bindings::{call_arguments, property_key_name, static_member_name, FunctionSite, Model};
 use crate::naming::collectors::{identify_collectors, CollectorReport};
-use crate::signals::schema::{BindingRef, Confidence, ProgramPropertiesLimits, SourceIdentity, SourceSpan};
 use crate::naming::program::{
     planned_binding_facts_for, planned_bindings_collide, transform_program, PlannedBindingFacts,
     ProgramBindingRename, ProgramTransformOptions,
+};
+use crate::signals::extract::bindings::expression_path;
+use crate::signals::extract::bindings::{
+    call_arguments, property_key_name, static_member_name, FunctionSite, Model,
+};
+use crate::signals::schema::{
+    BindingRef, Confidence, ProgramPropertiesLimits, SourceIdentity, SourceSpan,
 };
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
@@ -19,13 +24,12 @@ use oxc_syntax::scope::ScopeId;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
-use crate::signals::extract::bindings::expression_path;
 pub mod classes;
 mod collector_payload;
 pub mod collectors;
 pub mod function_index;
-pub mod inputs_context;
 pub(crate) mod functions;
+pub mod inputs_context;
 pub mod labels;
 mod native_classes;
 mod operations;
@@ -623,7 +627,9 @@ pub fn name_threads_with_labels(
         }
     }
     let purpose_start = Instant::now();
-    for outcome in crate::signals::analysis::roles::purposes::find_purposes(source, &program, &scoping, &nodes) {
+    for outcome in
+        crate::signals::analysis::roles::purposes::find_purposes(source, &program, &scoping, &nodes)
+    {
         if let crate::signals::analysis::roles::purposes::PurposeOutcome::Found(finding) = outcome {
             proposals
                 .entry(finding.function_span.start)
@@ -1145,7 +1151,8 @@ pub fn name_threads_with_labels(
     }
     // Class proof/application is additive. Reserve every function proposal so
     // a new class candidate can never invalidate an established function plan.
-    let mut class_outcomes = native_classes::plan(&program, &model, &class_claims, &mut plans, rename);
+    let mut class_outcomes =
+        native_classes::plan(&program, &model, &class_claims, &mut plans, rename);
     let start = Instant::now();
     let mut edits = Vec::new();
     let mut transformed = if plans.is_empty() {
@@ -1163,7 +1170,10 @@ pub fn name_threads_with_labels(
                 entry.reference_edits = outcome.reference_edits;
                 entry.shorthand_edits = outcome.shorthand_edits;
             }
-            if let Some(entry) = class_outcomes.iter_mut().find(|e| e.binding.identifier.start == outcome.declaration_start) {
+            if let Some(entry) = class_outcomes
+                .iter_mut()
+                .find(|e| e.binding.identifier.start == outcome.declaration_start)
+            {
                 entry.applied = outcome.applied;
                 entry.reason = outcome.skip_reason.as_ref().map(|r| format!("{r:?}"));
                 entry.reference_edits = outcome.reference_edits;
@@ -4466,8 +4476,10 @@ fn is_stack_getter(model: &Model<'_, '_>, site: FunctionSite) -> bool {
 }
 
 pub(crate) fn proves_method_interceptor(
-    model: &Model<'_, '_>, site: FunctionSite,
-    function: &oxc_ast::ast::Function<'_>, body: &oxc_ast::ast::FunctionBody<'_>,
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    function: &oxc_ast::ast::Function<'_>,
+    body: &oxc_ast::ast::FunctionBody<'_>,
 ) -> bool {
     shared::proves_method_interceptor(model, site, function, body)
 }

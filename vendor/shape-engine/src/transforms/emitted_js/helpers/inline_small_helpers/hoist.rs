@@ -41,7 +41,11 @@ pub(super) struct NestedCalls<'h> {
 }
 
 impl<'h> NestedCalls<'h> {
-    pub(super) fn new(scoping: &'h Scoping, helpers: &'h BTreeMap<SymbolId, Helper>, declined: &'h [Span]) -> Self {
+    pub(super) fn new(
+        scoping: &'h Scoping,
+        helpers: &'h BTreeMap<SymbolId, Helper>,
+        declined: &'h [Span],
+    ) -> Self {
         NestedCalls {
             scoping,
             helpers,
@@ -82,7 +86,9 @@ impl Choice {
 
 /// Standard namespaces whose methods a VM helper does not replace: reading
 /// `Object.defineProperty` before or after a call gives the same function.
-const FIXED_NAMESPACES: &[&str] = &["Object", "Math", "JSON", "Reflect", "Array", "Number", "String", "Symbol"];
+const FIXED_NAMESPACES: &[&str] = &[
+    "Object", "Math", "JSON", "Reflect", "Array", "Number", "String", "Symbol",
+];
 
 impl<'a> Visit<'a> for NestedCalls<'_> {
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
@@ -95,8 +101,10 @@ impl<'a> Visit<'a> for NestedCalls<'_> {
         } else {
             self.code.push(call.span);
         }
-        if matches!(call.callee.without_parentheses(), Expression::ChainExpression(_))
-            || call.callee.without_parentheses().is_member_expression()
+        if matches!(
+            call.callee.without_parentheses(),
+            Expression::ChainExpression(_)
+        ) || call.callee.without_parentheses().is_member_expression()
         {
             self.unbindable.push(call.callee.span());
         }
@@ -122,7 +130,10 @@ impl<'a> Visit<'a> for NestedCalls<'_> {
         }
     }
     fn visit_unary_expression(&mut self, unary: &UnaryExpression<'a>) {
-        if matches!(unary.operator, UnaryOperator::Delete | UnaryOperator::Typeof) {
+        if matches!(
+            unary.operator,
+            UnaryOperator::Delete | UnaryOperator::Typeof
+        ) {
             self.unbindable.push(unary.argument.span());
         }
         walk::walk_unary_expression(self, unary);
@@ -184,7 +195,12 @@ impl<'a> Visit<'a> for NestedCalls<'_> {
             };
             let fixed_object = match member.object() {
                 Expression::Identifier(object) => analysis::identifier_symbol(object, self.scoping)
-                    .is_some_and(|symbol| !self.scoping.get_resolved_references(symbol).any(|r| r.is_write())),
+                    .is_some_and(|symbol| {
+                        !self
+                            .scoping
+                            .get_resolved_references(symbol)
+                            .any(|r| r.is_write())
+                    }),
                 _ => false,
             };
             if literal_key && fixed_object {
@@ -213,14 +229,18 @@ impl<'a> Visit<'a> for NestedCalls<'_> {
         // `Object.defineProperty`: a standard method of a global namespace.
         let namespace_object = match member {
             MemberExpression::StaticMemberExpression(read) => Some(&read.object),
-            MemberExpression::ComputedMemberExpression(read) if matches!(read.expression, Expression::StringLiteral(_)) => {
+            MemberExpression::ComputedMemberExpression(read)
+                if matches!(read.expression, Expression::StringLiteral(_)) =>
+            {
                 Some(&read.object)
             }
             _ => None,
         };
-        let fixed = namespace_object.is_some_and(|object| matches!(object, Expression::Identifier(namespace)
+        let fixed = namespace_object.is_some_and(|object| {
+            matches!(object, Expression::Identifier(namespace)
             if FIXED_NAMESPACES.contains(&namespace.name.as_str())
-                && analysis::identifier_symbol(namespace, self.scoping).is_none()));
+                && analysis::identifier_symbol(namespace, self.scoping).is_none())
+        });
         // `arguments[0][…]` reads through the first argument only.
         let root = match (root.as_deref(), positional_argument(member)) {
             (Some("arguments"), Some(index)) => Some(format!("arguments[{index}]")),
@@ -278,7 +298,12 @@ fn armed_choice(nested: &NestedCalls<'_>) -> Option<Choice> {
         .calls
         .iter()
         .copied()
-        .filter(|call| nested.choices.iter().any(|choice| choice.arms().any(|arm| inside(arm, *call))))
+        .filter(|call| {
+            nested
+                .choices
+                .iter()
+                .any(|choice| choice.arms().any(|arm| inside(arm, *call)))
+        })
         .min_by_key(|call| call.start)?;
     nested
         .choices
@@ -298,14 +323,18 @@ fn positional_argument(member: &MemberExpression<'_>) -> Option<u32> {
         }
     }
     match current {
-        MemberExpression::ComputedMemberExpression(computed) => match (&computed.object, &computed.expression) {
-            (Expression::Identifier(object), Expression::NumericLiteral(index))
-                if object.name == "arguments" && index.value.fract() == 0.0 && index.value >= 0.0 =>
-            {
-                Some(index.value as u32)
+        MemberExpression::ComputedMemberExpression(computed) => {
+            match (&computed.object, &computed.expression) {
+                (Expression::Identifier(object), Expression::NumericLiteral(index))
+                    if object.name == "arguments"
+                        && index.value.fract() == 0.0
+                        && index.value >= 0.0 =>
+                {
+                    Some(index.value as u32)
+                }
+                _ => None,
             }
-            _ => None,
-        },
+        }
         _ => None,
     }
 }
@@ -320,7 +349,10 @@ fn hands(text: &str, root: &str) -> bool {
         !before.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
             && !after.is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
     };
-    if let Some(index) = root.strip_prefix("arguments[").and_then(|rest| rest.strip_suffix(']')) {
+    if let Some(index) = root
+        .strip_prefix("arguments[")
+        .and_then(|rest| rest.strip_suffix(']'))
+    {
         return text.match_indices("arguments").any(|(at, _)| {
             if !word(at, "arguments".len()) {
                 return false;
@@ -329,7 +361,9 @@ fn hands(text: &str, root: &str) -> bool {
             let other = rest
                 .strip_prefix('[')
                 .and_then(|rest| rest.split_once(']'))
-                .filter(|(position, _)| !position.is_empty() && position.bytes().all(|b| b.is_ascii_digit()))
+                .filter(|(position, _)| {
+                    !position.is_empty() && position.bytes().all(|b| b.is_ascii_digit())
+                })
                 .is_some_and(|(position, _)| position != index);
             !other
         });
@@ -359,7 +393,11 @@ fn bound_pieces(nested: &NestedCalls<'_>, call: Span, value: Span) -> Option<Vec
     let pieces: Vec<Span> = candidates
         .iter()
         .copied()
-        .filter(|span| !candidates.iter().any(|outer| outer != span && inside(*outer, *span)))
+        .filter(|span| {
+            !candidates
+                .iter()
+                .any(|outer| outer != span && inside(*outer, *span))
+        })
         .collect();
     if pieces.is_empty()
         || pieces.iter().any(|piece| {
@@ -367,10 +405,9 @@ fn bound_pieces(nested: &NestedCalls<'_>, call: Span, value: Span) -> Option<Vec
                 || nested.conditional.iter().any(|arm| inside(*arm, *piece))
                 || nested.unbindable.iter().any(|outer| inside(*outer, *piece))
         })
-        || nested
-            .opaque
-            .iter()
-            .any(|span| span.start < call.start && !pieces.iter().any(|piece| inside(*piece, *span)))
+        || nested.opaque.iter().any(|span| {
+            span.start < call.start && !pieces.iter().any(|piece| inside(*piece, *span))
+        })
     {
         return None;
     }
@@ -384,12 +421,20 @@ impl Hoists<'_, '_> {
         }
         // An `if` is scanned in its test only: its arms run later, or not.
         let (whole, value, test): (Span, Option<Span>, Option<&Expression<'_>>) = match statement {
-            Statement::ExpressionStatement(expression) => (expression.span, Some(expression.expression.span()), None),
-            Statement::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => {
-                (declaration.span, declaration.declarations[0].init.as_ref().map(GetSpan::span), None)
+            Statement::ExpressionStatement(expression) => {
+                (expression.span, Some(expression.expression.span()), None)
             }
-            Statement::ReturnStatement(ret) => (ret.span, ret.argument.as_ref().map(GetSpan::span), None),
-            Statement::IfStatement(branch) => (branch.span, Some(branch.test.span()), Some(&branch.test)),
+            Statement::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => (
+                declaration.span,
+                declaration.declarations[0].init.as_ref().map(GetSpan::span),
+                None,
+            ),
+            Statement::ReturnStatement(ret) => {
+                (ret.span, ret.argument.as_ref().map(GetSpan::span), None)
+            }
+            Statement::IfStatement(branch) => {
+                (branch.span, Some(branch.test.span()), Some(&branch.test))
+            }
             _ => return,
         };
         let Some(value) = value else {
@@ -405,7 +450,8 @@ impl Hoists<'_, '_> {
         }
         // The innermost call that is not the statement's own value or a
         // store's right side, and runs unconditionally.
-        let inside = |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
+        let inside =
+            |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
         let call = nested
             .calls
             .iter()
@@ -413,11 +459,18 @@ impl Hoists<'_, '_> {
             .filter(|call| test.is_some() || *call != value)
             // A plain store's right side expands where it is; a property
             // store's goes first, its target evaluating no code.
-            .filter(|call| !matches!(statement, Statement::ExpressionStatement(e)
+            .filter(|call| {
+                !matches!(statement, Statement::ExpressionStatement(e)
                 if matches!(&e.expression, Expression::AssignmentExpression(a)
                     if a.right.span() == *call
-                        && matches!(a.left, AssignmentTarget::AssignmentTargetIdentifier(_)))))
-            .filter(|call| !nested.calls.iter().any(|other| other != call && inside(*call, *other)))
+                        && matches!(a.left, AssignmentTarget::AssignmentTargetIdentifier(_))))
+            })
+            .filter(|call| {
+                !nested
+                    .calls
+                    .iter()
+                    .any(|other| other != call && inside(*call, *other))
+            })
             .find(|call| !nested.conditional.iter().any(|arm| inside(*arm, *call)));
         let call = match call {
             Some(call) => call,
@@ -439,7 +492,10 @@ impl Hoists<'_, '_> {
                 if (test.is_none()
                     && choice.span == value
                     && (fresh_temporary || matches!(statement, Statement::ExpressionStatement(_))))
-                    || nested.functions.iter().any(|function| inside(choice.span, *function))
+                    || nested
+                        .functions
+                        .iter()
+                        .any(|function| inside(choice.span, *function))
                 {
                     return;
                 }
@@ -448,21 +504,44 @@ impl Hoists<'_, '_> {
             None => return,
         };
         let call_text = &self.source[call.start as usize..call.end as usize];
-        let inside_any = |spans: &[Span], span: Span| spans.iter().any(|outer| inside(*outer, span));
+        let inside_any =
+            |spans: &[Span], span: Span| spans.iter().any(|outer| inside(*outer, span));
         // Code the statement runs before the call. The exact round binds
         // each outermost piece, in order, to a temporary ahead of the call
         // (`let t = f(); let u = H(x); g(t, u)`); otherwise nothing may run.
-        let before: Vec<Span> = nested.code.iter().copied().filter(|span| span.end <= call.start).collect();
-        let bound: Vec<Span> = before.iter().copied().filter(|span| !before.iter().any(|outer| outer != span && inside(*outer, *span))).collect();
+        let before: Vec<Span> = nested
+            .code
+            .iter()
+            .copied()
+            .filter(|span| span.end <= call.start)
+            .collect();
+        let bound: Vec<Span> = before
+            .iter()
+            .copied()
+            .filter(|span| {
+                !before
+                    .iter()
+                    .any(|outer| outer != span && inside(*outer, *span))
+            })
+            .collect();
         let mut fits = true;
         if !bound.is_empty() {
             let last = bound.iter().map(|span| span.start).max().unwrap_or(0);
             // Only unconditional pieces of the statement's value bind; no
             // property or changeable name read before one may move past it.
             if !self.exact
-                || bound.iter().any(|span| span.start < value.start || nested.conditional.iter().any(|arm| inside(*arm, *span)))
-                || nested.reads.iter().any(|(span, _)| span.end <= last && !inside_any(&bound, *span))
-                || nested.names.iter().any(|span| span.end <= last && !inside_any(&bound, *span))
+                || bound.iter().any(|span| {
+                    span.start < value.start
+                        || nested.conditional.iter().any(|arm| inside(*arm, *span))
+                })
+                || nested
+                    .reads
+                    .iter()
+                    .any(|(span, _)| span.end <= last && !inside_any(&bound, *span))
+                || nested
+                    .names
+                    .iter()
+                    .any(|span| span.end <= last && !inside_any(&bound, *span))
             {
                 fits = false;
             }
@@ -491,10 +570,16 @@ impl Hoists<'_, '_> {
         let mut lines = String::new();
         for span in bound.iter().copied().chain(std::iter::once(call)) {
             let name = self.names.fresh();
-            lines.push_str(&format!("let {name} = {};\n{indent}", &self.source[span.start as usize..span.end as usize]));
+            lines.push_str(&format!(
+                "let {name} = {};\n{indent}",
+                &self.source[span.start as usize..span.end as usize]
+            ));
             self.edits.push(analysis::Edit::replace(span, name));
         }
-        self.edits.push(analysis::Edit::replace(Span::new(whole.start, whole.start), lines));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(whole.start, whole.start),
+            lines,
+        ));
         self.done += 1;
     }
 
@@ -507,25 +592,34 @@ impl Hoists<'_, '_> {
     fn split_sequence(&mut self, statement: &Statement<'_>, nested: &NestedCalls<'_>) -> bool {
         let source = self.source;
         let (sequence, prefix): (&SequenceExpression<'_>, String) = match statement {
-            Statement::ExpressionStatement(expression) => match expression.expression.without_parentheses() {
-                Expression::SequenceExpression(sequence) => (sequence, String::new()),
-                Expression::AssignmentExpression(assignment) => {
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
-                        return false;
-                    };
-                    let Expression::SequenceExpression(sequence) = assignment.right.without_parentheses() else {
-                        return false;
-                    };
-                    if assignment.operator != AssignmentOperator::Assign
-                        || analysis::identifier_symbol(target, self.scoping).is_none()
-                    {
-                        return false;
+            Statement::ExpressionStatement(expression) => {
+                match expression.expression.without_parentheses() {
+                    Expression::SequenceExpression(sequence) => (sequence, String::new()),
+                    Expression::AssignmentExpression(assignment) => {
+                        let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                        else {
+                            return false;
+                        };
+                        let Expression::SequenceExpression(sequence) =
+                            assignment.right.without_parentheses()
+                        else {
+                            return false;
+                        };
+                        if assignment.operator != AssignmentOperator::Assign
+                            || analysis::identifier_symbol(target, self.scoping).is_none()
+                        {
+                            return false;
+                        }
+                        (sequence, format!("{} = ", target.name))
                     }
-                    (sequence, format!("{} = ", target.name))
+                    _ => return false,
                 }
-                _ => return false,
-            },
-            Statement::ReturnStatement(ret) => match ret.argument.as_ref().map(|argument| argument.without_parentheses()) {
+            }
+            Statement::ReturnStatement(ret) => match ret
+                .argument
+                .as_ref()
+                .map(|argument| argument.without_parentheses())
+            {
                 Some(Expression::SequenceExpression(sequence)) => (sequence, "return ".to_string()),
                 _ => return false,
             },
@@ -533,15 +627,19 @@ impl Hoists<'_, '_> {
                 if declaration.declarations.len() == 1
                     && matches!(
                         declaration.kind,
-                        VariableDeclarationKind::Let | VariableDeclarationKind::Const | VariableDeclarationKind::Var
+                        VariableDeclarationKind::Let
+                            | VariableDeclarationKind::Const
+                            | VariableDeclarationKind::Var
                     ) =>
             {
                 let declarator = &declaration.declarations[0];
                 let BindingPattern::BindingIdentifier(id) = &declarator.id else {
                     return false;
                 };
-                let Some(Expression::SequenceExpression(sequence)) =
-                    declarator.init.as_ref().map(|init| init.without_parentheses())
+                let Some(Expression::SequenceExpression(sequence)) = declarator
+                    .init
+                    .as_ref()
+                    .map(|init| init.without_parentheses())
                 else {
                     return false;
                 };
@@ -550,7 +648,8 @@ impl Hoists<'_, '_> {
             }
             _ => return false,
         };
-        let inside = |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
+        let inside =
+            |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
         if !nested.calls.iter().any(|call| inside(sequence.span, *call)) {
             return false;
         }
@@ -566,14 +665,24 @@ impl Hoists<'_, '_> {
             .map(|(index, span)| {
                 let bare = index + 1 < count || prefix.is_empty();
                 let text = source[span.start as usize..span.end as usize].trim_start();
-                if bare && ["{", "function", "class", "let", "async"].iter().any(|start| text.starts_with(start)) {
+                if bare
+                    && ["{", "function", "class", "let", "async"]
+                        .iter()
+                        .any(|start| text.starts_with(start))
+                {
                     ("(", ")")
                 } else {
                     ("", "")
                 }
             })
             .collect();
-        let lead = |index: usize| if index + 1 == count { prefix.as_str() } else { "" };
+        let lead = |index: usize| {
+            if index + 1 == count {
+                prefix.as_str()
+            } else {
+                ""
+            }
+        };
         self.edits.push(analysis::Edit::replace(
             Span::new(whole.start, elements[0].start),
             format!("{}{}", lead(0), parens[0].0),
@@ -581,7 +690,12 @@ impl Hoists<'_, '_> {
         for index in 1..count {
             self.edits.push(analysis::Edit::replace(
                 Span::new(elements[index - 1].end, elements[index].start),
-                format!("{};\n{indent}{}{}", parens[index - 1].1, lead(index), parens[index].0),
+                format!(
+                    "{};\n{indent}{}{}",
+                    parens[index - 1].1,
+                    lead(index),
+                    parens[index].0
+                ),
             ));
         }
         self.edits.push(analysis::Edit::replace(
@@ -599,9 +713,19 @@ impl Hoists<'_, '_> {
     /// each arm's text stays as it is. A declared name is assigned in the
     /// arms only when nothing but the code after it can read it (no
     /// closure, no read inside the statement). Returns whether it split.
-    fn split_choice(&mut self, statement: &Statement<'_>, choice: &Choice, nested: &NestedCalls<'_>) -> bool {
-        let inside = |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
-        if nested.chains.iter().any(|chain| inside(*chain, choice.span)) {
+    fn split_choice(
+        &mut self,
+        statement: &Statement<'_>,
+        choice: &Choice,
+        nested: &NestedCalls<'_>,
+    ) -> bool {
+        let inside =
+            |outer: Span, inner: Span| outer.start <= inner.start && inner.end <= outer.end;
+        if nested
+            .chains
+            .iter()
+            .any(|chain| inside(*chain, choice.span))
+        {
             return false;
         }
         let source = self.source;
@@ -618,10 +742,13 @@ impl Hoists<'_, '_> {
                     (String::new(), String::new())
                 } else {
                     // `x = t ? a : b`: `x` names the same binding either way.
-                    let Expression::AssignmentExpression(assignment) = expression.expression.without_parentheses() else {
+                    let Expression::AssignmentExpression(assignment) =
+                        expression.expression.without_parentheses()
+                    else {
                         return false;
                     };
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
                         return false;
                     };
                     if assignment.operator != AssignmentOperator::Assign
@@ -635,7 +762,12 @@ impl Hoists<'_, '_> {
                 }
             }
             Statement::ReturnStatement(ret) => {
-                if choice.operator.is_some() || ret.argument.as_ref().is_none_or(|a| unparenthesized(a) != choice.span) {
+                if choice.operator.is_some()
+                    || ret
+                        .argument
+                        .as_ref()
+                        .is_none_or(|a| unparenthesized(a) != choice.span)
+                {
                     return false;
                 }
                 (String::new(), "return ".to_string())
@@ -648,8 +780,13 @@ impl Hoists<'_, '_> {
                 let Some(symbol) = id.symbol_id.get() else {
                     return false;
                 };
-                if !matches!(declaration.kind, VariableDeclarationKind::Let | VariableDeclarationKind::Var)
-                    || declarator.init.as_ref().is_none_or(|init| unparenthesized(init) != choice.span)
+                if !matches!(
+                    declaration.kind,
+                    VariableDeclarationKind::Let | VariableDeclarationKind::Var
+                ) || declarator
+                    .init
+                    .as_ref()
+                    .is_none_or(|init| unparenthesized(init) != choice.span)
                     || self.captured_or_read_in(symbol, whole)
                 {
                     return false;
@@ -663,12 +800,18 @@ impl Hoists<'_, '_> {
                         LogicalOperator::Or => format!("!{name}"),
                         LogicalOperator::Coalesce => format!("{name} == null"),
                     };
-                    self.edits.push(analysis::Edit::replace(Span::new(whole.start, choice.test.start), format!("{kind}{name} = ")));
+                    self.edits.push(analysis::Edit::replace(
+                        Span::new(whole.start, choice.test.start),
+                        format!("{kind}{name} = "),
+                    ));
                     self.edits.push(analysis::Edit::replace(
                         Span::new(choice.test.end, choice.consequent.start),
                         format!(";\n{indent}if ({condition}) {{\n{inner}{name} = "),
                     ));
-                    self.edits.push(analysis::Edit::replace(Span::new(choice.consequent.end, whole.end), format!(";\n{indent}}}")));
+                    self.edits.push(analysis::Edit::replace(
+                        Span::new(choice.consequent.end, whole.end),
+                        format!(";\n{indent}}}"),
+                    ));
                     self.done += 1;
                     return true;
                 }
@@ -680,7 +823,10 @@ impl Hoists<'_, '_> {
         // declaration or function.
         let wrap = |span: Span| {
             let arm = text(span).trim_start();
-            store.is_empty() && ["{", "function", "class", "let", "async"].iter().any(|start| arm.starts_with(start))
+            store.is_empty()
+                && ["{", "function", "class", "let", "async"]
+                    .iter()
+                    .any(|start| arm.starts_with(start))
         };
         let open = |span: Span| if wrap(span) { "(" } else { "" };
         let close = |span: Span| if wrap(span) { ")" } else { "" };
@@ -689,22 +835,35 @@ impl Hoists<'_, '_> {
             Some(LogicalOperator::Or) => ("!(", ")"),
             Some(LogicalOperator::Coalesce) => ("(", ") == null"),
         };
-        self.edits.push(analysis::Edit::replace(Span::new(whole.start, choice.test.start), format!("{prefix}if ({test_open}")));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(whole.start, choice.test.start),
+            format!("{prefix}if ({test_open}"),
+        ));
         self.edits.push(analysis::Edit::replace(
             Span::new(choice.test.end, choice.consequent.start),
-            format!("{test_close}) {{\n{inner}{store}{}", open(choice.consequent)),
+            format!(
+                "{test_close}) {{\n{inner}{store}{}",
+                open(choice.consequent)
+            ),
         ));
         let last = match choice.alternate {
             Some(alternate) => {
                 self.edits.push(analysis::Edit::replace(
                     Span::new(choice.consequent.end, alternate.start),
-                    format!("{};\n{indent}}} else {{\n{inner}{store}{}", close(choice.consequent), open(alternate)),
+                    format!(
+                        "{};\n{indent}}} else {{\n{inner}{store}{}",
+                        close(choice.consequent),
+                        open(alternate)
+                    ),
                 ));
                 alternate
             }
             None => choice.consequent,
         };
-        self.edits.push(analysis::Edit::replace(Span::new(last.end, whole.end), format!("{};\n{indent}}}", close(last))));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(last.end, whole.end),
+            format!("{};\n{indent}}}", close(last)),
+        ));
         self.done += 1;
         true
     }
@@ -713,21 +872,27 @@ impl Hoists<'_, '_> {
     /// one declaring it.
     fn captured_or_read_in(&self, symbol: SymbolId, span: Span) -> bool {
         let owner = self.scoping.symbol_scope_id(symbol);
-        self.scoping.get_resolved_references(symbol).any(|reference| {
-            let node_span = self.nodes.get_node(reference.node_id()).kind().span();
-            if span.start <= node_span.start && node_span.end <= span.end {
-                return true;
-            }
-            for scope in self.scoping.scope_ancestors(reference.scope_id()) {
-                if scope == owner {
-                    return false;
-                }
-                if self.scoping.scope_flags(scope).intersects(ScopeFlags::Function | ScopeFlags::Arrow) {
+        self.scoping
+            .get_resolved_references(symbol)
+            .any(|reference| {
+                let node_span = self.nodes.get_node(reference.node_id()).kind().span();
+                if span.start <= node_span.start && node_span.end <= span.end {
                     return true;
                 }
-            }
-            false
-        })
+                for scope in self.scoping.scope_ancestors(reference.scope_id()) {
+                    if scope == owner {
+                        return false;
+                    }
+                    if self
+                        .scoping
+                        .scope_flags(scope)
+                        .intersects(ScopeFlags::Function | ScopeFlags::Arrow)
+                    {
+                        return true;
+                    }
+                }
+                false
+            })
     }
 
     pub(super) fn list(&mut self, statements: &[Statement<'_>]) {

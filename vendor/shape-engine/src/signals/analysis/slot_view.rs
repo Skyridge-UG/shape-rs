@@ -164,7 +164,14 @@ impl SlotView {
             .map(|emission| {
                 let generic = emission.payload == EmissionVariant::GenericObject;
                 let mut leaves = Vec::new();
-                collect_leaves(&emission.grammar, 0, 0, generic, &mut Vec::new(), &mut leaves);
+                collect_leaves(
+                    &emission.grammar,
+                    0,
+                    0,
+                    generic,
+                    &mut Vec::new(),
+                    &mut leaves,
+                );
                 EmissionView {
                     phase: emission.phase,
                     payload: emission.payload.clone(),
@@ -234,7 +241,9 @@ impl SlotView {
 
     /// Every value leaf of every emission.
     pub(crate) fn leaves(&self) -> impl Iterator<Item = &LeafView> {
-        self.emissions.iter().flat_map(|emission| emission.leaves.iter())
+        self.emissions
+            .iter()
+            .flat_map(|emission| emission.leaves.iter())
     }
 
     /// Whether some emission is a named object (generic codec) rather than a
@@ -247,7 +256,10 @@ impl SlotView {
 
     /// The salt-free shape of each emission.
     pub(crate) fn shapes(&self) -> Vec<&str> {
-        self.emissions.iter().map(|emission| emission.shape.as_str()).collect()
+        self.emissions
+            .iter()
+            .map(|emission| emission.shape.as_str())
+            .collect()
     }
 
     /// Union of host API paths feeding written values.
@@ -335,7 +347,11 @@ impl SlotView {
 }
 
 fn slot_anchors(contract: &SignalContract, spans: &[SourceSpan]) -> Vec<u32> {
-    let inside = |offset: u32| spans.iter().any(|span| offset >= span.start && offset < span.end);
+    let inside = |offset: u32| {
+        spans
+            .iter()
+            .any(|span| offset >= span.start && offset < span.end)
+    };
     let mut anchors = Vec::new();
     for emission in &contract.emissions {
         anchors.push(emission.site.start);
@@ -389,7 +405,10 @@ fn collect_leaves(
                     .sources
                     .iter()
                     .filter(|source| {
-                        matches!(source.class, SourceClass::HostObservation | SourceClass::HostClock)
+                        matches!(
+                            source.class,
+                            SourceClass::HostObservation | SourceClass::HostClock
+                        )
                     })
                     .filter_map(|source| source.api.clone())
                     .collect(),
@@ -412,20 +431,31 @@ fn collect_leaves(
             classes,
             transforms,
             apis,
-            generic_key: if generic { write.position.clone() } else { None },
+            generic_key: if generic {
+                write.position.clone()
+            } else {
+                None
+            },
         });
     };
     match node {
         GrammarNode::Number(write) => push(LeafOp::Number, write),
         GrammarNode::String(write) => push(LeafOp::String, write),
         GrammarNode::Byte(write) => push(LeafOp::Byte, write),
-        GrammarNode::Sequence { items } => items
-            .iter()
-            .for_each(|item| collect_leaves(item, repeat_depth, choice_depth, generic, guards, out)),
+        GrammarNode::Sequence { items } => items.iter().for_each(|item| {
+            collect_leaves(item, repeat_depth, choice_depth, generic, guards, out)
+        }),
         GrammarNode::Choice { arms, span, .. } => {
             guards.push(*span);
             arms.iter().for_each(|arm| {
-                collect_leaves(&arm.body, repeat_depth, choice_depth + 1, generic, guards, out)
+                collect_leaves(
+                    &arm.body,
+                    repeat_depth,
+                    choice_depth + 1,
+                    generic,
+                    guards,
+                    out,
+                )
             });
             guards.pop();
         }
@@ -540,8 +570,10 @@ impl<'a> Visit<'a> for HostCollector<'_> {
 
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
         if let Expression::StringLiteral(literal) = &member.expression {
-            self.facts
-                .push((member.span.start, HostFact::Member(literal.value.to_string())));
+            self.facts.push((
+                member.span.start,
+                HostFact::Member(literal.value.to_string()),
+            ));
         }
         walk::walk_computed_member_expression(self, member);
     }

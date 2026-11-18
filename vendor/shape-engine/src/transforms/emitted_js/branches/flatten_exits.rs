@@ -48,8 +48,8 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::AssignmentOperator;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 use crate::transforms::emitted_js::support::indent_before;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,7 +86,11 @@ fn flatten_exits_once(source: &str) -> Result<FlattenExitsResult, String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let comments: Vec<u32> = program.comments.iter().map(|comment| comment.span.start).collect();
+    let comments: Vec<u32> = program
+        .comments
+        .iter()
+        .map(|comment| comment.span.start)
+        .collect();
     let mut scan = Scan {
         source,
         scoping: &scoping,
@@ -113,7 +117,10 @@ fn flatten_exits_once(source: &str) -> Result<FlattenExitsResult, String> {
     edits.sort_by_key(|edit| (edit.start, std::cmp::Reverse(edit.end)));
     let mut kept: Vec<analysis::Edit> = Vec::new();
     for edit in edits {
-        if kept.iter().any(|other| edit.start < other.end && other.start < edit.end) {
+        if kept
+            .iter()
+            .any(|other| edit.start < other.end && other.start < edit.end)
+        {
             continue;
         }
         kept.push(edit);
@@ -209,7 +216,11 @@ impl Scan<'_, '_> {
         let (kept, rest, test) = if leaves(&yes.body) && !leaves(&no.body) {
             (yes, no, format!("if ({}) ", self.text(branch.test.span())))
         } else if leaves(&no.body) && !leaves(&yes.body) {
-            (no, yes, format!("if (!({})) ", self.text(branch.test.span())))
+            (
+                no,
+                yes,
+                format!("if (!({})) ", self.text(branch.test.span())),
+            )
         } else {
             return;
         };
@@ -230,7 +241,9 @@ impl Scan<'_, '_> {
     /// Carries every leaf of `branch` sets to one settled value: rewritten as
     /// one replacement of the whole tree, so the rewrite stays atomic.
     fn hoist_common_tails(&mut self, branch: &IfStatement<'_>) {
-        if self.has_comment(branch.span) || self.functions.last().is_some_and(|function| function.2 > 0) {
+        if self.has_comment(branch.span)
+            || self.functions.last().is_some_and(|function| function.2 > 0)
+        {
             return;
         }
         let mut leaves = Vec::new();
@@ -252,7 +265,9 @@ impl Scan<'_, '_> {
                         .map(|(_, statement, _)| *statement)
                 })
                 .collect();
-            if writes.len() != leaves.len() || !self.only_these_writes(*symbol, &writes, branch.span) {
+            if writes.len() != leaves.len()
+                || !self.only_these_writes(*symbol, &writes, branch.span)
+            {
                 continue;
             }
             removed.extend(writes);
@@ -292,12 +307,16 @@ impl Scan<'_, '_> {
             return;
         };
         // A throw in `B` could reach a handler that sees the early store.
-        if self.has_comment(branch.span) || self.functions.last().is_some_and(|function| function.2 > 0) {
+        if self.has_comment(branch.span)
+            || self.functions.last().is_some_and(|function| function.2 > 0)
+        {
             return;
         }
         let (name, negated) = match &branch.test {
             Expression::Identifier(test) => (test, false),
-            Expression::UnaryExpression(unary) if unary.operator == oxc_syntax::operator::UnaryOperator::LogicalNot => {
+            Expression::UnaryExpression(unary)
+                if unary.operator == oxc_syntax::operator::UnaryOperator::LogicalNot =>
+            {
                 let Expression::Identifier(test) = &unary.argument else {
                     return;
                 };
@@ -305,7 +324,11 @@ impl Scan<'_, '_> {
             }
             _ => return,
         };
-        let (store_arm, other) = if negated { (&branch.consequent, alternate) } else { (alternate, &branch.consequent) };
+        let (store_arm, other) = if negated {
+            (&branch.consequent, alternate)
+        } else {
+            (alternate, &branch.consequent)
+        };
         let Statement::BlockStatement(store_block) = store_arm else {
             return;
         };
@@ -331,23 +354,33 @@ impl Scan<'_, '_> {
             return;
         }
         // `B` ends storing the carry and has no jump that could skip it.
-        if !other_block.body.last().is_some_and(|last| self.plain_target(last).is_some_and(|(target, _)| target == carry))
-            || self.text(other_block.span).contains("break")
+        if !other_block.body.last().is_some_and(|last| {
+            self.plain_target(last)
+                .is_some_and(|(target, _)| target == carry)
+        }) || self.text(other_block.span).contains("break")
             || self.text(other_block.span).contains("continue")
         {
             return;
         }
         let owner = self.functions.last().map(|function| function.0);
-        let carry_ok = self.scoping.get_resolved_references(carry).all(|reference| {
-            let span = self.nodes.kind(reference.node_id()).span();
-            let inside = branch.span.start <= span.start && span.end <= branch.span.end;
-            let function = self
-                .nodes
-                .ancestor_ids(reference.node_id())
-                .find(|id| matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
-                .map(|id| self.nodes.kind(id).span());
-            function == owner && !(inside && reference.is_read())
-        });
+        let carry_ok = self
+            .scoping
+            .get_resolved_references(carry)
+            .all(|reference| {
+                let span = self.nodes.kind(reference.node_id()).span();
+                let inside = branch.span.start <= span.start && span.end <= branch.span.end;
+                let function = self
+                    .nodes
+                    .ancestor_ids(reference.node_id())
+                    .find(|id| {
+                        matches!(
+                            self.nodes.kind(*id),
+                            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                        )
+                    })
+                    .map(|id| self.nodes.kind(id).span());
+                function == owner && !(inside && reference.is_read())
+            });
         if !carry_ok || !self.scoping.symbol_name(carry).starts_with('$') {
             return;
         }
@@ -376,7 +409,9 @@ impl Scan<'_, '_> {
         let Some(carry) = analysis::identifier_symbol(returned, self.scoping) else {
             return;
         };
-        if self.has_comment(Span::new(branch.span.start, ret.span.end)) || !returned.name.starts_with('$') {
+        if self.has_comment(Span::new(branch.span.start, ret.span.end))
+            || !returned.name.starts_with('$')
+        {
             return;
         }
         let mut stores: Vec<(Span, Span)> = Vec::new();
@@ -394,7 +429,10 @@ impl Scan<'_, '_> {
             at = statement.end;
         }
         out.push_str(&self.source[at as usize..branch.span.end as usize]);
-        self.edits.push(analysis::Edit::replace(Span::new(branch.span.start, ret.span.end), out));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(branch.span.start, ret.span.end),
+            out,
+        ));
         self.flattened += 1;
     }
 
@@ -409,30 +447,41 @@ impl Scan<'_, '_> {
                 let [declarator] = declaration.declarations.as_slice() else {
                     return;
                 };
-                let (BindingPattern::BindingIdentifier(binding), Some(Expression::Identifier(joined))) =
-                    (&declarator.id, &declarator.init)
+                let (
+                    BindingPattern::BindingIdentifier(binding),
+                    Some(Expression::Identifier(joined)),
+                ) = (&declarator.id, &declarator.init)
                 else {
                     return;
                 };
                 let Some(symbol) = binding.symbol_id.get() else {
                     return;
                 };
-                let inside = self.scoping.get_resolved_references(symbol).any(|reference| {
-                    let span = self.nodes.kind(reference.node_id()).span();
-                    branch.span.start <= span.start && span.end <= branch.span.end
-                });
+                let inside = self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|reference| {
+                        let span = self.nodes.kind(reference.node_id()).span();
+                        branch.span.start <= span.start && span.end <= branch.span.end
+                    });
                 if inside {
                     return;
                 }
-                let kind = if declaration.kind == VariableDeclarationKind::Var { "var" } else { "let" };
+                let kind = if declaration.kind == VariableDeclarationKind::Var {
+                    "var"
+                } else {
+                    "let"
+                };
                 (self.text(binding.span).to_string(), joined, Some(kind))
             }
             Statement::ExpressionStatement(expression) => {
                 let Expression::AssignmentExpression(assignment) = &expression.expression else {
                     return;
                 };
-                let (AssignmentTarget::AssignmentTargetIdentifier(target), Expression::Identifier(joined)) =
-                    (&assignment.left, &assignment.right)
+                let (
+                    AssignmentTarget::AssignmentTargetIdentifier(target),
+                    Expression::Identifier(joined),
+                ) = (&assignment.left, &assignment.right)
                 else {
                     return;
                 };
@@ -446,15 +495,22 @@ impl Scan<'_, '_> {
         let Some(carry) = analysis::identifier_symbol(joined, self.scoping) else {
             return;
         };
-        if !joined.name.starts_with('$') || self.has_comment(Span::new(branch.span.start, copy.span().end)) {
+        if !joined.name.starts_with('$')
+            || self.has_comment(Span::new(branch.span.start, copy.span().end))
+        {
             return;
         }
         let mut stores: Vec<(Span, Span)> = Vec::new();
-        if !self.tree_stores(branch, carry, &mut stores) || stores.is_empty() || !self.only_read_at(carry, &stores, joined.span) {
+        if !self.tree_stores(branch, carry, &mut stores)
+            || stores.is_empty()
+            || !self.only_read_at(carry, &stores, joined.span)
+        {
             return;
         }
         let indent = indent_before(self.source, branch.span.start);
-        let mut out = declaration.map_or(String::new(), |kind| format!("{kind} {target_text};\n{indent}"));
+        let mut out = declaration.map_or(String::new(), |kind| {
+            format!("{kind} {target_text};\n{indent}")
+        });
         let mut at = branch.span.start;
         for (statement, value) in &stores {
             out.push_str(&self.source[at as usize..statement.start as usize]);
@@ -462,7 +518,10 @@ impl Scan<'_, '_> {
             at = statement.end;
         }
         out.push_str(&self.source[at as usize..branch.span.end as usize]);
-        self.edits.push(analysis::Edit::replace(Span::new(branch.span.start, copy.span().end), out));
+        self.edits.push(analysis::Edit::replace(
+            Span::new(branch.span.start, copy.span().end),
+            out,
+        ));
         self.flattened += 1;
     }
 
@@ -470,28 +529,47 @@ impl Scan<'_, '_> {
     /// and no closure names it.
     fn only_read_at(&self, carry: SymbolId, stores: &[(Span, Span)], read: Span) -> bool {
         let owner = self.functions.last().map(|function| function.0);
-        let writes = self.scoping.get_resolved_references(carry).filter(|reference| reference.is_write()).count();
+        let writes = self
+            .scoping
+            .get_resolved_references(carry)
+            .filter(|reference| reference.is_write())
+            .count();
         writes == stores.len()
-            && self.scoping.get_resolved_references(carry).all(|reference| {
-                let span = self.nodes.kind(reference.node_id()).span();
-                let function = self
-                    .nodes
-                    .ancestor_ids(reference.node_id())
-                    .find(|id| matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
-                    .map(|id| self.nodes.kind(id).span());
-                function == owner
-                    && if reference.is_write() {
-                        !reference.is_read()
-                            && stores.iter().any(|(statement, _)| statement.start <= span.start && span.end <= statement.end)
-                    } else {
-                        span == read
-                    }
-            })
+            && self
+                .scoping
+                .get_resolved_references(carry)
+                .all(|reference| {
+                    let span = self.nodes.kind(reference.node_id()).span();
+                    let function = self
+                        .nodes
+                        .ancestor_ids(reference.node_id())
+                        .find(|id| {
+                            matches!(
+                                self.nodes.kind(*id),
+                                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                            )
+                        })
+                        .map(|id| self.nodes.kind(id).span());
+                    function == owner
+                        && if reference.is_write() {
+                            !reference.is_read()
+                                && stores.iter().any(|(statement, _)| {
+                                    statement.start <= span.start && span.end <= statement.end
+                                })
+                        } else {
+                            span == read
+                        }
+                })
     }
 
     /// Each leaf of a complete tree ends storing `carry` (collected as the
     /// statement and value) or with `return`/`throw`.
-    fn tree_stores(&self, branch: &IfStatement<'_>, carry: SymbolId, stores: &mut Vec<(Span, Span)>) -> bool {
+    fn tree_stores(
+        &self,
+        branch: &IfStatement<'_>,
+        carry: SymbolId,
+        stores: &mut Vec<(Span, Span)>,
+    ) -> bool {
         let Some(alternate) = &branch.alternate else {
             return false;
         };
@@ -516,7 +594,10 @@ impl Scan<'_, '_> {
     }
 
     /// `$X = value;`: the target and the value.
-    fn plain_target<'b, 'a>(&self, statement: &'b Statement<'a>) -> Option<(SymbolId, &'b Expression<'a>)> {
+    fn plain_target<'b, 'a>(
+        &self,
+        statement: &'b Statement<'a>,
+    ) -> Option<(SymbolId, &'b Expression<'a>)> {
         let Statement::ExpressionStatement(expression) = statement else {
             return None;
         };
@@ -534,14 +615,22 @@ impl Scan<'_, '_> {
 
     /// Collect each leaf's tail of settled stores `(symbol, statement, value)`
     /// in a complete `if`/`else` tree; false when an arm is missing.
-    fn tree_tails(&self, branch: &IfStatement<'_>, leaves: &mut Vec<Vec<(SymbolId, Span, Span)>>) -> bool {
+    fn tree_tails(
+        &self,
+        branch: &IfStatement<'_>,
+        leaves: &mut Vec<Vec<(SymbolId, Span, Span)>>,
+    ) -> bool {
         let Some(alternate) = &branch.alternate else {
             return false;
         };
         self.arm_tails(&branch.consequent, leaves) && self.arm_tails(alternate, leaves)
     }
 
-    fn arm_tails(&self, arm: &Statement<'_>, leaves: &mut Vec<Vec<(SymbolId, Span, Span)>>) -> bool {
+    fn arm_tails(
+        &self,
+        arm: &Statement<'_>,
+        leaves: &mut Vec<Vec<(SymbolId, Span, Span)>>,
+    ) -> bool {
         let statements: &[Statement<'_>] = match arm {
             Statement::BlockStatement(block) => &block.body,
             Statement::IfStatement(_) => std::slice::from_ref(arm),
@@ -588,7 +677,8 @@ impl Scan<'_, '_> {
             return None;
         }
         let symbol = analysis::identifier_symbol(target, self.scoping)?;
-        self.settled(&assignment.right, statement.span()).then(|| (symbol, assignment.right.span()))
+        self.settled(&assignment.right, statement.span())
+            .then(|| (symbol, assignment.right.span()))
     }
 
     /// A value no code can change, read without effect, that names only
@@ -604,18 +694,25 @@ impl Scan<'_, '_> {
                 unary.operator == oxc_syntax::operator::UnaryOperator::Void
                     && matches!(unary.argument, Expression::NumericLiteral(_))
             }
-            Expression::Identifier(identifier) => match analysis::identifier_symbol(identifier, self.scoping) {
-                None => super::super::primitives::is_stable_global(&identifier.name),
-                Some(symbol) => {
-                    !self.scoping.symbol_is_mutated(symbol)
-                        && self.scoping.symbol_declarations(symbol).count() == 1
-                        && matches!(
-                            self.nodes.kind(self.scoping.symbol_declaration(symbol)),
-                            AstKind::VariableDeclarator(declarator) if declarator.init.is_some()
-                        )
-                        && self.nodes.kind(self.scoping.symbol_declaration(symbol)).span().end <= scope.start
+            Expression::Identifier(identifier) => {
+                match analysis::identifier_symbol(identifier, self.scoping) {
+                    None => super::super::primitives::is_stable_global(&identifier.name),
+                    Some(symbol) => {
+                        !self.scoping.symbol_is_mutated(symbol)
+                            && self.scoping.symbol_declarations(symbol).count() == 1
+                            && matches!(
+                                self.nodes.kind(self.scoping.symbol_declaration(symbol)),
+                                AstKind::VariableDeclarator(declarator) if declarator.init.is_some()
+                            )
+                            && self
+                                .nodes
+                                .kind(self.scoping.symbol_declaration(symbol))
+                                .span()
+                                .end
+                                <= scope.start
+                    }
                 }
-            },
+            }
             Expression::ComputedMemberExpression(member) => {
                 matches!(&member.object, Expression::Identifier(object)
                     if object.name == "arguments" && analysis::identifier_symbol(object, self.scoping).is_none())
@@ -627,9 +724,10 @@ impl Scan<'_, '_> {
                         self.scoping,
                     )
             }
-            Expression::StaticMemberExpression(_) => {
-                super::super::primitives::is_builtin_member(value.as_member_expression().expect("a member"), self.scoping)
-            }
+            Expression::StaticMemberExpression(_) => super::super::primitives::is_builtin_member(
+                value.as_member_expression().expect("a member"),
+                self.scoping,
+            ),
             _ => false,
         }
     }
@@ -643,19 +741,43 @@ impl Scan<'_, '_> {
     /// inside `tree`, and none outside the current function's own code.
     fn only_these_writes(&self, symbol: SymbolId, writes: &[Span], tree: Span) -> bool {
         let owner = self.functions.last().map(|function| function.0);
-        self.scoping.get_resolved_references(symbol).all(|reference| {
-            let span = self.nodes.kind(reference.node_id()).span();
-            let inside = tree.start <= span.start && span.end <= tree.end;
-            let is_listed = writes.iter().any(|write| write.start <= span.start && span.end <= write.end);
-            let function = self
+        self.scoping
+            .get_resolved_references(symbol)
+            .all(|reference| {
+                let span = self.nodes.kind(reference.node_id()).span();
+                let inside = tree.start <= span.start && span.end <= tree.end;
+                let is_listed = writes
+                    .iter()
+                    .any(|write| write.start <= span.start && span.end <= write.end);
+                let function = self
+                    .nodes
+                    .ancestor_ids(reference.node_id())
+                    .find(|id| {
+                        matches!(
+                            self.nodes.kind(*id),
+                            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                        )
+                    })
+                    .map(|id| self.nodes.kind(id).span());
+                function == owner
+                    && if reference.is_write() {
+                        is_listed && !reference.is_read()
+                    } else {
+                        !inside
+                    }
+            })
+            && writes.len()
+                == self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .filter(|reference| reference.is_write())
+                    .count()
+            && self
                 .nodes
-                .ancestor_ids(reference.node_id())
-                .find(|id| matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
-                .map(|id| self.nodes.kind(id).span());
-            function == owner && if reference.is_write() { is_listed && !reference.is_read() } else { !inside }
-        }) && writes.len()
-            == self.scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).count()
-            && self.nodes.kind(self.scoping.symbol_declaration(symbol)).span().end <= tree.start
+                .kind(self.scoping.symbol_declaration(symbol))
+                .span()
+                .end
+                <= tree.start
     }
 
     /// A bare `{ … }` in a statement list whose own bindings can move to the
@@ -665,10 +787,13 @@ impl Scan<'_, '_> {
             return;
         }
         let replacement = match (block.body.first(), block.body.last()) {
-            (Some(first), Some(last)) => self.source[first.span().start as usize..last.span().end as usize].to_string(),
+            (Some(first), Some(last)) => {
+                self.source[first.span().start as usize..last.span().end as usize].to_string()
+            }
             _ => String::new(),
         };
-        self.edits.push(analysis::Edit::replace(block.span, replacement));
+        self.edits
+            .push(analysis::Edit::replace(block.span, replacement));
         self.flattened += 1;
     }
 
@@ -676,11 +801,13 @@ impl Scan<'_, '_> {
     fn splice_safe(&self, statements: &[Statement<'_>]) -> bool {
         statements.iter().all(|statement| match statement {
             Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_) => false,
-            Statement::VariableDeclaration(declaration) => declaration.declarations.iter().all(|declarator| {
-                let mut names = Names::default();
-                names.visit_binding_pattern(&declarator.id);
-                names.all_generated
-            }),
+            Statement::VariableDeclaration(declaration) => {
+                declaration.declarations.iter().all(|declarator| {
+                    let mut names = Names::default();
+                    names.visit_binding_pattern(&declarator.id);
+                    names.all_generated
+                })
+            }
             _ => true,
         })
     }
@@ -696,10 +823,21 @@ impl Scan<'_, '_> {
         for declarator in &declaration.declarations {
             let text = self.text(declarator.span);
             match (&declarator.id, &declarator.init) {
-                (BindingPattern::BindingIdentifier(binding), None) if binding.name.starts_with('$') => {
-                    match binding.symbol_id.get().and_then(|symbol| self.first_store(symbol, rest)) {
-                        Some((store, value)) if !stores.iter().any(|(other, _)| *other == store) => {
-                            stores.push((store, format!("let {} = {};", self.text(binding.span), self.text(value))));
+                (BindingPattern::BindingIdentifier(binding), None)
+                    if binding.name.starts_with('$') =>
+                {
+                    match binding
+                        .symbol_id
+                        .get()
+                        .and_then(|symbol| self.first_store(symbol, rest))
+                    {
+                        Some((store, value))
+                            if !stores.iter().any(|(other, _)| *other == store) =>
+                        {
+                            stores.push((
+                                store,
+                                format!("let {} = {};", self.text(binding.span), self.text(value)),
+                            ));
                         }
                         _ => kept.push(text),
                     }
@@ -711,9 +849,15 @@ impl Scan<'_, '_> {
             return;
         }
         if kept.is_empty() {
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, declaration.span)));
+            self.edits.push(analysis::Edit::delete(whole_line(
+                self.source,
+                declaration.span,
+            )));
         } else {
-            self.edits.push(analysis::Edit::replace(declaration.span, format!("let {};", kept.join(", "))));
+            self.edits.push(analysis::Edit::replace(
+                declaration.span,
+                format!("let {};", kept.join(", ")),
+            ));
         }
         self.sunk += stores.len();
         for (store, replacement) in stores {
@@ -726,12 +870,19 @@ impl Scan<'_, '_> {
     fn first_store(&self, symbol: SymbolId, rest: &[Statement<'_>]) -> Option<(Span, Span)> {
         // A closure could run before the store and meet the binding's TDZ.
         let function_of = |node| {
-            self.nodes
-                .ancestor_ids(node)
-                .find(|id| matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+            self.nodes.ancestor_ids(node).find(|id| {
+                matches!(
+                    self.nodes.kind(*id),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
+            })
         };
         let declaring = function_of(self.scoping.symbol_declaration(symbol));
-        if self.scoping.get_resolved_references(symbol).any(|reference| function_of(reference.node_id()) != declaring) {
+        if self
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| function_of(reference.node_id()) != declaring)
+        {
             return None;
         }
         let first = self
@@ -739,7 +890,9 @@ impl Scan<'_, '_> {
             .get_resolved_references(symbol)
             .map(|reference| self.nodes.kind(reference.node_id()).span())
             .min_by_key(|span| span.start)?;
-        let store = rest.iter().find(|statement| statement.span().start <= first.start && first.end <= statement.span().end)?;
+        let store = rest.iter().find(|statement| {
+            statement.span().start <= first.start && first.end <= statement.span().end
+        })?;
         let value = self.plain_store(store, symbol)?;
         (!self.has_comment(store.span())).then(|| (store.span(), value))
     }
@@ -761,7 +914,11 @@ impl Scan<'_, '_> {
         {
             return None;
         }
-        let mut reads = Reads { scoping: self.scoping, symbol, found: false };
+        let mut reads = Reads {
+            scoping: self.scoping,
+            symbol,
+            found: false,
+        };
         reads.visit_expression(&assignment.right);
         (!reads.found).then(|| assignment.right.span())
     }
@@ -827,7 +984,11 @@ impl<'a> Visit<'a> for Scan<'_, 'a> {
         self.dynamic |= identifier.name == "eval";
     }
     fn visit_function(&mut self, function: &Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
-        self.functions.push((function.span, super::super::dead_ssa::readonly_arguments(function), 0));
+        self.functions.push((
+            function.span,
+            super::super::dead_ssa::readonly_arguments(function),
+            0,
+        ));
         walk::walk_function(self, function, flags);
         self.functions.pop();
     }
@@ -860,8 +1021,20 @@ mod tests {
         let source = "function f(t, x) {\n  if (t) {\n    return null;\n  } else {\n    let $SSA_1 = x.p;\n    g($SSA_1);\n  }\n  if (t) {\n    g(1);\n  } else {\n    throw x;\n  }\n}";
         let result = flatten_exits(source).unwrap();
         assert_eq!(result.flattened, 2, "{}", result.code);
-        assert!(result.code.contains("if (t) {\n    return null;\n  }\n  let $SSA_1 = x.p;\n  g($SSA_1);"), "{}", result.code);
-        assert!(result.code.contains("if (!(t)) {\n    throw x;\n  }\n  g(1);"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("if (t) {\n    return null;\n  }\n  let $SSA_1 = x.p;\n  g($SSA_1);"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result
+                .code
+                .contains("if (!(t)) {\n    throw x;\n  }\n  g(1);"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -869,7 +1042,13 @@ mod tests {
         let source = "function f(x) {\n  let $CARRY_1;\n  g();\n  $CARRY_1 = x;\n  $CARRY_1 = 2;\n  return $CARRY_1;\n}";
         let result = flatten_exits(source).unwrap();
         assert_eq!(result.sunk, 1, "{}", result.code);
-        assert!(result.code.contains("g();\n  let $CARRY_1 = x;\n  $CARRY_1 = 2;"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("g();\n  let $CARRY_1 = x;\n  $CARRY_1 = 2;"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -877,19 +1056,41 @@ mod tests {
         let source = "function f() {\n  let $JOIN_1, $JOIN_2;\n  if (arguments[0] < 0) {\n    $JOIN_1 = true;\n    $JOIN_2 = arguments[1];\n  } else {\n    if (arguments[0] === 0) {\n      g();\n      $JOIN_1 = g();\n      $JOIN_2 = arguments[1];\n    } else {\n      $JOIN_1 = false;\n      $JOIN_2 = arguments[1];\n    }\n  }\n  return [$JOIN_1, $JOIN_2];\n}";
         let result = flatten_exits(source).unwrap();
         assert_eq!(result.hoisted, 1, "{}", result.code);
-        assert_eq!(result.code.matches("$JOIN_2 = arguments[1];").count(), 1, "{}", result.code);
-        assert!(result.code.contains("  }\n  let $JOIN_2 = arguments[1];\n  return"), "{}", result.code);
+        assert_eq!(
+            result.code.matches("$JOIN_2 = arguments[1];").count(),
+            1,
+            "{}",
+            result.code
+        );
+        assert!(
+            result
+                .code
+                .contains("  }\n  let $JOIN_2 = arguments[1];\n  return"),
+            "{}",
+            result.code
+        );
         for declined in [
             // a missing else: one path keeps the old value
-            source.replace("    } else {\n      $JOIN_1 = false;\n      $JOIN_2 = arguments[1];\n    }\n", "    }\n"),
+            source.replace(
+                "    } else {\n      $JOIN_1 = false;\n      $JOIN_2 = arguments[1];\n    }\n",
+                "    }\n",
+            ),
             // a value that runs code
             source.replace("$JOIN_2 = arguments[1];", "$JOIN_2 = g();"),
             // an effect after the store in a leaf
-            source.replace("      $JOIN_1 = g();\n      $JOIN_2 = arguments[1];", "      $JOIN_2 = arguments[1];\n      $JOIN_1 = g();"),
+            source.replace(
+                "      $JOIN_1 = g();\n      $JOIN_2 = arguments[1];",
+                "      $JOIN_2 = arguments[1];\n      $JOIN_1 = g();",
+            ),
             // a parameter makes arguments[n] writable
             source.replace("function f()", "function f(a)"),
             // a try around the tree
-            source.replace("  if (arguments[0] < 0) {", "  try {} finally {}\n  try {\n  if (arguments[0] < 0) {").replace("  return [", "  } catch (e) {}\n  return ["),
+            source
+                .replace(
+                    "  if (arguments[0] < 0) {",
+                    "  try {} finally {}\n  try {\n  if (arguments[0] < 0) {",
+                )
+                .replace("  return [", "  } catch (e) {}\n  return ["),
         ] {
             let result = flatten_exits(&declined).unwrap();
             assert_eq!(result.hoisted, 0, "{declined} -> {}", result.code);
@@ -901,7 +1102,13 @@ mod tests {
         let source = "function f(x) {\n  let $VAR_1, $JOIN_2, $JOIN_3;\n  g();\n  $VAR_1 = this;\n  $JOIN_3 = x;\n  return [$VAR_1, $JOIN_2, $JOIN_3, () => $JOIN_2];\n}";
         let result = flatten_exits(source).unwrap();
         assert_eq!(result.sunk, 2, "{}", result.code);
-        assert!(result.code.contains("let $JOIN_2;\n  g();\n  let $VAR_1 = this;\n  let $JOIN_3 = x;"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("let $JOIN_2;\n  g();\n  let $VAR_1 = this;\n  let $JOIN_3 = x;"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -911,14 +1118,21 @@ mod tests {
         assert!(result.code.contains("  let $JOIN_1 = $MERGE_1;\n  if ($JOIN_1) {\n    let $SSA_1 = g();\n    $JOIN_1 = $SSA_1.x;\n  }\n  return"), "{}", result.code);
         for declined in [
             // the other arm does not end storing the carry
-            source.replace("    $JOIN_1 = $SSA_1.x;\n", "    $JOIN_1 = $SSA_1.x;\n    g();\n"),
+            source.replace(
+                "    $JOIN_1 = $SSA_1.x;\n",
+                "    $JOIN_1 = $SSA_1.x;\n    g();\n",
+            ),
             // the arm reads the carry
             source.replace("let $SSA_1 = g();", "let $SSA_1 = g($JOIN_1);"),
             // a closure reads the carry
             source.replace("  return g($JOIN_1);", "  return () => $JOIN_1;"),
         ] {
             let result = flatten_exits(&declined).unwrap();
-            assert!(result.code.contains("} else {"), "{declined} -> {}", result.code);
+            assert!(
+                result.code.contains("} else {"),
+                "{declined} -> {}",
+                result.code
+            );
         }
     }
 
@@ -926,18 +1140,42 @@ mod tests {
     fn splices_a_bare_block_into_its_list() {
         let source = "function f(g) {\n  {\n    let $LOOP_1 = 0;\n    g($LOOP_1);\n  }\n  {\n    let i = 0;\n    g(i);\n  }\n  {\n    function h() {}\n  }\n}";
         let result = flatten_exits(source).unwrap();
-        assert!(result.code.contains("function f(g) {\n  let $LOOP_1 = 0;\n    g($LOOP_1);\n  {\n    let i = 0;"), "{}", result.code);
-        assert!(result.code.contains("{\n    function h() {}\n  }"), "{}", result.code);
+        assert!(
+            result.code.contains(
+                "function f(g) {\n  let $LOOP_1 = 0;\n    g($LOOP_1);\n  {\n    let i = 0;"
+            ),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("{\n    function h() {}\n  }"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
     fn returns_from_each_leaf_instead_of_a_join() {
         let source = "function f(c, d, g) {\n  let $JOIN_1;\n  if (c) {\n    g();\n    $JOIN_1 = 1;\n  } else {\n    if (d) {\n      throw g;\n    } else {\n      $JOIN_1 = g(2);\n    }\n  }\n  return $JOIN_1;\n}";
         let result = flatten_exits(source).unwrap();
-        assert!(result.code.contains("    g();\n    return 1;\n  }\n  if (d) {"), "{}", result.code);
-        assert!(result.code.contains("      return g(2);\n    }\n}"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("    g();\n    return 1;\n  }\n  if (d) {"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("      return g(2);\n    }\n}"),
+            "{}",
+            result.code
+        );
         // another read of the carry
-        let kept = flatten_exits(&source.replace("    g();\n    $JOIN_1 = 1;", "    $JOIN_1 = 1;\n    g($JOIN_1);")).unwrap();
+        let kept = flatten_exits(&source.replace(
+            "    g();\n    $JOIN_1 = 1;",
+            "    $JOIN_1 = 1;\n    g($JOIN_1);",
+        ))
+        .unwrap();
         assert!(kept.code.contains("return $JOIN_1;"), "{}", kept.code);
     }
 
@@ -946,11 +1184,24 @@ mod tests {
         let source = "function f(c, g) {\n  let $JOIN_1;\n  if (c) {\n    g();\n    $JOIN_1 = 1;\n  } else {\n    $JOIN_1 = g(2);\n  }\n  let $LOOP_1 = $JOIN_1;\n  while (g($LOOP_1)) $LOOP_1 = 3;\n}";
         let result = flatten_exits(source).unwrap();
         assert!(result.code.contains("  let $LOOP_1;\n  if (c) {\n    g();\n    $LOOP_1 = 1;\n  } else {\n    $LOOP_1 = g(2);\n  }\n  while"), "{}", result.code);
-        let assigned = flatten_exits(&source.replace("let $LOOP_1 = $JOIN_1;", "$KEY_1 = $JOIN_1;")).unwrap();
-        assert!(assigned.code.contains("    $KEY_1 = g(2);\n  }\n  while"), "{}", assigned.code);
+        let assigned =
+            flatten_exits(&source.replace("let $LOOP_1 = $JOIN_1;", "$KEY_1 = $JOIN_1;")).unwrap();
+        assert!(
+            assigned.code.contains("    $KEY_1 = g(2);\n  }\n  while"),
+            "{}",
+            assigned.code
+        );
         // the tree names the target of a `let`
-        let kept = flatten_exits(&source.replace("    g();\n    $JOIN_1 = 1;", "    g(() => $LOOP_1);\n    $JOIN_1 = 1;")).unwrap();
-        assert!(kept.code.contains("let $LOOP_1 = $JOIN_1;"), "{}", kept.code);
+        let kept = flatten_exits(&source.replace(
+            "    g();\n    $JOIN_1 = 1;",
+            "    g(() => $LOOP_1);\n    $JOIN_1 = 1;",
+        ))
+        .unwrap();
+        assert!(
+            kept.code.contains("let $LOOP_1 = $JOIN_1;"),
+            "{}",
+            kept.code
+        );
     }
 
     #[test]

@@ -10,14 +10,20 @@ fn keeps_a_handoff_slot_that_would_forward_too() {
     let source = "function f(o, g) {\n  let $CARRY_1 = o[\"get\"];\n  let $CARRY_2 = $CARRY_1;\n  if (typeof $CARRY_1 === \"function\" && g($CARRY_2)) {\n    return 1;\n  }\n  return 0;\n}";
     let (code, _) = forward(source);
     let (free, _) = crate::tracing::scope::free_and_bound_names(&code).unwrap();
-    assert!(!free.iter().any(|name| name.starts_with("$CARRY_")), "{code}");
+    assert!(
+        !free.iter().any(|name| name.starts_with("$CARRY_")),
+        "{code}"
+    );
 }
 
 #[test]
 fn moves_past_reads_of_a_local_no_call_can_write() {
     let source = "function f(k, a, n) {\n  let $LOOP_1 = 0;\n  for (let i = 0; i < n; i++) {\n    $LOOP_1 = 0 | ($LOOP_1 << 5) - $LOOP_1 + k(a[i]);\n  }\n  let $JOIN_1;\n  if (n) {\n    let $SSA_1 = k(a[0]);\n    $JOIN_1 = ($LOOP_1 << 5) - $LOOP_1 + ($SSA_1 << 16) | 0;\n  } else {\n    $JOIN_1 = $LOOP_1;\n  }\n  return $JOIN_1;\n}";
     let (code, _) = forward(source);
-    assert!(code.contains("$JOIN_1 = ($LOOP_1 << 5) - $LOOP_1 + ((k(a[0])) << 16) | 0;"), "{code}");
+    assert!(
+        code.contains("$JOIN_1 = ($LOOP_1 << 5) - $LOOP_1 + ((k(a[0])) << 16) | 0;"),
+        "{code}"
+    );
     // a closure writes the local: the call could change it
     let (code, _) = forward(&source.replace("  return $JOIN_1;", "  return () => $LOOP_1 = 1;"));
     assert!(code.contains("let $SSA_1"), "{code}");
@@ -124,7 +130,10 @@ fn reads_duplicate_tuple_slots_through_the_first_name() {
     );
     assert_eq!(n, 1, "{code}");
     assert!(code.contains("let [$SSA_1, ] = $VMHELPER_1(o);"), "{code}");
-    assert!(code.contains("return [$SSA_1.x, $SSA_1.call(o), $SSA_1];"), "{code}");
+    assert!(
+        code.contains("return [$SSA_1.x, $SSA_1.call(o), $SSA_1];"),
+        "{code}"
+    );
     // different slots are different values
     let (code, n) = forward(
         "function $VMHELPER_1(a, b) {\n  return [a, b];\n}\nfunction f(o) {\n  let [$SSA_1, $SSA_2] = $VMHELPER_1(o.p, o.q);\n  return [$SSA_1, $SSA_2, $SSA_2];\n}",
@@ -147,7 +156,10 @@ fn reads_pass_through_slots_as_their_arguments() {
     );
     // the helper's own single-use temporary goes too
     assert_eq!(n, 2, "{code}");
-    assert!(code.contains("let [$SSA_1, ] = $VMHELPER_1(x, y);"), "{code}");
+    assert!(
+        code.contains("let [$SSA_1, ] = $VMHELPER_1(x, y);"),
+        "{code}"
+    );
     assert!(code.contains("return g($SSA_1, y, y);"), "{code}");
     for source in [
         // a computed argument is not copied
@@ -287,7 +299,10 @@ fn reads_a_slot_before_a_store_whose_right_side_consumes_the_copy() {
         "function f() {\n  var $KEY_3 = g();\n  let $SSA_1 = $KEY_3;\n  $KEY_3 = ($SSA_1 << 5) - $SSA_1 | 0;\n}",
     );
     assert_eq!(n, 1, "{code}");
-    assert!(code.contains("$KEY_3 = ($KEY_3 << 5) - $KEY_3 | 0;"), "{code}");
+    assert!(
+        code.contains("$KEY_3 = ($KEY_3 << 5) - $KEY_3 | 0;"),
+        "{code}"
+    );
     for source in [
         // a read after the store sees the new value
         "function f() {\n  var $KEY_3 = g();\n  let $SSA_1 = $KEY_3;\n  $KEY_3 = $SSA_1 + 1;\n  return [$SSA_1, $SSA_1];\n}",
@@ -354,15 +369,13 @@ fn keeps_a_snapshot_when_the_store_can_still_reach_a_read() {
 
 #[test]
 fn moves_past_a_call_method_read() {
-    let (code, n) = forward(
-        "function f(g, t, o) {\n  let $SSA_1 = o.p;\n  return g.call(t, $SSA_1);\n}",
-    );
+    let (code, n) =
+        forward("function f(g, t, o) {\n  let $SSA_1 = o.p;\n  return g.call(t, $SSA_1);\n}");
     assert_eq!(n, 1, "{code}");
     assert!(code.contains("return g.call(t, o.p);"), "{code}");
     // any other property read first still blocks
-    let (code, n) = forward(
-        "function f(g, t, o) {\n  let $SSA_1 = o.p;\n  return g.bind(t, $SSA_1);\n}",
-    );
+    let (code, n) =
+        forward("function f(g, t, o) {\n  let $SSA_1 = o.p;\n  return g.bind(t, $SSA_1);\n}");
     assert_eq!(n, 0, "{code}");
 }
 
@@ -391,7 +404,10 @@ fn writes_a_later_stored_value_to_its_slot_early() {
         "function h() { sink(); }\nfunction f(o) {\n  let $SSA_1 = h(o);\n  h($SSA_1);\n  var $KEY_1 = $SSA_1;\n  return [$SSA_1, $SSA_1];\n}",
     );
     assert_eq!(n, 1, "{code}");
-    assert!(code.contains("$KEY_1 = h(o);\n  h($KEY_1);\n  var $KEY_1;\n  return [$KEY_1, $KEY_1];"), "{code}");
+    assert!(
+        code.contains("$KEY_1 = h(o);\n  h($KEY_1);\n  var $KEY_1;\n  return [$KEY_1, $KEY_1];"),
+        "{code}"
+    );
     for source in [
         // the slot is read before the store
         "function h() { sink(); }\nfunction f(o) {\n  var $KEY_1 = h();\n  let $SSA_1 = h(o);\n  h($KEY_1);\n  $KEY_1 = $SSA_1;\n  return [$SSA_1, $SSA_1];\n}",
@@ -412,7 +428,10 @@ fn leaves_a_read_in_a_deleted_shuffle_to_the_call() {
         "function $VMHELPER_1(a, b) {\n  return [b, a, a];\n}\nfunction h() { sink(); }\nfunction f(x) {\n  let $SSA_1 = h(x);\n  let [$SSA_2, ] = $VMHELPER_1($SSA_1, x);\n  h($SSA_2, $SSA_1);\n  var $KEY_1 = $SSA_1;\n  return [$SSA_1, $SSA_1];\n}",
     );
     assert!(!code.contains("$VMHELPER_1($"), "{code}");
-    assert!(code.contains("$KEY_1 = h(x);\n  h(x, $KEY_1);\n  var $KEY_1;\n  return [$KEY_1, $KEY_1];"), "{code}");
+    assert!(
+        code.contains("$KEY_1 = h(x);\n  h(x, $KEY_1);\n  var $KEY_1;\n  return [$KEY_1, $KEY_1];"),
+        "{code}"
+    );
     // the deleted call does not take a moved value's effect with it
     let (code, _) = forward(
         "function $VMHELPER_1(a, b) {\n  return [b, a];\n}\nfunction f(x, g) {\n  let $SSA_1 = g();\n  let [$SSA_2, ] = $VMHELPER_1($SSA_1, x);\n  return $SSA_2;\n}",
@@ -446,7 +465,10 @@ fn reads_fixed_arguments_as_stable_values() {
         "function h() { sink(); }\nfunction f() {\n  let $SSA_1 = arguments[1];\n  var $KEY_0 = arguments[0];\n  h($SSA_1, $KEY_0);\n  return [$SSA_1, $SSA_1];\n}",
     );
     assert!(n >= 1, "{code}");
-    assert!(code.contains("return [arguments[1], arguments[1]];"), "{code}");
+    assert!(
+        code.contains("return [arguments[1], arguments[1]];"),
+        "{code}"
+    );
     for source in [
         // a parameter aliases `arguments` in sloppy code
         "function f(a) {\n  let $SSA_1 = arguments[0];\n  a = 2;\n  return [$SSA_1, $SSA_1];\n}",
@@ -467,7 +489,12 @@ fn deletes_decoys_and_moves_pure_primitives() {
     );
     assert!(!code.contains("$SSA_1 + 2;"), "{code}");
     // Number(o) runs before g(): the call stays, the pure + 2 moves
-    assert!(code.contains("return ($SSA_1 * 2)") || code.contains("return $SSA_1 * 2;") || code.contains("Number(o) + 2"), "{code}");
+    assert!(
+        code.contains("return ($SSA_1 * 2)")
+            || code.contains("return $SSA_1 * 2;")
+            || code.contains("Number(o) + 2"),
+        "{code}"
+    );
     // operands are primitives: a discarded sum is a decoy too
     let (code, _) = forward("function f(o) {\n  o + 2;\n  return 1;\n}");
     assert!(!code.contains("o + 2;"), "{code}");
@@ -479,7 +506,10 @@ fn writes_a_value_to_the_carry_it_joins_into() {
         "function h() { sink(); }\nfunction f(o, c) {\n  let $CARRY_1;\n  if (c) {\n    let $SSA_1 = h(o);\n    h(null != $SSA_1);\n    $CARRY_1 = $SSA_1;\n    h($SSA_1);\n  } else {\n    $CARRY_1 = 2;\n  }\n  return $CARRY_1;\n}",
     );
     assert_eq!(n, 1, "{code}");
-    assert!(code.contains("$CARRY_1 = h(o);\n    h(null != $CARRY_1);\n    h($CARRY_1);"), "{code}");
+    assert!(
+        code.contains("$CARRY_1 = h(o);\n    h(null != $CARRY_1);\n    h($CARRY_1);"),
+        "{code}"
+    );
     // the carry is read between the value and its store
     let (code, n) = forward(
         "function h() { sink(); }\nfunction f(o) {\n  let $CARRY_1 = 0;\n  let $SSA_1 = h(o);\n  h($CARRY_1);\n  $CARRY_1 = $SSA_1;\n  return [$SSA_1, $SSA_1];\n}",
@@ -505,8 +535,14 @@ fn copies_a_builtin_method_into_its_reads() {
     let (code, _) = forward(
         "function f(g, x) {\n  let $SSA_1 = Object[\"defineProperty\"];\n  g();\n  $SSA_1.call(Object, x, \"a\", {});\n  return $SSA_1;\n}",
     );
-    assert!(code.contains("Object[\"defineProperty\"].call(Object, x"), "{code}");
-    assert!(code.contains("return Object[\"defineProperty\"];"), "{code}");
+    assert!(
+        code.contains("Object[\"defineProperty\"].call(Object, x"),
+        "{code}"
+    );
+    assert!(
+        code.contains("return Object[\"defineProperty\"];"),
+        "{code}"
+    );
     // a local named Object is not the built-in
     let (code, _) = forward("function f(Object, g) {\n  let $SSA_1 = Object.keys;\n  g();\n  return [$SSA_1, $SSA_1];\n}");
     assert!(code.contains("[$SSA_1, $SSA_1]"), "{code}");
@@ -515,7 +551,10 @@ fn copies_a_builtin_method_into_its_reads() {
 #[test]
 fn moves_a_fresh_array_down_to_its_one_read() {
     let (code, _) = forward("function f(g, o) {\n  let $SSA_1 = [];\n  g();\n  o.x = g();\n  if (o) {\n    o.next([$SSA_1, 2]);\n  }\n}");
-    assert!(code.contains("o.next([[], 2]);") && !code.contains("$SSA_1"), "{code}");
+    assert!(
+        code.contains("o.next([[], 2]);") && !code.contains("$SSA_1"),
+        "{code}"
+    );
     // a loop would allocate it again on every pass
     let (code, _) = forward("function f(g, o) {\n  let $SSA_1 = [];\n  g();\n  while (o.x) {\n    o.next($SSA_1);\n  }\n}");
     assert!(code.contains("o.next($SSA_1);"), "{code}");
@@ -530,7 +569,8 @@ fn a_slot_its_declaring_function_writes_is_settled_inside_closures() {
     let (code, _) = forward(&source.replace("$KEY_1 = h;", "$KEY_1 = h;\n  while (t) $KEY_1 = t;"));
     assert!(code.contains("o.x = $KEY_1(a, $KEY_1(a));"), "{code}");
     // a let declared after other code may be read in its TDZ
-    let (code, _) = forward(&source.replace("  let $KEY_1, $KEY_2;\n", "  h();\n  let $KEY_1, $KEY_2;\n"));
+    let (code, _) =
+        forward(&source.replace("  let $KEY_1, $KEY_2;\n", "  h();\n  let $KEY_1, $KEY_2;\n"));
     assert!(code.contains("let $SSA_1"), "{code}");
     // a closure writes it
     let (code, _) = forward(&source.replace("$KEY_1 = h;", "(() => { $KEY_1 = h; })();"));
@@ -543,7 +583,11 @@ fn copies_a_property_read_late_only_while_nothing_can_change_it() {
     assert_eq!(forward(source).1, 0);
     let late = super::forward_values_and_property_reads(source).unwrap();
     assert_eq!(late.forwarded, 1, "{}", late.code);
-    assert!(late.code.contains("return [o.p, (o.p) + 1];"), "{}", late.code);
+    assert!(
+        late.code.contains("return [o.p, (o.p) + 1];"),
+        "{}",
+        late.code
+    );
     for kept in [
         "function f(o, g) {\n  let $SSA_1 = o.p;\n  g(o);\n  return [$SSA_1, $SSA_1];\n}",
         "function f(o) {\n  let $SSA_1 = o.p;\n  o.p = 2;\n  return [$SSA_1, $SSA_1];\n}",
@@ -575,7 +619,11 @@ fn reads_a_property_of_arguments_across_calls_not_handed_arguments() {
 fn reads_a_property_inside_the_store_it_feeds() {
     let source = "function f(o, p) {\n  let $SSA_1 = o.a;\n  $SSA_1.ts = $SSA_1.ts + p.top;\n}";
     let late = super::forward_values_and_property_reads(source).unwrap();
-    assert!(late.code.contains("(o.a).ts = (o.a).ts + p.top;"), "{}", late.code);
+    assert!(
+        late.code.contains("(o.a).ts = (o.a).ts + p.top;"),
+        "{}",
+        late.code
+    );
 }
 
 #[test]
@@ -600,7 +648,8 @@ fn reads_a_slot_as_the_stable_value_just_stored() {
     // after the if the store may not have run
     assert!(code.contains("return $KEY_8;"), "{code}");
     // a store in between
-    let (code, _) = forward("function f(x) {\n  var $KEY_8 = 1;\n  $KEY_8 = x();\n  return $KEY_8;\n}");
+    let (code, _) =
+        forward("function f(x) {\n  var $KEY_8 = 1;\n  $KEY_8 = x();\n  return $KEY_8;\n}");
     assert!(code.contains("return $KEY_8;"), "{code}");
 }
 
@@ -609,12 +658,18 @@ fn reads_a_tested_boolean_as_its_known_value_in_each_arm() {
     let (code, _) = forward(
         "function g() { sink(); }\nfunction f(a) {\n  let $SSA_1 = a < 0;\n  let $CARRY_1;\n  if ($SSA_1) {\n    $CARRY_1 = $SSA_1;\n    g();\n  } else {\n    $CARRY_1 = !$SSA_1;\n    g();\n  }\n  return $CARRY_1;\n}",
     );
-    assert!(code.contains("$CARRY_1 = true;") && code.contains("$CARRY_1 = !false;"), "{code}");
+    assert!(
+        code.contains("$CARRY_1 = true;") && code.contains("$CARRY_1 = !false;"),
+        "{code}"
+    );
     // not a known boolean
     let (code, _) = forward(
         "function g() { sink(); }\nfunction f(a) {\n  let $SSA_1 = a.p;\n  let $CARRY_1;\n  if ($SSA_1) {\n    $CARRY_1 = $SSA_1;\n    g();\n  }\n  return $CARRY_1;\n}",
     );
-    assert!(code.contains("$CARRY_1 = $SSA_1;") || code.contains("a.p"), "{code}");
+    assert!(
+        code.contains("$CARRY_1 = $SSA_1;") || code.contains("a.p"),
+        "{code}"
+    );
     assert!(!code.contains("true"), "{code}");
 }
 
@@ -622,11 +677,17 @@ fn reads_a_tested_boolean_as_its_known_value_in_each_arm() {
 fn writes_early_into_a_carry_declared_inside_the_same_try() {
     let source = "function g() { sink(); }\nfunction f(a, j) {\n  try {\n    let $CARRY_1;\n    if (j) {\n      let $SSA_1 = j + 1;\n      a[$SSA_1] = g();\n      $CARRY_1 = $SSA_1;\n    } else {\n      $CARRY_1 = 0;\n    }\n    return $CARRY_1;\n  } catch (e) {}\n}";
     let (code, _) = forward(source);
-    assert!(code.contains("$CARRY_1 = j + 1;\n      a[$CARRY_1] = g();"), "{code}");
+    assert!(
+        code.contains("$CARRY_1 = j + 1;\n      a[$CARRY_1] = g();"),
+        "{code}"
+    );
     // a carry declared outside the try stays
     let source = "function g() { sink(); }\nfunction f(a, j) {\n  let $CARRY_1 = 5;\n  try {\n    let $SSA_1 = j + 1;\n    a[$SSA_1] = g();\n    $CARRY_1 = $SSA_1;\n  } catch (e) {}\n  return $CARRY_1;\n}";
     let (code, _) = forward(source);
-    assert!(code.contains("let $SSA_1 = j + 1;") || code.contains("a[j + 1]"), "{code}");
+    assert!(
+        code.contains("let $SSA_1 = j + 1;") || code.contains("a[j + 1]"),
+        "{code}"
+    );
     assert!(!code.contains("$CARRY_1 = j + 1;"), "{code}");
 }
 
@@ -645,7 +706,10 @@ fn keeps_calls_of_child_thread_stubs() {
     let source = "function $THREAD_SELF() {\n\tfunction $THREAD_5_1() {}\n\t$KEY_1 = $THREAD_5_1;\n\t$THREAD_5_1();\n\t$KEY_1();\n\tlet $SSA_1 = $THREAD_5_1();\n\tsink();\n\treturn $SSA_1;\n}";
     let (code, _) = forward(source);
     assert!(code.contains("\t$THREAD_5_1();\n\t$KEY_1();\n"), "{code}");
-    assert!(code.contains("let $SSA_1 = $THREAD_5_1();\n\tsink();"), "{code}");
+    assert!(
+        code.contains("let $SSA_1 = $THREAD_5_1();\n\tsink();"),
+        "{code}"
+    );
 }
 
 #[test]
@@ -655,7 +719,8 @@ fn never_moves_a_store_between_a_snapshot_and_its_reads() {
     // array `$SSA_…_589` is stored there, and the byte reads the snapshot.
     // Forwarding the snapshot (its reads read `$KEY_12`) and writing the
     // array to `$KEY_12` early, in one round, made the byte read the array.
-    let source = include_str!("../../../../../tests/fixtures/forward_values/snapshot_then_early_store.js");
+    let source =
+        include_str!("../../../../../tests/fixtures/forward_values/snapshot_then_early_store.js");
     let (code, _) = forward(source);
     let byte = code
         .lines()
@@ -674,7 +739,9 @@ fn never_moves_a_store_between_a_computed_value_and_its_read() {
     // Moving the pack to its one read (the byte store) and storing
     // `$SSA_…_813` in `$KEY_21` early, in one round, made the byte read
     // the new value.
-    let source = include_str!("../../../../../tests/fixtures/forward_values/early_store_past_computed_read.js");
+    let source = include_str!(
+        "../../../../../tests/fixtures/forward_values/early_store_past_computed_read.js"
+    );
     let (code, _) = forward(source);
     let byte = code
         .lines()
@@ -691,7 +758,11 @@ fn never_copies_a_call_through_a_copy_into_several_reads() {
     // The writer call runs once; its copy is read by a decoy and by a store.
     let source = "function f(g, k, buf) {\n  var $KEY_32 = k;\n  var $KEY_42 = buf;\n  let $SSA_x31 = g;\n  let $SSA_x32 = $KEY_32;\n  let $SSA_x30 = buf;\n  let $SSA_x29 = $SSA_x31($SSA_x32, 0, buf, 4);\n  var $KEY_37 = $SSA_x29;\n  let $SSA_x37 = $SSA_x29;\n  let $SSA_x38 = $SSA_x30;\n  let $SSA_x39 = $KEY_32;\n  let $SSA_x34 = $SSA_x38;\n  let $SSA_x35 = $SSA_x37 + 1;\n  let $SSA_x36 = $SSA_x39();\n  let $SSA_x33 = $SSA_x37 + 1;\n  $SSA_x33;\n  $SSA_x34[$SSA_x35] = $SSA_x36 ^ 60;\n  return $KEY_42;\n}";
     let (code, _) = forward(source);
-    assert_eq!(code.matches("g(").count() + code.matches("$SSA_x31(").count(), 1, "{code}");
+    assert_eq!(
+        code.matches("g(").count() + code.matches("$SSA_x31(").count(),
+        1,
+        "{code}"
+    );
 }
 
 #[test]
@@ -705,5 +776,8 @@ fn never_moves_an_array_literal_into_a_slot_read() {
 fn never_moves_a_tuple_helper_call_into_a_slot_read() {
     let source = "function f(x, g) {\n  function vm_sub_1($PARAMA) {\n    return [$PARAMA | 0, $PARAMA | 0];\n  }\n  function vm_sub_2($PARAMA) {\n    return [$PARAMA, $PARAMA];\n  }\n  let $SSA_1 = vm_sub_1(x);\n  return g($SSA_1[0]);\n}";
     let (code, _) = forward(source);
-    assert!(!code.contains("vm_sub_1(x)[0]") && !code.contains("(vm_sub_1(x))[0]"), "{code}");
+    assert!(
+        !code.contains("vm_sub_1(x)[0]") && !code.contains("(vm_sub_1(x))[0]"),
+        "{code}"
+    );
 }

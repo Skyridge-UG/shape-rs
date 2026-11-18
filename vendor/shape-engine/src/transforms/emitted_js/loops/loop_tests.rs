@@ -54,9 +54,12 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
     let function_of = |node: oxc_semantic::NodeId| {
-        nodes
-            .ancestor_ids(node)
-            .find(|ancestor| matches!(nodes.kind(*ancestor), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+        nodes.ancestor_ids(node).find(|ancestor| {
+            matches!(
+                nodes.kind(*ancestor),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            )
+        })
     };
     let mut edits: Vec<analysis::Edit> = Vec::new();
     let mut touched: Vec<Span> = Vec::new();
@@ -66,7 +69,9 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
         let AstKind::VariableDeclarator(declarator) = nodes.kind(declarator_id) else {
             continue;
         };
-        if declarator.init.is_some() || !matches!(declarator.id, BindingPattern::BindingIdentifier(_)) {
+        if declarator.init.is_some()
+            || !matches!(declarator.id, BindingPattern::BindingIdentifier(_))
+        {
             continue;
         }
         let declaration_id = nodes.parent_id(declarator_id);
@@ -78,10 +83,17 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
         }
         let home = function_of(declaration_id);
         let references: Vec<_> = scoping.get_resolved_references(symbol).collect();
-        let Some(first) = references.iter().map(|reference| nodes.kind(reference.node_id()).span()).min_by_key(|span| span.start) else {
+        let Some(first) = references
+            .iter()
+            .map(|reference| nodes.kind(reference.node_id()).span())
+            .min_by_key(|span| span.start)
+        else {
             continue;
         };
-        if references.iter().any(|reference| function_of(reference.node_id()) != home) {
+        if references
+            .iter()
+            .any(|reference| function_of(reference.node_id()) != home)
+        {
             continue;
         }
         // The innermost block after the declaration holding every reference.
@@ -91,15 +103,24 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
                 block.start <= span.start && span.end <= block.end
             })
         };
-        let Some(block) = nodes.ancestor_ids(references[0].node_id()).find_map(|ancestor| match nodes.kind(ancestor) {
-            AstKind::BlockStatement(block) if block.span.start > declaration.span.end && inside(block.span) => Some(block),
-            _ => None,
-        }) else {
+        let Some(block) = nodes
+            .ancestor_ids(references[0].node_id())
+            .find_map(|ancestor| match nodes.kind(ancestor) {
+                AstKind::BlockStatement(block)
+                    if block.span.start > declaration.span.end && inside(block.span) =>
+                {
+                    Some(block)
+                }
+                _ => None,
+            })
+        else {
             continue;
         };
         // The first reference is the target of a top-level `x = v;` whose
         // value does not read `x`.
-        let Some(store) = block.body.iter().find(|statement| statement.span().start <= first.start && first.end <= statement.span().end) else {
+        let Some(store) = block.body.iter().find(|statement| {
+            statement.span().start <= first.start && first.end <= statement.span().end
+        }) else {
             continue;
         };
         let Statement::ExpressionStatement(expression) = store else {
@@ -115,7 +136,8 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
             || target.span != first
             || references.iter().any(|reference| {
                 let span = nodes.kind(reference.node_id()).span();
-                assignment.right.span().start <= span.start && span.end <= assignment.right.span().end
+                assignment.right.span().start <= span.start
+                    && span.end <= assignment.right.span().end
             })
         {
             continue;
@@ -129,19 +151,28 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
         let removal = if declaration.declarations.len() == 1 {
             declaration.span
         } else {
-            let Some(at) = declaration.declarations.iter().position(|other| other.span == declarator.span) else {
+            let Some(at) = declaration
+                .declarations
+                .iter()
+                .position(|other| other.span == declarator.span)
+            else {
                 continue;
             };
             match declaration.declarations.get(at + 1) {
                 Some(next) => Span::new(declarator.span.start, next.span.start),
-                None => Span::new(declaration.declarations[at - 1].span.end, declarator.span.end),
+                None => Span::new(
+                    declaration.declarations[at - 1].span.end,
+                    declarator.span.end,
+                ),
             }
         };
         // The store may be written `(x = v);`: `let` must replace the
         // parentheses, or `let (x = v);` is a call of a function named `let`.
         let insert = Span::new(expression.span.start, assignment.span.start);
         let end = Span::new(assignment.span.end, expression.span.end);
-        if touched.iter().any(|span| span.start < removal.end && removal.start < span.end)
+        if touched
+            .iter()
+            .any(|span| span.start < removal.end && removal.start < span.end)
             || touched.contains(&declaration.span)
         {
             continue;
@@ -160,7 +191,8 @@ fn sink_loop_lets(source: &str) -> Result<(String, usize), String> {
         return Err("loop declaration sinks overlap".into());
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("loop declaration sink output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("loop declaration sink output: {error}"))?;
     Ok((applied.output, sunk))
 }
 
@@ -226,7 +258,11 @@ fn steps_test(test: &Expression<'_>) -> bool {
 
 impl<'a> Split<'a> {
     /// The statements an expression evaluated for its effects stands for.
-    fn statements_of(&mut self, expression: Expression<'a>, into: &mut ArenaVec<'a, Statement<'a>>) {
+    fn statements_of(
+        &mut self,
+        expression: Expression<'a>,
+        into: &mut ArenaVec<'a, Statement<'a>>,
+    ) {
         let choice = statement_choice(&expression);
         match expression {
             Expression::ParenthesizedExpression(inner) => {
@@ -244,7 +280,8 @@ impl<'a> Split<'a> {
                 self.statements_of(conditional.consequent, &mut consequent);
                 let mut alternate = self.builder.vec();
                 self.statements_of(conditional.alternate, &mut alternate);
-                let alternate = (!alternate.is_empty()).then(|| self.builder.statement_block(SPAN, alternate));
+                let alternate =
+                    (!alternate.is_empty()).then(|| self.builder.statement_block(SPAN, alternate));
                 into.push(self.builder.statement_if(
                     SPAN,
                     conditional.test,
@@ -254,8 +291,11 @@ impl<'a> Split<'a> {
             }
             // `void 0` and literals do nothing as statements.
             Expression::UnaryExpression(unary)
-                if unary.operator == UnaryOperator::Void && matches!(unary.argument, Expression::NumericLiteral(_)) => {}
-            Expression::BooleanLiteral(_) | Expression::NullLiteral(_) | Expression::NumericLiteral(_) => {}
+                if unary.operator == UnaryOperator::Void
+                    && matches!(unary.argument, Expression::NumericLiteral(_)) => {}
+            Expression::BooleanLiteral(_)
+            | Expression::NullLiteral(_)
+            | Expression::NumericLiteral(_) => {}
             expression => into.push(self.builder.statement_expression(SPAN, expression)),
         }
     }
@@ -264,13 +304,22 @@ impl<'a> Split<'a> {
     fn exit_unless(&mut self, test: Expression<'a>) -> Statement<'a> {
         // `c || (steps, false)`: the exit runs the steps.
         if steps_test(&test) && matches!(test, Expression::LogicalExpression(_)) {
-            let Expression::LogicalExpression(logical) = test else { unreachable!() };
+            let Expression::LogicalExpression(logical) = test else {
+                unreachable!()
+            };
             let logical = logical.unbox();
             let mut exit = self.builder.vec();
             self.statements_of(logical.right, &mut exit);
             exit.push(self.builder.statement_break(SPAN, None));
-            let test = self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, logical.left);
-            return self.builder.statement_if(SPAN, test, self.builder.statement_block(SPAN, exit), None);
+            let test = self
+                .builder
+                .expression_unary(SPAN, UnaryOperator::LogicalNot, logical.left);
+            return self.builder.statement_if(
+                SPAN,
+                test,
+                self.builder.statement_block(SPAN, exit),
+                None,
+            );
         }
         let test = match test {
             Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
@@ -279,7 +328,9 @@ impl<'a> Split<'a> {
             Expression::ParenthesizedExpression(inner) => {
                 return self.exit_unless(inner.unbox().expression);
             }
-            test => self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, test),
+            test => self
+                .builder
+                .expression_unary(SPAN, UnaryOperator::LogicalNot, test),
         };
         let exit = self.builder.statement_break(SPAN, None);
         self.builder.statement_if(SPAN, test, exit, None)
@@ -304,8 +355,15 @@ impl<'a> Split<'a> {
                 self.statements_of(logical.right, &mut exit);
                 // The trailing `false` was dropped as a statement with no effect.
                 exit.push(self.builder.statement_break(SPAN, None));
-                let test = self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, logical.left);
-                statements.push(self.builder.statement_if(SPAN, test, self.builder.statement_block(SPAN, exit), None));
+                let test =
+                    self.builder
+                        .expression_unary(SPAN, UnaryOperator::LogicalNot, logical.left);
+                statements.push(self.builder.statement_if(
+                    SPAN,
+                    test,
+                    self.builder.statement_block(SPAN, exit),
+                    None,
+                ));
             }
             _ => unreachable!("a stepped test"),
         }
@@ -335,8 +393,10 @@ impl<'a> VisitMut<'a> for Split<'a> {
         for statement in statements.drain(..) {
             match statement {
                 Statement::ExpressionStatement(expression)
-                    if matches!(expression.expression.without_parentheses(), Expression::SequenceExpression(_))
-                        || statement_choice(&expression.expression) =>
+                    if matches!(
+                        expression.expression.without_parentheses(),
+                        Expression::SequenceExpression(_)
+                    ) || statement_choice(&expression.expression) =>
                 {
                     self.split += 1;
                     self.statements_of(expression.unbox().expression, &mut out);
@@ -362,13 +422,17 @@ impl<'a> VisitMut<'a> for Split<'a> {
             Statement::WhileStatement(loop_) => {
                 let loop_ = loop_.unbox();
                 let body = self.body(loop_.test, loop_.body);
-                *statement = self.builder.statement_for(loop_.span, None, None, None, body);
+                *statement = self
+                    .builder
+                    .statement_for(loop_.span, None, None, None, body);
             }
             Statement::ForStatement(loop_) => {
                 let loop_ = loop_.unbox();
                 let test = loop_.test.expect("a sequence test");
                 let body = self.body(test, loop_.body);
-                *statement = self.builder.statement_for(loop_.span, loop_.init, None, loop_.update, body);
+                *statement =
+                    self.builder
+                        .statement_for(loop_.span, loop_.init, None, loop_.update, body);
             }
             _ => unreachable!(),
         }
@@ -384,7 +448,11 @@ mod tests {
             .args(["-e", &format!("{source};console.log(JSON.stringify(f()));")])
             .output()
             .unwrap();
-        assert!(output.status.success(), "{}\n{source}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "{}\n{source}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         String::from_utf8(output.stdout).unwrap()
     }
 
@@ -394,7 +462,11 @@ mod tests {
         let result = split_loop_tests(source).unwrap();
         assert!(result.split >= 3, "{}", result.code);
         assert!(!result.code.contains("while (i ="), "{}", result.code);
-        assert!(result.code.contains("if (k >= 4) break;"), "{}", result.code);
+        assert!(
+            result.code.contains("if (k >= 4) break;"),
+            "{}",
+            result.code
+        );
         assert_eq!(run(source), run(&result.code), "{}", result.code);
     }
 

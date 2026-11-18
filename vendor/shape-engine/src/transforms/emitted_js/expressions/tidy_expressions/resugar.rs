@@ -52,10 +52,15 @@ pub(super) fn repeatable(expression: &Expression<'_>) -> bool {
     use oxc_syntax::operator::BinaryOperator;
     match expression {
         // With no getters a property path reads the same twice.
-        Expression::StaticMemberExpression(member) => !member.optional && repeatable(&member.object),
+        Expression::StaticMemberExpression(member) => {
+            !member.optional && repeatable(&member.object)
+        }
         Expression::ComputedMemberExpression(member) => {
             !member.optional
-                && matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
+                && matches!(
+                    member.expression,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                )
                 && repeatable(&member.object)
         }
         Expression::Identifier(_)
@@ -64,21 +69,27 @@ pub(super) fn repeatable(expression: &Expression<'_>) -> bool {
         | Expression::BooleanLiteral(_)
         | Expression::NullLiteral(_) => true,
         Expression::UnaryExpression(unary) => {
-            matches!(unary.operator, UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void)
-                && repeatable(&unary.argument)
+            matches!(
+                unary.operator,
+                UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void
+            ) && repeatable(&unary.argument)
         }
         Expression::BinaryExpression(binary) => match binary.operator {
             BinaryOperator::StrictEquality | BinaryOperator::StrictInequality => {
                 repeatable(&binary.left) && repeatable(&binary.right)
             }
             BinaryOperator::Equality | BinaryOperator::Inequality => {
-                (matches!(binary.left, Expression::NullLiteral(_)) || matches!(binary.right, Expression::NullLiteral(_)))
+                (matches!(binary.left, Expression::NullLiteral(_))
+                    || matches!(binary.right, Expression::NullLiteral(_)))
                     && repeatable(&binary.left)
                     && repeatable(&binary.right)
             }
             // Over primitives a comparison runs no code: `x > 0` twice is
             // one value (`x > 0 ? x < 1 : x > 0` is `x > 0 && x < 1`).
-            BinaryOperator::LessThan | BinaryOperator::LessEqualThan | BinaryOperator::GreaterThan | BinaryOperator::GreaterEqualThan => {
+            BinaryOperator::LessThan
+            | BinaryOperator::LessEqualThan
+            | BinaryOperator::GreaterThan
+            | BinaryOperator::GreaterEqualThan => {
                 repeatable(&binary.left) && repeatable(&binary.right)
             }
             _ => false,
@@ -101,7 +112,8 @@ pub(super) fn folded_nullish(expression: &Expression<'_>) -> Option<bool> {
     if !nullish(&binary.left) || !nullish(&binary.right) {
         return None;
     }
-    let same = matches!(binary.left, Expression::NullLiteral(_)) == matches!(binary.right, Expression::NullLiteral(_));
+    let same = matches!(binary.left, Expression::NullLiteral(_))
+        == matches!(binary.right, Expression::NullLiteral(_));
     match binary.operator {
         BinaryOperator::Equality => Some(true),
         BinaryOperator::Inequality => Some(false),
@@ -116,7 +128,9 @@ pub(super) fn folded_number(expression: &Expression<'_>) -> Option<f64> {
     let Expression::BinaryExpression(binary) = expression else {
         return None;
     };
-    let (Expression::NumericLiteral(left), Expression::NumericLiteral(right)) = (&binary.left, &binary.right) else {
+    let (Expression::NumericLiteral(left), Expression::NumericLiteral(right)) =
+        (&binary.left, &binary.right)
+    else {
         return None;
     };
     let value = match binary.operator {
@@ -125,8 +139,10 @@ pub(super) fn folded_number(expression: &Expression<'_>) -> Option<f64> {
         BinaryOperator::Multiplication => left.value * right.value,
         _ => return None,
     };
-    (left.value.fract() == 0.0 && right.value.fract() == 0.0 && (0.0..=9007199254740991.0).contains(&value))
-        .then_some(value)
+    (left.value.fract() == 0.0
+        && right.value.fract() == 0.0
+        && (0.0..=9007199254740991.0).contains(&value))
+    .then_some(value)
 }
 
 /// An expression statement whose value nobody reads and that does nothing:
@@ -137,8 +153,10 @@ pub(super) fn discardable(expression: &Expression<'_>) -> bool {
     match expression {
         Expression::ParenthesizedExpression(inner) => discardable(&inner.expression),
         Expression::BinaryExpression(binary) => {
-            !matches!(binary.operator, BinaryOperator::In | BinaryOperator::Instanceof)
-                && discardable(&binary.left)
+            !matches!(
+                binary.operator,
+                BinaryOperator::In | BinaryOperator::Instanceof
+            ) && discardable(&binary.left)
                 && discardable(&binary.right)
         }
         Expression::UnaryExpression(unary) => {
@@ -156,30 +174,46 @@ pub(super) fn discardable(expression: &Expression<'_>) -> bool {
         // A property read whose value nobody uses does nothing (no getters).
         Expression::StaticMemberExpression(member) => discardable(&member.object),
         Expression::ComputedMemberExpression(member)
-            if matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_)) =>
+            if matches!(
+                member.expression,
+                Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+            ) =>
         {
             discardable(&member.object)
         }
         // `Math.random()` and the like change nothing anyone can see, nor do
         // a number's or string's own methods on such a result.
-        Expression::CallExpression(call) if !call.optional && call.arguments.iter().all(|argument| {
-            argument.as_expression().is_some_and(discardable)
-        }) => match call.callee.get_member_expr() {
-            Some(member) if !member.optional() => match member.object() {
-                Expression::Identifier(object) => object.name == "Math",
-                object => {
-                    matches!(member.static_property_name(), Some("toString" | "slice" | "substring" | "toFixed"))
-                        && matches!(object, Expression::CallExpression(_) | Expression::StringLiteral(_))
-                        && discardable(object)
-                }
-            },
-            _ => false,
-        },
+        Expression::CallExpression(call)
+            if !call.optional
+                && call
+                    .arguments
+                    .iter()
+                    .all(|argument| argument.as_expression().is_some_and(discardable)) =>
+        {
+            match call.callee.get_member_expr() {
+                Some(member) if !member.optional() => match member.object() {
+                    Expression::Identifier(object) => object.name == "Math",
+                    object => {
+                        matches!(
+                            member.static_property_name(),
+                            Some("toString" | "slice" | "substring" | "toFixed")
+                        ) && matches!(
+                            object,
+                            Expression::CallExpression(_) | Expression::StringLiteral(_)
+                        ) && discardable(object)
+                    }
+                },
+                _ => false,
+            }
+        }
         // Reading a standard global or the page's own `document`/`window`
         // runs no code and never throws in the page.
         Expression::Identifier(identifier)
             if super::super::super::primitives::is_stable_global(&identifier.name)
-                || matches!(identifier.name.as_str(), "document" | "window" | "self" | "navigator" | "location") =>
+                || matches!(
+                    identifier.name.as_str(),
+                    "document" | "window" | "self" | "navigator" | "location"
+                ) =>
         {
             true
         }
@@ -208,7 +242,9 @@ pub(super) fn boolean(expression: &Expression<'_>) -> bool {
                 | BinaryOperator::Instanceof
         ),
         Expression::LogicalExpression(logical) => {
-            logical.operator != LogicalOperator::Coalesce && boolean(&logical.left) && boolean(&logical.right)
+            logical.operator != LogicalOperator::Coalesce
+                && boolean(&logical.left)
+                && boolean(&logical.right)
         }
         Expression::ConditionalExpression(conditional) => {
             boolean(&conditional.consequent) && boolean(&conditional.alternate)
@@ -223,7 +259,9 @@ pub(super) fn boolean(expression: &Expression<'_>) -> bool {
 pub(super) fn droppable(expression: &Expression<'_>) -> bool {
     use oxc_syntax::operator::BinaryOperator;
     match expression {
-        Expression::Identifier(identifier) => identifier.name.starts_with('$') || identifier.name == "arguments",
+        Expression::Identifier(identifier) => {
+            identifier.name.starts_with('$') || identifier.name == "arguments"
+        }
         Expression::NumericLiteral(_)
         | Expression::StringLiteral(_)
         | Expression::BooleanLiteral(_)
@@ -234,7 +272,9 @@ pub(super) fn droppable(expression: &Expression<'_>) -> bool {
                 && matches!(member.expression, Expression::NumericLiteral(_))
         }
         Expression::UnaryExpression(unary) => match unary.operator {
-            UnaryOperator::Typeof => matches!(unary.argument, Expression::Identifier(_)) || droppable(&unary.argument),
+            UnaryOperator::Typeof => {
+                matches!(unary.argument, Expression::Identifier(_)) || droppable(&unary.argument)
+            }
             UnaryOperator::LogicalNot | UnaryOperator::Void => droppable(&unary.argument),
             _ => false,
         },
@@ -265,14 +305,21 @@ pub(super) fn same_path(a: &Expression<'_>, b: &Expression<'_>) -> bool {
         (Expression::Identifier(a), Expression::Identifier(b)) => a.name == b.name,
         (Expression::ThisExpression(_), Expression::ThisExpression(_)) => true,
         (Expression::StaticMemberExpression(a), Expression::StaticMemberExpression(b)) => {
-            !a.optional && !b.optional && a.property.name == b.property.name && same_path(&a.object, &b.object)
+            !a.optional
+                && !b.optional
+                && a.property.name == b.property.name
+                && same_path(&a.object, &b.object)
         }
         (Expression::ComputedMemberExpression(a), Expression::ComputedMemberExpression(b)) => {
             !a.optional
                 && !b.optional
                 && match (&a.expression, &b.expression) {
-                    (Expression::StringLiteral(x), Expression::StringLiteral(y)) => x.value == y.value,
-                    (Expression::NumericLiteral(x), Expression::NumericLiteral(y)) => x.value == y.value,
+                    (Expression::StringLiteral(x), Expression::StringLiteral(y)) => {
+                        x.value == y.value
+                    }
+                    (Expression::NumericLiteral(x), Expression::NumericLiteral(y)) => {
+                        x.value == y.value
+                    }
                     _ => false,
                 }
                 && same_path(&a.object, &b.object)
@@ -282,7 +329,10 @@ pub(super) fn same_path(a: &Expression<'_>, b: &Expression<'_>) -> bool {
 }
 
 /// `c == null`, `null == c` (or `!=` with `negated`): the tested name.
-pub(super) fn null_test<'e, 'a>(test: &'e Expression<'a>, negated: bool) -> Option<&'e Expression<'a>> {
+pub(super) fn null_test<'e, 'a>(
+    test: &'e Expression<'a>,
+    negated: bool,
+) -> Option<&'e Expression<'a>> {
     let Expression::BinaryExpression(binary) = test else {
         return None;
     };
@@ -296,7 +346,8 @@ pub(super) fn null_test<'e, 'a>(test: &'e Expression<'a>, negated: bool) -> Opti
     }
     match (&binary.left, &binary.right) {
         (Expression::NullLiteral(_), name) | (name, Expression::NullLiteral(_))
-            if matches!(name, Expression::Identifier(_)) || (name.is_member_expression() && repeatable(name)) =>
+            if matches!(name, Expression::Identifier(_))
+                || (name.is_member_expression() && repeatable(name)) =>
         {
             Some(name)
         }
@@ -314,12 +365,21 @@ impl<'a> Resugar<'a> {
         std::mem::replace(expression, self.builder.expression_null_literal(SPAN))
     }
 
-    fn logical(&self, left: Expression<'a>, operator: oxc_syntax::operator::LogicalOperator, right: Expression<'a>) -> Expression<'a> {
+    fn logical(
+        &self,
+        left: Expression<'a>,
+        operator: oxc_syntax::operator::LogicalOperator,
+        right: Expression<'a>,
+    ) -> Expression<'a> {
         self.builder.expression_logical(SPAN, left, operator, right)
     }
 
     /// `c?.p` / `c?.[k]` for a member read of `c`.
-    fn optional_member(&self, name: &Expression<'a>, member: &mut Expression<'a>) -> Option<Expression<'a>> {
+    fn optional_member(
+        &self,
+        name: &Expression<'a>,
+        member: &mut Expression<'a>,
+    ) -> Option<Expression<'a>> {
         // A longer chain off a repeated path: `c.p.q` with `c` a path marks
         // the link right after `c` optional.
         if !matches!(name, Expression::Identifier(_)) {
@@ -350,7 +410,9 @@ impl<'a> Resugar<'a> {
             let taken = self.take(member);
             let chain = match taken {
                 Expression::StaticMemberExpression(m) => ChainElement::StaticMemberExpression(m),
-                Expression::ComputedMemberExpression(m) => ChainElement::ComputedMemberExpression(m),
+                Expression::ComputedMemberExpression(m) => {
+                    ChainElement::ComputedMemberExpression(m)
+                }
                 _ => return None,
             };
             return Some(self.builder.expression_chain(SPAN, chain));
@@ -389,12 +451,17 @@ impl<'a> Resugar<'a> {
                 if boolean(&argument) {
                     argument
                 } else {
-                    let once = self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, argument);
-                    self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, once)
+                    let once =
+                        self.builder
+                            .expression_unary(SPAN, UnaryOperator::LogicalNot, argument);
+                    self.builder
+                        .expression_unary(SPAN, UnaryOperator::LogicalNot, once)
                 }
             }
             Expression::LogicalExpression(logical)
-                if logical.operator == LogicalOperator::Or && boolean(&logical.left) && boolean(&logical.right) =>
+                if logical.operator == LogicalOperator::Or
+                    && boolean(&logical.left)
+                    && boolean(&logical.right) =>
             {
                 let logical = logical.unbox();
                 let left = self.negate(logical.left);
@@ -402,7 +469,10 @@ impl<'a> Resugar<'a> {
                 self.logical(left, LogicalOperator::And, right)
             }
             Expression::BinaryExpression(mut binary)
-                if matches!(binary.operator, BinaryOperator::StrictEquality | BinaryOperator::StrictInequality) =>
+                if matches!(
+                    binary.operator,
+                    BinaryOperator::StrictEquality | BinaryOperator::StrictInequality
+                ) =>
             {
                 binary.operator = if binary.operator == BinaryOperator::StrictEquality {
                     BinaryOperator::StrictInequality
@@ -411,7 +481,9 @@ impl<'a> Resugar<'a> {
                 };
                 Expression::BinaryExpression(binary)
             }
-            test => self.builder.expression_unary(SPAN, UnaryOperator::LogicalNot, test),
+            test => self
+                .builder
+                .expression_unary(SPAN, UnaryOperator::LogicalNot, test),
         }
     }
 
@@ -425,7 +497,8 @@ impl<'a> Resugar<'a> {
             // Nodes built by this pass have an empty span and no text.
             a.end > a.start
                 && b.end > b.start
-                && self.source[a.start as usize..a.end as usize] == self.source[b.start as usize..b.end as usize]
+                && self.source[a.start as usize..a.end as usize]
+                    == self.source[b.start as usize..b.end as usize]
         };
         // A test that cannot throw or run code has no effect to keep.
         let local_test = droppable(&conditional.test);
@@ -530,10 +603,10 @@ impl<'a> Resugar<'a> {
     /// `.call` or `["call"]`.
     fn fold_method_call(&mut self, call: &mut CallExpression<'a>) {
         let (optional, callee_object) = match &call.callee {
-            Expression::StaticMemberExpression(callee) if callee.property.name == "call" => (callee.optional, &callee.object),
-            Expression::ComputedMemberExpression(callee)
-                if matches!(&callee.expression, Expression::StringLiteral(key) if key.value == "call") =>
-            {
+            Expression::StaticMemberExpression(callee) if callee.property.name == "call" => {
+                (callee.optional, &callee.object)
+            }
+            Expression::ComputedMemberExpression(callee) if matches!(&callee.expression, Expression::StringLiteral(key) if key.value == "call") => {
                 (callee.optional, &callee.object)
             }
             _ => return,
@@ -552,8 +625,12 @@ impl<'a> Resugar<'a> {
                     && matches!(sequence.expressions[0], Expression::NumericLiteral(_)) =>
             {
                 match &sequence.expressions[1] {
-                    Expression::StaticMemberExpression(method) if !method.optional => &method.object,
-                    Expression::ComputedMemberExpression(method) if !method.optional => &method.object,
+                    Expression::StaticMemberExpression(method) if !method.optional => {
+                        &method.object
+                    }
+                    Expression::ComputedMemberExpression(method) if !method.optional => {
+                        &method.object
+                    }
                     _ => return,
                 }
             }

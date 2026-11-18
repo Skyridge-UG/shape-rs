@@ -1,7 +1,7 @@
 //! Ordered request metadata callback protocol. No native transport identity is inferred.
 use super::super::browser::url_query_merge as q;
-use crate::naming::support::interaction as i;
 use super::*;
+use crate::naming::support::interaction as i;
 use oxc_span::GetSpan;
 
 type S = SymbolId;

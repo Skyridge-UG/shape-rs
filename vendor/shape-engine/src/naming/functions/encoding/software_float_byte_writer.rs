@@ -72,9 +72,7 @@ impl<'a> Body<'a> {
                 self.seen.insert(role, s);
                 Some(Tree::Capture(role))
             }
-            None if matches!(id.name.as_str(), "Math") => {
-                Some(Tree::Global(id.name.to_string()))
-            }
+            None if matches!(id.name.as_str(), "Math") => Some(Tree::Global(id.name.to_string())),
             _ => None,
         }
     }
@@ -494,53 +492,120 @@ impl<T> OptionalNode<T> for Option<Option<T>> {
     }
 }
 
-struct Projection { tree: Tree, table: SymbolId }
+struct Projection {
+    tree: Tree,
+    table: SymbolId,
+}
 fn project(scoping: &Scoping, f: &Function<'_>) -> Option<Projection> {
-    if f.r#type != FunctionType::FunctionDeclaration || f.r#async || f.generator
-        || f.params.rest.is_some() || f.params.items.len()!=2
-        || f.type_parameters.is_some() || f.return_type.is_some() { return None; }
-    let body=f.body.as_ref()?;
-    if !body.directives.is_empty() { return None; }
+    if f.r#type != FunctionType::FunctionDeclaration
+        || f.r#async
+        || f.generator
+        || f.params.rest.is_some()
+        || f.params.items.len() != 2
+        || f.type_parameters.is_some()
+        || f.return_type.is_some()
+    {
+        return None;
+    }
+    let body = f.body.as_ref()?;
+    if !body.directives.is_empty() {
+        return None;
+    }
     // The sole port must be the object of the DOUBLE64 read. Projection below
     // checks every later use against this exact resolved identity.
-    let table=body.statements.iter().find_map(|s| {
-        let Statement::VariableDeclaration(d)=s else {return None};
+    let table = body.statements.iter().find_map(|s| {
+        let Statement::VariableDeclaration(d) = s else {
+            return None;
+        };
         d.declarations.iter().find_map(|v| {
-            let Expression::StaticMemberExpression(m)=v.init.as_ref()? else {return None};
-            if m.optional || m.property.name!="DOUBLE64" {return None;}
-            let Expression::Identifier(id)=m.object.without_parentheses() else{return None};
-            id.reference_id.get().and_then(|r|scoping.get_reference(r).symbol_id())
+            let Expression::StaticMemberExpression(m) = v.init.as_ref()? else {
+                return None;
+            };
+            if m.optional || m.property.name != "DOUBLE64" {
+                return None;
+            }
+            let Expression::Identifier(id) = m.object.without_parentheses() else {
+                return None;
+            };
+            id.reference_id
+                .get()
+                .and_then(|r| scoping.get_reference(r).symbol_id())
         })
     })?;
-    let mut proof=Body{scoping, locals:BTreeMap::new(), ports:BTreeMap::from([(table,Port::Tags)]),
-        seen:BTreeMap::new(), self_binding:f.id.as_ref()?.symbol_id.get()?,depth:0,budget:20048};
+    let mut proof = Body {
+        scoping,
+        locals: BTreeMap::new(),
+        ports: BTreeMap::from([(table, Port::Tags)]),
+        seen: BTreeMap::new(),
+        self_binding: f.id.as_ref()?.symbol_id.get()?,
+        depth: 0,
+        budget: 20048,
+    };
     for p in &f.params.items {
-        if p.initializer.is_some() || !p.decorators.is_empty() {return None;}
+        if p.initializer.is_some() || !p.decorators.is_empty() {
+            return None;
+        }
         proof.bind(&p.pattern)?;
     }
-    let tree=proof.statements(&body.statements)?;
-    if proof.seen.get(&Port::Tags)!=Some(&table) {return None;}
-    Some(Projection{tree,table})
+    let tree = proof.statements(&body.statements)?;
+    if proof.seen.get(&Port::Tags) != Some(&table) {
+        return None;
+    }
+    Some(Projection { tree, table })
 }
-fn references()-> &'static Vec<Tree> {
-    static REFS:OnceLock<Vec<Tree>>=OnceLock::new();
-    REFS.get_or_init(||reference::protocols().iter().map(|body| {
-        let source=format!("let tags; function writer(value, output){{{body}}}");
-        let allocator=Allocator::default();
-        let parsed=Parser::new(&allocator,&source,SourceType::default()).parse();
-        assert!(!parsed.panicked && parsed.errors.is_empty(),"float grammar parse: {:?}",parsed.errors);
-        let semantic=SemanticBuilder::new().build(&parsed.program).semantic;
-        let Statement::FunctionDeclaration(f)=&parsed.program.body[1] else{unreachable!()};
-        project(semantic.scoping(),f).expect("float grammar projects").tree
-    }).collect())
+fn references() -> &'static Vec<Tree> {
+    static REFS: OnceLock<Vec<Tree>> = OnceLock::new();
+    REFS.get_or_init(|| {
+        reference::protocols()
+            .iter()
+            .map(|body| {
+                let source = format!("let tags; function writer(value, output){{{body}}}");
+                let allocator = Allocator::default();
+                let parsed = Parser::new(&allocator, &source, SourceType::default()).parse();
+                assert!(
+                    !parsed.panicked && parsed.errors.is_empty(),
+                    "float grammar parse: {:?}",
+                    parsed.errors
+                );
+                let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+                let Statement::FunctionDeclaration(f) = &parsed.program.body[1] else {
+                    unreachable!()
+                };
+                project(semantic.scoping(), f)
+                    .expect("float grammar projects")
+                    .tree
+            })
+            .collect()
+    })
 }
-pub(in crate::naming) fn evaluate(model:&Model<'_, '_>,site:FunctionSite,f:&Facts<'_>)->Vec<Proposal>{
-    let AstKind::Function(function)=model.nodes.kind(site.node_id) else{return Vec::new()};
-    if !matches!(model.nodes.parent_kind(site.node_id),AstKind::FunctionBody(_)|AstKind::BlockStatement(_))
-        || function.id.as_ref().and_then(|id|id.symbol_id.get())!=site.binding_symbol {return Vec::new();}
-    let Some(p)=project(model.scoping,function) else{return Vec::new()};
-    if !references().contains(&p.tree) {return Vec::new();}
-    if crate::naming::functions::encoding::numeric_byte_writers::software_float_capture_ready(model,site,p.table).is_none(){return Vec::new();}
+pub(in crate::naming) fn evaluate(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    f: &Facts<'_>,
+) -> Vec<Proposal> {
+    let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+        return Vec::new();
+    };
+    if !matches!(
+        model.nodes.parent_kind(site.node_id),
+        AstKind::FunctionBody(_) | AstKind::BlockStatement(_)
+    ) || function.id.as_ref().and_then(|id| id.symbol_id.get()) != site.binding_symbol
+    {
+        return Vec::new();
+    }
+    let Some(p) = project(model.scoping, function) else {
+        return Vec::new();
+    };
+    if !references().contains(&p.tree) {
+        return Vec::new();
+    }
+    if crate::naming::functions::encoding::numeric_byte_writers::software_float_capture_ready(
+        model, site, p.table,
+    )
+    .is_none()
+    {
+        return Vec::new();
+    }
     vec![proposal("writeTaggedArithmeticFloatBytes", "shared_software_float_byte_writer_protocol",
         "whole owned ordered numeric protocol: reciprocal signed-zero test, abs/log/LN2 normalization, exact half/parity ties, zero/subnormal/overflow paths and source NaN/infinity fallthrough; exact 536870911 mask AND divisor, narrow exponent adjustment placement, 8/23 and 11/52 widths, low-bit extraction and MSB-first eight-bit output; global Math and resolved symbols; all numeric tag stores and callable exposure readiness independently proved; arithmetic behavior only, no native IEEE/superpack validity asserted",f)]
 }
@@ -550,17 +615,35 @@ mod protocol_tests {
     use super::*;
     #[test]
     fn actual_software_float_whole_model_guard() {
-        let source=include_str!("../../../../tests/fixtures/software_float_byte_writer/whole-scope.js");
-        let allocator=Allocator::default();
-        let program=crate::analysis::parse_program(&allocator,source).unwrap();
-        let (scoping,nodes)=crate::analysis::analyze(&program);
-        let model=Model::new(source,&program,&scoping,&nodes,ProgramPropertiesLimits::default()).unwrap();
-        for start in [405638,601302] {
-            let site=model.site_by_span(oxc_span::Span::new(start,start)).unwrap();
-            let AstKind::Function(function)=model.nodes.kind(site.node_id) else {panic!()};
-            let p=project(&scoping,function).expect("actual entire body projects");
-            assert!(!evaluate(&model,site,&Facts::default()).is_empty(),"full evaluator accepts {start}");
-            assert!(references().contains(&p.tree),"whole numeric AST grammar {start}");
+        let source =
+            include_str!("../../../../tests/fixtures/software_float_byte_writer/whole-scope.js");
+        let allocator = Allocator::default();
+        let program = crate::analysis::parse_program(&allocator, source).unwrap();
+        let (scoping, nodes) = crate::analysis::analyze(&program);
+        let model = Model::new(
+            source,
+            &program,
+            &scoping,
+            &nodes,
+            ProgramPropertiesLimits::default(),
+        )
+        .unwrap();
+        for start in [405638, 601302] {
+            let site = model
+                .site_by_span(oxc_span::Span::new(start, start))
+                .unwrap();
+            let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+                panic!()
+            };
+            let p = project(&scoping, function).expect("actual entire body projects");
+            assert!(
+                !evaluate(&model, site, &Facts::default()).is_empty(),
+                "full evaluator accepts {start}"
+            );
+            assert!(
+                references().contains(&p.tree),
+                "whole numeric AST grammar {start}"
+            );
             assert!(crate::naming::functions::encoding::numeric_byte_writers::software_float_capture_ready(&model,site,p.table).is_some(),"captured table/exposure protocol {start}");
         }
     }

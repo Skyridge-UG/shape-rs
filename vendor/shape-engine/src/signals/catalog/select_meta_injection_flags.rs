@@ -1,23 +1,33 @@
 //! `SelectMetaInjectionFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{property_census::*, census_probes::*};
+use crate::signals::analysis::{census_probes::*, property_census::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `SelectMetaInjectionFlags`. Card: [`CARD`].
-const SELECT_META_KEYS: [&str; 4] = ["selectMeta", "animationStart", "measurementDiv", "animationStyle"];
+const SELECT_META_KEYS: [&str; 4] = [
+    "selectMeta",
+    "animationStart",
+    "measurementDiv",
+    "animationStyle",
+];
 
-pub(crate) fn recognize_select_meta_injection_flags(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_select_meta_injection_flags(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     let keyed = view.is_generic_object()
         && view.emissions().iter().all(|emission| {
             emission.leaves.len() == SELECT_META_KEYS.len()
-                && emission
-                    .leaves
-                    .iter()
-                    .all(|leaf| leaf.generic_key.as_deref().is_some_and(|key| SELECT_META_KEYS.contains(&key)))
+                && emission.leaves.iter().all(|leaf| {
+                    leaf.generic_key
+                        .as_deref()
+                        .is_some_and(|key| SELECT_META_KEYS.contains(&key))
+                })
         });
     (keyed && probes(view, &census, "_selectMeta"))
         .then(|| Claim::new(["window._selectMeta trap", "four keyed marker flags"]))

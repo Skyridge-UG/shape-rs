@@ -16,12 +16,19 @@ use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 /// `raw` is the raw script the program was traced from.
-pub(crate) fn replace_vm_values(source: &str, native_functions: &[String], raw: &str) -> Result<(String, usize), String> {
-    if !source.contains("vmNativeFunctions") && !source.contains("vmEmptyResultSentinel") && !source.contains("vmEntry") {
+pub(crate) fn replace_vm_values(
+    source: &str,
+    native_functions: &[String],
+    raw: &str,
+) -> Result<(String, usize), String> {
+    if !source.contains("vmNativeFunctions")
+        && !source.contains("vmEmptyResultSentinel")
+        && !source.contains("vmEntry")
+    {
         return Ok((source.into(), 0));
     }
     let allocator = Allocator::default();
@@ -33,28 +40,55 @@ pub(crate) fn replace_vm_values(source: &str, native_functions: &[String], raw: 
         .root_unresolved_references()
         .iter()
         .filter(|(name, _)| name.as_str() == "vmNativeFunctions")
-        .flat_map(|(_, references)| references.iter().map(|&reference| nodes.get_node(scoping.get_reference(reference).node_id()).span()))
+        .flat_map(|(_, references)| {
+            references.iter().map(|&reference| {
+                nodes
+                    .get_node(scoping.get_reference(reference).node_id())
+                    .span()
+            })
+        })
         .collect();
     if let ([read], false) = (natives.as_slice(), native_functions.is_empty()) {
-        edits.push(analysis::Edit::replace(*read, format!("[{}]", native_functions.join(", "))));
+        edits.push(analysis::Edit::replace(
+            *read,
+            format!("[{}]", native_functions.join(", ")),
+        ));
     }
 
-    if let Some(entry) = super::super::vm_fingerprint::fold_entry_fingerprint(source, &scoping, &nodes, raw) {
+    if let Some(entry) =
+        super::super::vm_fingerprint::fold_entry_fingerprint(source, &scoping, &nodes, raw)
+    {
         edits.extend(entry);
     }
 
     // The root thread: the one the program's last statement calls.
     let root = program.body.last().and_then(|statement| {
-        let Statement::ExpressionStatement(statement) = statement else { return None };
-        let Expression::CallExpression(call) = &statement.expression else { return None };
-        let Expression::Identifier(callee) = &call.callee else { return None };
+        let Statement::ExpressionStatement(statement) = statement else {
+            return None;
+        };
+        let Expression::CallExpression(call) = &statement.expression else {
+            return None;
+        };
+        let Expression::Identifier(callee) = &call.callee else {
+            return None;
+        };
         program.body.iter().find_map(|statement| match statement {
-            Statement::FunctionDeclaration(function) if function.id.as_ref().is_some_and(|id| id.name == callee.name) => Some(function),
+            Statement::FunctionDeclaration(function)
+                if function
+                    .id
+                    .as_ref()
+                    .is_some_and(|id| id.name == callee.name) =>
+            {
+                Some(function)
+            }
             _ => None,
         })
     });
     if let Some(body) = root.and_then(|function| function.body.as_ref()) {
-        let mut returns = Returns { found: Vec::new(), depth: 0 };
+        let mut returns = Returns {
+            found: Vec::new(),
+            depth: 0,
+        };
         oxc_ast_visit::Visit::visit_function_body(&mut returns, body);
         let last = body.statements.last().map(GetSpan::span);
         for span in returns.found {
@@ -92,7 +126,9 @@ impl<'a> oxc_ast_visit::Visit<'a> for Returns {
         self.depth -= 1;
     }
     fn visit_return_statement(&mut self, statement: &ReturnStatement<'a>) {
-        if self.depth == 0 && matches!(&statement.argument, Some(Expression::Identifier(value)) if value.name == "vmEmptyResultSentinel") {
+        if self.depth == 0
+            && matches!(&statement.argument, Some(Expression::Identifier(value)) if value.name == "vmEmptyResultSentinel")
+        {
             self.found.push(statement.span);
         }
     }
@@ -105,7 +141,10 @@ mod tests {
     #[test]
     fn inlines_the_native_catalogue_and_ends_the_root_plainly() {
         let source = "function $THREAD_0_0() {\n\tlet $KEY_1 = vmNativeFunctions;\n\tif ($KEY_1) {\n\t\treturn vmEmptyResultSentinel;\n\t}\n\tf(() => vmEmptyResultSentinel);\n\treturn vmEmptyResultSentinel;\n}\n\n$THREAD_0_0();\n";
-        let natives = vec!["ReferenceError".to_string(), "Function.prototype.bind".to_string()];
+        let natives = vec![
+            "ReferenceError".to_string(),
+            "Function.prototype.bind".to_string(),
+        ];
         let (code, count) = replace_vm_values(source, &natives, "").unwrap();
         assert_eq!(count, 3);
         assert_eq!(code, "function $THREAD_0_0() {\n\tlet $KEY_1 = [ReferenceError, Function.prototype.bind];\n\tif ($KEY_1) {\n\t\treturn;\n\t}\n\tf(() => vmEmptyResultSentinel);\n}\n\n$THREAD_0_0();\n");

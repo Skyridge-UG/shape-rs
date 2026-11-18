@@ -1,11 +1,13 @@
 //! `CanvasToDataUrl`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{api_matches, BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafView, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    api_matches, BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafView,
+    SignalLayout, SlotView,
+};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use crate::signals::extract::contracts::SourceClass;
 
 fn has_class(leaves: &[&LeafView], class: SourceClass) -> bool {
     leaves.iter().any(|leaf| leaf.classes.contains(&class))
@@ -31,20 +33,33 @@ pub(crate) fn bind_canvas_to_data_url(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
         let kind = |index: usize| match &fields[index].node {
             LayoutNode::Leaf(leaf) => Some(leaf.kind),
             _ => None,
         };
         let n = fields.len();
         if !(2..=3).contains(&n) || (0..n).any(|index| kind(index).is_none()) {
-            return Err(refuse(SIGNAL, format!("message {message}: expected two or three scalar fields")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected two or three scalar fields"),
+            ));
         }
-        let strings: Vec<usize> = (0..n).filter(|i| kind(*i) == Some(LeafKind::String)).collect();
-        let bytes: Vec<usize> = (0..n).filter(|i| kind(*i) == Some(LeafKind::Byte)).collect();
-        let numbers: Vec<usize> = (0..n).filter(|i| kind(*i) == Some(LeafKind::Number)).collect();
+        let strings: Vec<usize> = (0..n)
+            .filter(|i| kind(*i) == Some(LeafKind::String))
+            .collect();
+        let bytes: Vec<usize> = (0..n)
+            .filter(|i| kind(*i) == Some(LeafKind::Byte))
+            .collect();
+        let numbers: Vec<usize> = (0..n)
+            .filter(|i| kind(*i) == Some(LeafKind::Number))
+            .collect();
         let [prefix] = strings.as_slice() else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected one string")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected one string"),
+            ));
         };
         if let ([], [hash]) = (bytes.as_slice(), numbers.as_slice()) {
             // Builds without the timing field: prefix and hash only.
@@ -65,10 +80,20 @@ pub(crate) fn bind_canvas_to_data_url(
                 match (clock(*a), clock(*b)) {
                     (true, false) => (*a, *b),
                     (false, true) => (*b, *a),
-                    _ => return Err(refuse(SIGNAL, format!("message {message}: no single clock-read number"))),
+                    _ => {
+                        return Err(refuse(
+                            SIGNAL,
+                            format!("message {message}: no single clock-read number"),
+                        ))
+                    }
                 }
             }
-            _ => return Err(refuse(SIGNAL, format!("message {message}: unexpected field kinds"))),
+            _ => {
+                return Err(refuse(
+                    SIGNAL,
+                    format!("message {message}: unexpected field kinds"),
+                ))
+            }
         };
         binding.insert(message, fields[*prefix].key.clone(), "dataUrlPrefix");
         binding.insert(message, fields[elapsed].key.clone(), "elapsedMs");

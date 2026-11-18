@@ -56,7 +56,12 @@ pub(crate) fn name_bindings_by_position(source: &str) -> Result<(String, usize),
         let mut outer = scoping.scope_parent_id(*function);
         while let Some(scope) = outer {
             let enclosing = function_of(&scoping, scope);
-            reserved.extend(own.get(&enclosing).into_iter().flatten().map(String::as_str));
+            reserved.extend(
+                own.get(&enclosing)
+                    .into_iter()
+                    .flatten()
+                    .map(String::as_str),
+            );
             outer = scoping.scope_parent_id(enclosing);
         }
         let mut next = 0;
@@ -79,9 +84,15 @@ pub(crate) fn name_bindings_by_position(source: &str) -> Result<(String, usize),
 
     let mut edits = Vec::new();
     for (&symbol, name) in &names {
-        edits.push(analysis::Edit::replace(scoping.symbol_span(symbol), name.clone()));
+        edits.push(analysis::Edit::replace(
+            scoping.symbol_span(symbol),
+            name.clone(),
+        ));
         for reference in scoping.get_resolved_references(symbol) {
-            edits.push(analysis::Edit::replace(nodes.kind(reference.node_id()).span(), name.clone()));
+            edits.push(analysis::Edit::replace(
+                nodes.kind(reference.node_id()).span(),
+                name.clone(),
+            ));
         }
     }
     if edits.is_empty() {
@@ -100,7 +111,9 @@ fn generated(name: &str) -> bool {
     let Some((prefix, _)) = rest.split_once('_') else {
         return false;
     };
-    !matches!(prefix, "THREAD" | "KEY") && !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_uppercase())
+    !matches!(prefix, "THREAD" | "KEY")
+        && !prefix.is_empty()
+        && prefix.bytes().all(|b| b.is_ascii_uppercase())
 }
 
 /// The nearest function scope at or above `scope`, or the program's.

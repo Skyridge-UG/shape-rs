@@ -797,7 +797,8 @@ impl Walk<'_> {
                 // outside the catch learns nothing from it, unless the side
                 // entered that `try` itself: then its catch is that side's.
                 let own_catch = fork.is_some_and(|fork| {
-                    self.catch_stop_try.is_some_and(|statement| statement > fork)
+                    self.catch_stop_try
+                        .is_some_and(|statement| statement > fork)
                 });
                 if (self.catch_depth > 0 || own_catch)
                     && diagnostic.code == TraceStopCode::CatchStackUnknown

@@ -23,11 +23,21 @@ fn inspect(source: &str, check: impl FnOnce(&Model<'_, '_>, FunctionSite, &Funct
         ProgramPropertiesLimits::default(),
     )
     .unwrap();
-    let site = model.all_sites().iter().copied().find(|site| {
-        let AstKind::Function(f) = model.nodes.kind(site.node_id) else { return false; };
-        f.id.as_ref().is_some_and(|id| id.name == "$THREAD_2_101607")
-    }).expect("saved ordinary-constructor factory");
-    let AstKind::Function(factory) = model.nodes.kind(site.node_id) else { unreachable!() };
+    let site = model
+        .all_sites()
+        .iter()
+        .copied()
+        .find(|site| {
+            let AstKind::Function(f) = model.nodes.kind(site.node_id) else {
+                return false;
+            };
+            f.id.as_ref()
+                .is_some_and(|id| id.name == "$THREAD_2_101607")
+        })
+        .expect("saved ordinary-constructor factory");
+    let AstKind::Function(factory) = model.nodes.kind(site.node_id) else {
+        unreachable!()
+    };
     check(&model, site, factory);
 }
 
@@ -36,12 +46,17 @@ fn actual_saved_factory_first_guard_is_class_first_layout() {
     inspect(SOURCE, |model, site, factory| {
         assert_eq!(site.span, Span::new(160636, 165798));
         let body = body_of(factory).unwrap();
-        let [Statement::FunctionDeclaration(conversion), Statement::FunctionDeclaration(constructor), alias, ..] = body.statements.as_slice() else {
+        let [Statement::FunctionDeclaration(conversion), Statement::FunctionDeclaration(constructor), alias, ..] =
+            body.statements.as_slice()
+        else {
             panic!("saved whole-body layout changed");
         };
         assert_eq!(plain_params(model, conversion).unwrap().len(), 2);
         assert_eq!(constructor.body.as_ref().unwrap().directives.len(), 1);
-        assert_eq!(constructor.body.as_ref().unwrap().directives[0].directive, "use strict");
+        assert_eq!(
+            constructor.body.as_ref().unwrap().directives[0].directive,
+            "use strict"
+        );
         assert!(constructor_method(model, constructor).is_some());
         let class = constructor.id.as_ref().unwrap().symbol_id.get().unwrap();
         let alias = one_variable(alias).unwrap();
@@ -77,13 +92,23 @@ impl<'a> Visit<'a> for Captures<'_, '_, 'a> {
 fn actual_saved_captures_pass_readiness_at_the_real_factory_call() {
     inspect(SOURCE, |model, site, factory| {
         let body = body_of(factory).unwrap();
-        let mut captures = Captures { model, site, symbols: BTreeSet::new() };
+        let mut captures = Captures {
+            model,
+            site,
+            symbols: BTreeSet::new(),
+        };
         captures.visit_function_body(body);
         assert_eq!(captures.symbols.len(), 5);
-        let uses: Vec<_> = model.scoping.get_resolved_references(site.binding_symbol.unwrap())
-            .map(|reference| reference.node_id()).collect();
+        let uses: Vec<_> = model
+            .scoping
+            .get_resolved_references(site.binding_symbol.unwrap())
+            .map(|reference| reference.node_id())
+            .collect();
         assert_eq!(uses.len(), 1);
-        assert!(matches!(model.nodes.kind(model.nodes.parent_id(uses[0])), AstKind::CallExpression(_)));
+        assert!(matches!(
+            model.nodes.kind(model.nodes.parent_id(uses[0])),
+            AstKind::CallExpression(_)
+        ));
         for symbol in captures.symbols {
             assert!(immutable(model, symbol));
             let declaration = model.scoping.symbol_declaration(symbol);
@@ -92,13 +117,21 @@ fn actual_saved_captures_pass_readiness_at_the_real_factory_call() {
             };
             assert!(variable.init.is_some());
             let lexical_body = model.nodes.parent_id(model.nodes.parent_id(declaration));
-            assert!(matches!(model.nodes.kind(lexical_body), AstKind::FunctionBody(_)));
+            assert!(matches!(
+                model.nodes.kind(lexical_body),
+                AstKind::FunctionBody(_)
+            ));
             for use_node in &uses {
                 assert!(ordered_captured_origin(model, symbol, *use_node, 8));
             }
             eprintln!("capture {:?} at {:?}: immutable initialized alias; ordered_captured_origin accepts every actual factory exposure", symbol, variable.span);
         }
-        let mut origins = CapturedOrigins { model, site, uses, valid: true };
+        let mut origins = CapturedOrigins {
+            model,
+            site,
+            uses,
+            valid: true,
+        };
         origins.visit_function_body(body);
         assert!(origins.valid);
     });
@@ -111,17 +144,44 @@ fn actual_tuple_call_preserves_receiver_and_detects_changed_call_receiver() {
     for (source, valid) in [
         (SOURCE.to_string(), true),
         (SOURCE.replace("$BR", "renamedStartTuple"), true),
-        (SOURCE.replace("$BR[1].call($BR[0], $BP, $BQ)", "$BR[1].call($BR[1], $BP, $BQ)"), false),
+        (
+            SOURCE.replace(
+                "$BR[1].call($BR[0], $BP, $BQ)",
+                "$BR[1].call($BR[1], $BP, $BQ)",
+            ),
+            false,
+        ),
     ] {
         inspect(&source, |model, _, factory| {
-            let member = factory.body.as_ref().unwrap().statements.iter().find_map(|statement| {
-                let Statement::FunctionDeclaration(function) = statement else { return None; };
-                function.id.as_ref().is_some_and(|id| id.name == "$THREAD_3_101729").then_some(function)
-            }).unwrap();
-            let Statement::IfStatement(branch) = member.body.as_ref().unwrap().statements.last().unwrap() else { panic!() };
+            let member = factory
+                .body
+                .as_ref()
+                .unwrap()
+                .statements
+                .iter()
+                .find_map(|statement| {
+                    let Statement::FunctionDeclaration(function) = statement else {
+                        return None;
+                    };
+                    function
+                        .id
+                        .as_ref()
+                        .is_some_and(|id| id.name == "$THREAD_3_101729")
+                        .then_some(function)
+                })
+                .unwrap();
+            let Statement::IfStatement(branch) =
+                member.body.as_ref().unwrap().statements.last().unwrap()
+            else {
+                panic!()
+            };
             let accepted = block(branch.alternate.as_ref().unwrap()).unwrap();
-            let Statement::IfStatement(start) = &accepted[1] else { panic!() };
-            let [bundle, call] = block(&start.consequent).unwrap() else { panic!() };
+            let Statement::IfStatement(start) = &accepted[1] else {
+                panic!()
+            };
+            let [bundle, call] = block(&start.consequent).unwrap() else {
+                panic!()
+            };
             let result = bundled_call(model, bundle, call);
             assert_eq!(result.is_some(), valid);
             if let Some((_, method, arguments)) = result {
@@ -135,14 +195,20 @@ fn actual_tuple_call_preserves_receiver_and_detects_changed_call_receiver() {
 fn own_change(from: &str, to: &str) -> String {
     let own = &SOURCE[160636..165798];
     assert!(own.contains(from), "missing mutation {from}");
-    format!("{}{}{}", &SOURCE[..160636], own.replace(from, to), &SOURCE[165798..])
+    format!(
+        "{}{}{}",
+        &SOURCE[..160636],
+        own.replace(from, to),
+        &SOURCE[165798..]
+    )
 }
 
 #[test]
 fn ordinary_api_alpha_equivalents_and_complete_contract_refusals() {
     for source in [
         SOURCE.to_string(),
-        SOURCE.replace("$KEY_379", "observerConstructorCapture")
+        SOURCE
+            .replace("$KEY_379", "observerConstructorCapture")
             .replace("$KEY_436", "wrapperConstructorCapture")
             .replace("$KEY_62", "mapOperatorCapture")
             .replace("$KEY_38", "flatMapOperatorCapture")
@@ -151,23 +217,41 @@ fn ordinary_api_alpha_equivalents_and_complete_contract_refusals() {
         inspect(&source, |model, site, factory| {
             let names = ordinary_factory(model, site, factory).expect("complete own API");
             assert_eq!(names.len(), 8);
-            assert_eq!(ordinary_name(model, site, factory), Some("createSubscriberStreamConstructor"));
+            assert_eq!(
+                ordinary_name(model, site, factory),
+                Some("createSubscriberStreamConstructor")
+            );
             assert!(proven_native_class(model, site).is_none());
         });
     }
     let mut mutations = Vec::new();
     for (from, to) in [
-        ("$KEY_1.prototype.subscribe", "$KEY_1.otherPrototype.subscribe"),
-        ("$KEY_1.from = $THREAD_0_148109;", "$KEY_1.from = $THREAD_0_148109; $KEY_1.from = $THREAD_0_148109;"),
+        (
+            "$KEY_1.prototype.subscribe",
+            "$KEY_1.otherPrototype.subscribe",
+        ),
+        (
+            "$KEY_1.from = $THREAD_0_148109;",
+            "$KEY_1.from = $THREAD_0_148109; $KEY_1.from = $THREAD_0_148109;",
+        ),
         ("$KEY_1.prototype.pipe = $THREAD_5_71209;", ""),
         ("typeof $BM !== \"function\"", "typeof $BM === \"function\""),
         ("this._subscriber = $BM;", "this._subscriber = other;"),
         ("\"use strict\";", ""),
-        ("$BR[1].call($BR[0], $BP, $BQ)", "$BR[1].call($BR[0], $BQ, $BP)"),
+        (
+            "$BR[1].call($BR[0], $BP, $BQ)",
+            "$BR[1].call($BR[0], $BQ, $BP)",
+        ),
         ("$BS[1].call($BS[0], e)", "$BS[1].call($BS[1], e)"),
         ("$KEY_1.prototype.map =", "$KEY_1.prototype.unknownMethod ="),
-        ("$KEY_1.prototype.map = $THREAD_7_22989;", "$KEY_1.prototype.unorderedFlatMap = $THREAD_7_22989;"),
-        ("return this.pipe($KEY_38($BM));", "return this.pipe($KEY_62($BM));"),
+        (
+            "$KEY_1.prototype.map = $THREAD_7_22989;",
+            "$KEY_1.prototype.unorderedFlatMap = $THREAD_7_22989;",
+        ),
+        (
+            "return this.pipe($KEY_38($BM));",
+            "return this.pipe($KEY_62($BM));",
+        ),
         ("return $KEY_1;", "publish($KEY_1); return $KEY_1;"),
         (".then($BP =>", ".then(async $BP =>"),
     ] {
@@ -175,14 +259,32 @@ fn ordinary_api_alpha_equivalents_and_complete_contract_refusals() {
     }
     // Every real exposure must follow capture initialization, including a
     // publication that can invoke the factory synchronously and an alias read.
-    for prefix in ["$THREAD_2_101607(); ", "register($THREAD_2_101607); ", "let earlyFactory = $THREAD_2_101607; earlyFactory(); "] {
-        mutations.push(SOURCE.replacen("let $KEY_379 = $THREAD_7_143368;", &format!("{prefix}let $KEY_379 = $THREAD_7_143368;"), 1));
+    for prefix in [
+        "$THREAD_2_101607(); ",
+        "register($THREAD_2_101607); ",
+        "let earlyFactory = $THREAD_2_101607; earlyFactory(); ",
+    ] {
+        mutations.push(SOURCE.replacen(
+            "let $KEY_379 = $THREAD_7_143368;",
+            &format!("{prefix}let $KEY_379 = $THREAD_7_143368;"),
+            1,
+        ));
     }
-    mutations.push(SOURCE.replacen("let $KEY_379 = $THREAD_7_143368;", "let $KEY_379 = $THREAD_7_143368; $KEY_379 = other;", 1));
+    mutations.push(SOURCE.replacen(
+        "let $KEY_379 = $THREAD_7_143368;",
+        "let $KEY_379 = $THREAD_7_143368; $KEY_379 = other;",
+        1,
+    ));
     for (index, source) in mutations.iter().enumerate() {
         inspect(source, |model, site, factory| {
-            assert!(ordinary_factory(model, site, factory).is_none(), "accepted mutation {index}");
-            assert!(ordinary_name(model, site, factory).is_none(), "named incomplete parent {index}");
+            assert!(
+                ordinary_factory(model, site, factory).is_none(),
+                "accepted mutation {index}"
+            );
+            assert!(
+                ordinary_name(model, site, factory).is_none(),
+                "named incomplete parent {index}"
+            );
         });
     }
 }

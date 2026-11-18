@@ -150,7 +150,11 @@ fn prove(m: &Model<'_, '_>, site: FunctionSite) -> Option<()> {
     Some(())
 }
 
-pub(in crate::naming) fn evaluate(m: &Model<'_, '_>, site: FunctionSite, facts: &Facts<'_>) -> Vec<Proposal> {
+pub(in crate::naming) fn evaluate(
+    m: &Model<'_, '_>,
+    site: FunctionSite,
+    facts: &Facts<'_>,
+) -> Vec<Proposal> {
     if prove(m, site).is_none() {
         if sample_protocol(m, site).is_some() {
             return vec![proposal("appendSineDerivedSamples", "append_sine_derived_samples", "whole one-formal mutation: state = input[0]*63+input[1]; counter1, initial limit8; ordered sin/fround/*2/abs iteration, >=1 growth with cap50 and exact continue, bounded fractional fallback, append, counter increment, and final Number(input[1])+1 store; no lexical captures or invented initialized origins", facts)];

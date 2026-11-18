@@ -770,14 +770,23 @@ struct SealedTuples<'s> {
 
 impl SealedTuples<'_> {
     fn build(scoping: &Scoping, program: &Program<'_>) -> BTreeSet<SymbolId> {
-        let mut walk = SealedTuples { scoping, indexed: BTreeSet::new(), escaped: BTreeSet::new() };
+        let mut walk = SealedTuples {
+            scoping,
+            indexed: BTreeSet::new(),
+            escaped: BTreeSet::new(),
+        };
         walk.visit_program(program);
         walk.indexed.difference(&walk.escaped).copied().collect()
     }
 
     fn indexed_object(member: &ComputedMemberExpression<'_>) -> bool {
-        matches!(member.object.without_parentheses(), Expression::Identifier(_))
-            && matches!(member.expression.without_parentheses(), Expression::NumericLiteral(_))
+        matches!(
+            member.object.without_parentheses(),
+            Expression::Identifier(_)
+        ) && matches!(
+            member.expression.without_parentheses(),
+            Expression::NumericLiteral(_)
+        )
     }
 }
 
@@ -955,7 +964,9 @@ fn restore_guarded_function_aliases(
         if stores.other || stores.guarded == 0 {
             continue;
         }
-        let [Some(right)] = stores.unguarded[..] else { continue };
+        let [Some(right)] = stores.unguarded[..] else {
+            continue;
+        };
         if right == *left || aliases.get(left) == Some(&right) {
             continue;
         }
@@ -1355,14 +1366,20 @@ fn returned_statement_proof(
     // parameter can still have been reassigned, so the checks below prove the
     // value is unchanged and the helper cannot mutate it opaquely.
     let returned = returned_statement_index(statements, parameters, scoping)?;
-    let (written, store_returned, index, value) = store_helper_shape(statements, parameters, scoping)?;
+    let (written, store_returned, index, value) =
+        store_helper_shape(statements, parameters, scoping)?;
     if returned != store_returned {
         return None;
     }
     if !parameter_is_unchanged(statements, parameters[returned], scoping) {
         return None;
     }
-    Some(ReturnedParameterProof { returned, written, index, value })
+    Some(ReturnedParameterProof {
+        returned,
+        written,
+        index,
+        value,
+    })
 }
 
 /// The exact recognized helper grammar: one `array[index] = value;` store over
@@ -1413,16 +1430,21 @@ struct InlineStore<'n, 'a> {
     formals: Vec<SymbolId>,
 }
 
-fn inline_store_helper<'n, 'a>(callee: &'n Expression<'a>, scoping: &Scoping) -> Option<InlineStore<'n, 'a>> {
+fn inline_store_helper<'n, 'a>(
+    callee: &'n Expression<'a>,
+    scoping: &Scoping,
+) -> Option<InlineStore<'n, 'a>> {
     let Expression::ArrowFunctionExpression(arrow) = callee.without_parentheses() else {
         return None;
     };
     let formals = plain_parameter_symbols(&arrow.params)?;
-    let [Statement::ExpressionStatement(statement), Statement::ReturnStatement(returned)] = arrow.body.statements.as_slice()
+    let [Statement::ExpressionStatement(statement), Statement::ReturnStatement(returned)] =
+        arrow.body.statements.as_slice()
     else {
         return None;
     };
-    let Expression::AssignmentExpression(assignment) = statement.expression.without_parentheses() else {
+    let Expression::AssignmentExpression(assignment) = statement.expression.without_parentheses()
+    else {
         return None;
     };
     if assignment.operator != AssignmentOperator::Assign {
@@ -1437,12 +1459,21 @@ fn inline_store_helper<'n, 'a>(callee: &'n Expression<'a>, scoping: &Scoping) ->
     if returned == written || !pure_formal_expression(&assignment.right, &formals, scoping) {
         return None;
     }
-    Some(InlineStore { written, index, returned, value: &assignment.right, formals })
+    Some(InlineStore {
+        written,
+        index,
+        returned,
+        value: &assignment.right,
+        formals,
+    })
 }
 
 /// The returned argument of an inline store helper call
 /// (`((a, b, c, d) => { a[b] = c; return d; })(pair, 0, [], buf)` → `buf`).
-pub(crate) fn inline_store_returned<'n, 'a>(call: &'n CallExpression<'a>, scoping: &Scoping) -> Option<&'n Expression<'a>> {
+pub(crate) fn inline_store_returned<'n, 'a>(
+    call: &'n CallExpression<'a>,
+    scoping: &Scoping,
+) -> Option<&'n Expression<'a>> {
     let store = inline_store_helper(&call.callee, scoping)?;
     if call.arguments.len() != store.formals.len() {
         return None;
@@ -1451,15 +1482,23 @@ pub(crate) fn inline_store_returned<'n, 'a>(call: &'n CallExpression<'a>, scopin
 }
 
 /// Only formals, numeric literals and side-effect-free operators.
-fn pure_formal_expression(expression: &Expression<'_>, formals: &[SymbolId], scoping: &Scoping) -> bool {
+fn pure_formal_expression(
+    expression: &Expression<'_>,
+    formals: &[SymbolId],
+    scoping: &Scoping,
+) -> bool {
     match expression.without_parentheses() {
-        Expression::Identifier(_) => expression_parameter_index(expression, formals, scoping).is_some(),
+        Expression::Identifier(_) => {
+            expression_parameter_index(expression, formals, scoping).is_some()
+        }
         Expression::NumericLiteral(_) => true,
         Expression::BinaryExpression(binary) => {
-            pure_formal_expression(&binary.left, formals, scoping) && pure_formal_expression(&binary.right, formals, scoping)
+            pure_formal_expression(&binary.left, formals, scoping)
+                && pure_formal_expression(&binary.right, formals, scoping)
         }
         Expression::UnaryExpression(unary) => {
-            unary.operator != UnaryOperator::Delete && pure_formal_expression(&unary.argument, formals, scoping)
+            unary.operator != UnaryOperator::Delete
+                && pure_formal_expression(&unary.argument, formals, scoping)
         }
         _ => false,
     }
@@ -1827,10 +1866,14 @@ impl WriterHelperWalk<'_> {
 impl<'a> Visit<'a> for WriterHelperWalk<'_> {
     fn visit_function(&mut self, function: &Function<'a>, flags: ScopeFlags) {
         if let Some(symbol) = function.id.as_ref().and_then(|id| id.symbol_id.get()) {
-            let proof = function
-                .body
-                .as_ref()
-                .and_then(|body| writer_helper_proof(self.scoping, self.source, &function.params, &body.statements));
+            let proof = function.body.as_ref().and_then(|body| {
+                writer_helper_proof(
+                    self.scoping,
+                    self.source,
+                    &function.params,
+                    &body.statements,
+                )
+            });
             self.record(symbol, function.span, proof);
         }
         walk::walk_function(self, function, flags);
@@ -1839,18 +1882,29 @@ impl<'a> Visit<'a> for WriterHelperWalk<'_> {
     fn visit_variable_declarator(&mut self, declarator: &VariableDeclarator<'a>) {
         if let BindingPattern::BindingIdentifier(identifier) = &declarator.id {
             if let Some(symbol) = identifier.symbol_id.get() {
-                let proof = declarator.init.as_ref().and_then(|value| match value.without_parentheses() {
-                    Expression::FunctionExpression(function) => function.body.as_ref().and_then(|body| {
-                        writer_helper_proof(self.scoping, self.source, &function.params, &body.statements)
-                    }),
-                    Expression::ArrowFunctionExpression(arrow) => writer_helper_proof(
-                        self.scoping,
-                        self.source,
-                        &arrow.params,
-                        &arrow.body.statements,
-                    ),
-                    _ => None,
-                });
+                let proof =
+                    declarator
+                        .init
+                        .as_ref()
+                        .and_then(|value| match value.without_parentheses() {
+                            Expression::FunctionExpression(function) => {
+                                function.body.as_ref().and_then(|body| {
+                                    writer_helper_proof(
+                                        self.scoping,
+                                        self.source,
+                                        &function.params,
+                                        &body.statements,
+                                    )
+                                })
+                            }
+                            Expression::ArrowFunctionExpression(arrow) => writer_helper_proof(
+                                self.scoping,
+                                self.source,
+                                &arrow.params,
+                                &arrow.body.statements,
+                            ),
+                            _ => None,
+                        });
                 self.record(symbol, declarator.span, proof);
             }
         }
@@ -1951,7 +2005,10 @@ impl<'a> Visit<'a> for WriterHelperBodyScan<'_, '_> {
                                 span: expression.span(),
                                 text: self
                                     .source
-                                    .get(expression.span().start as usize..expression.span().end as usize)
+                                    .get(
+                                        expression.span().start as usize
+                                            ..expression.span().end as usize,
+                                    )
                                     .unwrap_or_default()
                                     .trim()
                                     .to_string(),
@@ -2659,7 +2716,11 @@ enum PayloadResolution {
 /// whose arms are typed differently.
 #[derive(Clone, Debug, PartialEq)]
 enum ScalarTree {
-    Leaf { kind: LeafKind, value: String, span: Span },
+    Leaf {
+        kind: LeafKind,
+        value: String,
+        span: Span,
+    },
     Choice {
         kind: ChoiceKind,
         span: Span,
@@ -2672,13 +2733,32 @@ enum ScalarTree {
 impl ScalarTree {
     /// `test ? then : other` (or the if/else join of a binding): one leaf when
     /// both arms have the same type, else a two-arm choice.
-    fn join(kind: ChoiceKind, span: Span, condition: String, value: String, then: ScalarTree, other: ScalarTree) -> ScalarTree {
-        if let (ScalarTree::Leaf { kind: a, .. }, ScalarTree::Leaf { kind: b, .. }) = (&then, &other) {
+    fn join(
+        kind: ChoiceKind,
+        span: Span,
+        condition: String,
+        value: String,
+        then: ScalarTree,
+        other: ScalarTree,
+    ) -> ScalarTree {
+        if let (ScalarTree::Leaf { kind: a, .. }, ScalarTree::Leaf { kind: b, .. }) =
+            (&then, &other)
+        {
             if a == b {
-                return ScalarTree::Leaf { kind: *a, value, span };
+                return ScalarTree::Leaf {
+                    kind: *a,
+                    value,
+                    span,
+                };
             }
         }
-        ScalarTree::Choice { kind, span, condition, then: Box::new(then), other: Box::new(other) }
+        ScalarTree::Choice {
+            kind,
+            span,
+            condition,
+            then: Box::new(then),
+            other: Box::new(other),
+        }
     }
 }
 
@@ -3023,7 +3103,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let mut prefix_ranges: Vec<Span> = Vec::new();
         for grammar in grammars {
             grammar.walk(&mut |node| match node {
-                GrammarNode::Number(write) | GrammarNode::String(write) | GrammarNode::Byte(write) => {
+                GrammarNode::Number(write)
+                | GrammarNode::String(write)
+                | GrammarNode::Byte(write) => {
                     // A helper write's accounting site is the caller's helper
                     // call, matching `collect_buffer_writes`; its own span is
                     // inside the helper body and repeats per call site.
@@ -3373,7 +3455,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                         span: prefix.span,
                         spelling: PrefixSpelling::Inherited,
                         seed_word: prefix.seed_word.clone(),
-                        elements: prefix.elements.iter().map(|(text, _)| text.clone()).collect(),
+                        elements: prefix
+                            .elements
+                            .iter()
+                            .map(|(text, _)| text.clone())
+                            .collect(),
                     }),
                 );
             }
@@ -3528,11 +3614,15 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 }
                 _ => {}
             }
-            let node = self.grammar_one(op, buffer, version, depth + 1).or_else(|| {
-                co_names
-                    .iter()
-                    .find_map(|name| matches!(op, IOp::Leaf(_)).then(|| self.grammar_one(op, *name, version, depth + 1)).flatten())
-            });
+            let node = self
+                .grammar_one(op, buffer, version, depth + 1)
+                .or_else(|| {
+                    co_names.iter().find_map(|name| {
+                        matches!(op, IOp::Leaf(_))
+                            .then(|| self.grammar_one(op, *name, version, depth + 1))
+                            .flatten()
+                    })
+                });
             match node {
                 Some(GrammarNode::Sequence { items: inner }) => items.extend(inner),
                 Some(node) => items.push(node),
@@ -3863,12 +3953,30 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     /// whose binding has exactly one write; a changing handle stays refused.
     fn seed_stable_observer_aliases(&mut self, statements: &[Statement<'a>]) {
         for statement in statements {
-            let Statement::ExpressionStatement(statement) = statement else { continue };
-            let Expression::AssignmentExpression(assignment) = &statement.expression else { continue };
-            if assignment.operator != AssignmentOperator::Assign { continue; }
-            let AssignmentTarget::AssignmentTargetIdentifier(left) = &assignment.left else { continue };
-            let Some(symbol) = resolve_reference(left, self.scoping) else { continue };
-            if self.scoping.get_resolved_references(symbol).filter(|r| r.is_write()).count() != 1 { continue; }
+            let Statement::ExpressionStatement(statement) = statement else {
+                continue;
+            };
+            let Expression::AssignmentExpression(assignment) = &statement.expression else {
+                continue;
+            };
+            if assignment.operator != AssignmentOperator::Assign {
+                continue;
+            }
+            let AssignmentTarget::AssignmentTargetIdentifier(left) = &assignment.left else {
+                continue;
+            };
+            let Some(symbol) = resolve_reference(left, self.scoping) else {
+                continue;
+            };
+            if self
+                .scoping
+                .get_resolved_references(symbol)
+                .filter(|r| r.is_write())
+                .count()
+                != 1
+            {
+                continue;
+            }
             if let Some(target) = self.observer_target(&assignment.right) {
                 self.aliases_out.insert(symbol, target);
             }
@@ -3901,11 +4009,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             test
         });
         let lowered_for_in = is_lowered_for_in(guarded.test, &guarded.body, self.scoping);
-        control.kind = if lowered_for_in { LoopKind::ForIn } else { control.kind };
+        control.kind = if lowered_for_in {
+            LoopKind::ForIn
+        } else {
+            control.kind
+        };
         control.direction = if lowered_for_in {
             LoopDirection::Iteration
         } else {
-            loop_direction(Some(guarded.test), update, guarded.body.iter().copied(), self.scoping)
+            loop_direction(
+                Some(guarded.test),
+                update,
+                guarded.body.iter().copied(),
+                self.scoping,
+            )
         };
         let entry = self.path.len();
         let first_emission = self.emissions.len();
@@ -4160,14 +4277,19 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 // A payload holder can select different [aux, bytes] arrays
                 // on the two paths. Keep the holder as a symbolic join and
                 // resolve its byte buffer separately in each grammar arm.
-                self.payload_buffers = then_payloads.iter().filter_map(|(&holder, &left)| {
-                    let &right = else_payloads.get(&holder)?;
-                    if left == right { Some((holder, left)) } else {
-                        then_aliases.insert(holder, left);
-                        else_aliases.insert(holder, right);
-                        Some((holder, holder))
-                    }
-                }).collect();
+                self.payload_buffers = then_payloads
+                    .iter()
+                    .filter_map(|(&holder, &left)| {
+                        let &right = else_payloads.get(&holder)?;
+                        if left == right {
+                            Some((holder, left))
+                        } else {
+                            then_aliases.insert(holder, left);
+                            else_aliases.insert(holder, right);
+                            Some((holder, holder))
+                        }
+                    })
+                    .collect();
                 // Only aliases common to both paths survive the join. The
                 // branch snapshots retain each concrete buffer for the grammar.
                 self.buffer_aliases = then_aliases
@@ -4184,13 +4306,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     condition: Some(self.slice(if_statement.test.span())),
                     labels: vec!["then".into(), "else".into()],
                 };
-                self.push_op(IOp::Choice(site, branches.into_iter().map(IOp::Seq).collect()));
+                self.push_op(IOp::Choice(
+                    site,
+                    branches.into_iter().map(IOp::Seq).collect(),
+                ));
             }
             Statement::WhileStatement(while_statement)
                 if matches!(
                     while_statement.test.without_parentheses(),
                     Expression::BooleanLiteral(literal) if literal.value
-                ) && guarded_loop(&while_statement.body, self.own_label(while_statement.span)).is_some() =>
+                ) && guarded_loop(
+                    &while_statement.body,
+                    self.own_label(while_statement.span),
+                )
+                .is_some() =>
             {
                 let control = LoopControl {
                     kind: LoopKind::While,
@@ -4202,7 +4331,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     direction: LoopDirection::Unknown,
                     span: while_statement.span,
                 };
-                if let Some(guarded) = guarded_loop(&while_statement.body, self.own_label(while_statement.span)) {
+                if let Some(guarded) =
+                    guarded_loop(&while_statement.body, self.own_label(while_statement.span))
+                {
                     self.scan_guarded_loop(control, None, guarded, depth);
                 }
             }
@@ -4321,7 +4452,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             Statement::BreakStatement(_) => self.push_op(IOp::Exit(ControlExit::Break)),
             Statement::ContinueStatement(_) => self.push_op(IOp::Exit(ControlExit::Continue)),
             Statement::LabeledStatement(labeled) => {
-                let saved = self.statement_label.replace((labeled.body.span(), labeled.label.name.to_string()));
+                let saved = self
+                    .statement_label
+                    .replace((labeled.body.span(), labeled.label.name.to_string()));
                 self.scan_statement(&labeled.body, depth);
                 self.statement_label = saved;
             }
@@ -4416,7 +4549,10 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 for branch in &branches {
                     collect_op_buffers(branch, &mut written);
                 }
-                self.push_op(IOp::Choice(site, branches.into_iter().map(IOp::Seq).collect()));
+                self.push_op(IOp::Choice(
+                    site,
+                    branches.into_iter().map(IOp::Seq).collect(),
+                ));
                 if !written.is_empty() {
                     self.push_op(IOp::Unsupported {
                         span: switch_statement.span,
@@ -4468,7 +4604,10 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     condition: Some(self.slice(conditional.test.span())),
                     labels: vec!["then".into(), "else".into()],
                 };
-                self.push_op(IOp::Choice(site, vec![IOp::Seq(consequent), IOp::Seq(alternate)]));
+                self.push_op(IOp::Choice(
+                    site,
+                    vec![IOp::Seq(consequent), IOp::Seq(alternate)],
+                ));
             }
             Expression::LogicalExpression(logical) => {
                 // `&&`, `||` and `??` always evaluate the left operand; the right
@@ -4487,7 +4626,10 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     )),
                     labels: vec!["right".into(), "skip".into()],
                 };
-                self.push_op(IOp::Choice(site, vec![IOp::Seq(right), IOp::Seq(Vec::new())]));
+                self.push_op(IOp::Choice(
+                    site,
+                    vec![IOp::Seq(right), IOp::Seq(Vec::new())],
+                ));
             }
             Expression::NewExpression(new) => {
                 // `new C(args)`: the callee, then the arguments. Callbacks
@@ -4655,12 +4797,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         if call.arguments.len() != store.formals.len() {
             return false;
         }
-        let argument = |position: usize| call.arguments.get(position).and_then(Argument::as_expression);
-        let formal = |expression: &Expression<'a>| expression_parameter_index(expression, &store.formals, self.scoping);
+        let argument = |position: usize| {
+            call.arguments
+                .get(position)
+                .and_then(Argument::as_expression)
+        };
+        let formal = |expression: &Expression<'a>| {
+            expression_parameter_index(expression, &store.formals, self.scoping)
+        };
         // `a[b] = c` stores an argument; `a[b] = c ^ d` an argument masked by
         // another (`(…)(buf, 11, bits, ks(), r)`).
         let (value, mask) = match store.value.without_parentheses() {
-            Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::BitwiseXOR => {
+            Expression::BinaryExpression(binary)
+                if binary.operator == BinaryOperator::BitwiseXOR =>
+            {
                 match (formal(&binary.left), formal(&binary.right)) {
                     (Some(left), Some(right)) => (left, Some(right)),
                     _ => return false,
@@ -4671,7 +4821,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 None => return false,
             },
         };
-        let (Some(array), Some(index), Some(value)) = (argument(store.written), argument(store.index), argument(value)) else {
+        let (Some(array), Some(index), Some(value)) = (
+            argument(store.written),
+            argument(store.index),
+            argument(value),
+        ) else {
             return false;
         };
         let Some(buffer) = self.buffer_symbol(array) else {
@@ -4698,7 +4852,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         };
         // One operand is a draw from a known stream; the other is the value.
         let draw = |expression: &Expression<'a>| -> Option<MaskInfo> {
-            let Expression::CallExpression(draw) = expression.without_parentheses() else { return None };
+            let Expression::CallExpression(draw) = expression.without_parentheses() else {
+                return None;
+            };
             if !draw.arguments.is_empty() {
                 return None;
             }
@@ -4712,7 +4868,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             (None, None) => return false,
         };
         let xor_literal = numeric_value(value);
-        let mask_source = Some(drawn.argument.clone()).filter(|argument| !argument.is_empty()).unwrap_or_else(|| self.slice(mask_span));
+        let mask_source = Some(drawn.argument.clone())
+            .filter(|argument| !argument.is_empty())
+            .unwrap_or_else(|| self.slice(mask_span));
         self.push_op(IOp::Leaf(ILeaf {
             index_span: Some(index.span()),
             writer_factory: None,
@@ -4722,11 +4880,19 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             buffer: Some(buffer),
             mask: Some(drawn),
             masked: xor_literal.is_some(),
-            value: Some(format!("{} ^ {}", self.slice(value.span()), self.slice(mask_span))),
+            value: Some(format!(
+                "{} ^ {}",
+                self.slice(value.span()),
+                self.slice(mask_span)
+            )),
             index: Some(index_text),
             xor_literal,
             xor_source: xor_literal.map(|_| self.slice(value.span())),
-            xor_span: if xor_literal.is_some() { value.span() } else { Span::default() },
+            xor_span: if xor_literal.is_some() {
+                value.span()
+            } else {
+                Span::default()
+            },
             byte_width: None,
             logical_value: self.slice(value.span()),
             logical_span: value.span(),
@@ -4741,16 +4907,27 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     }
 
     /// `w.call(void 0, …)` / `t[0].call(undefined, …)` of a known writer `w`.
-    fn receiverless_writer_call<'c>(&self, call: &'c CallExpression<'a>) -> Option<(&'c Expression<'a>, LeafKind)> {
+    fn receiverless_writer_call<'c>(
+        &self,
+        call: &'c CallExpression<'a>,
+    ) -> Option<(&'c Expression<'a>, LeafKind)> {
         if member_property(&call.callee).as_deref() != Some("call") {
             return None;
         }
-        let receiver = call.arguments.first()?.as_expression()?.without_parentheses();
+        let receiver = call
+            .arguments
+            .first()?
+            .as_expression()?
+            .without_parentheses();
         let receiverless = match receiver {
             Expression::UnaryExpression(unary) => {
-                unary.operator == UnaryOperator::Void && matches!(unary.argument, Expression::NumericLiteral(_))
+                unary.operator == UnaryOperator::Void
+                    && matches!(unary.argument, Expression::NumericLiteral(_))
             }
-            Expression::Identifier(identifier) => identifier.name == "undefined" && resolve_reference(identifier, self.scoping).is_none(),
+            Expression::Identifier(identifier) => {
+                identifier.name == "undefined"
+                    && resolve_reference(identifier, self.scoping).is_none()
+            }
             Expression::NullLiteral(_) => true,
             _ => false,
         };
@@ -4764,7 +4941,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         Some((writer, self.write_kind(writer)?))
     }
 
-    fn push_emission(&mut self, call: &CallExpression<'a>, target: ObsTarget, payload: PayloadResolution) {
+    fn push_emission(
+        &mut self,
+        call: &CallExpression<'a>,
+        target: ObsTarget,
+        payload: PayloadResolution,
+    ) {
         if self.emissions.len() >= self.limits.max_emissions {
             self.emission_truncated = true;
         } else {
@@ -4796,18 +4978,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         if binary.operator != BinaryOperator::BitwiseXOR {
             return None;
         }
-        [&binary.left, &binary.right].into_iter().find_map(|operand| {
-            let Expression::CallExpression(draw) = operand.without_parentheses() else {
-                return None;
-            };
-            let callee = receiverless_draw_callee(draw)?;
-            // `t = [i, v, mask]; buf[t[0]] = t[1] ^ t[2]()`: the tracer's
-            // argument tuple holds the mask binding.
-            self.mask_of(callee).or_else(|| {
-                let (symbol, _) = self.tuple_element(callee)?;
-                self.masks.get(&(*symbol)?).cloned()
+        [&binary.left, &binary.right]
+            .into_iter()
+            .find_map(|operand| {
+                let Expression::CallExpression(draw) = operand.without_parentheses() else {
+                    return None;
+                };
+                let callee = receiverless_draw_callee(draw)?;
+                // `t = [i, v, mask]; buf[t[0]] = t[1] ^ t[2]()`: the tracer's
+                // argument tuple holds the mask binding.
+                self.mask_of(callee).or_else(|| {
+                    let (symbol, _) = self.tuple_element(callee)?;
+                    self.masks.get(&(*symbol)?).cloned()
+                })
             })
-        })
     }
 
     /// `t[k] ^ v` (either order) where `t[k]` holds a draw from a stream:
@@ -4978,7 +5162,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         *self.tuple_values.get(&tuple)?.get(index as usize)?
     }
 
-    fn tuple_store(&self, object: &Expression<'a>, index: &Expression<'a>) -> Option<(SymbolId, String)> {
+    fn tuple_store(
+        &self,
+        object: &Expression<'a>,
+        index: &Expression<'a>,
+    ) -> Option<(SymbolId, String)> {
         let (buffer, _) = self.tuple_element(object)?;
         let index = match self.tuple_element(index) {
             Some((_, text)) => text.clone(),
@@ -5040,7 +5228,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let callee_symbol = expression_symbol(&call.callee, self.scoping);
         // An inline store helper (a tracer spelling) carries its own proof.
         let inline_proof = match call.callee.without_parentheses() {
-            Expression::ArrowFunctionExpression(arrow) => returned_arrow_parameter_proof(arrow, self.scoping),
+            Expression::ArrowFunctionExpression(arrow) => {
+                returned_arrow_parameter_proof(arrow, self.scoping)
+            }
             _ => None,
         };
         let store_proof = inline_proof
@@ -5081,13 +5271,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         // tracer spelling of a folded write) carries its own proof: the same
         // straight-line formal-callee body a named helper must have.
         let inline = match call.callee.without_parentheses() {
-            Expression::ArrowFunctionExpression(arrow) => {
-                writer_helper_proof(self.scoping, self.source, &arrow.params, &arrow.body.statements)
-            }
-            Expression::FunctionExpression(function) => function
-                .body
-                .as_ref()
-                .and_then(|body| writer_helper_proof(self.scoping, self.source, &function.params, &body.statements)),
+            Expression::ArrowFunctionExpression(arrow) => writer_helper_proof(
+                self.scoping,
+                self.source,
+                &arrow.params,
+                &arrow.body.statements,
+            ),
+            Expression::FunctionExpression(function) => function.body.as_ref().and_then(|body| {
+                writer_helper_proof(
+                    self.scoping,
+                    self.source,
+                    &function.params,
+                    &body.statements,
+                )
+            }),
             _ => None,
         };
         let proof = match inline {
@@ -5126,7 +5323,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let helper_arguments: Vec<Span> = call
             .arguments
             .iter()
-            .map(|argument| argument.as_expression().map(GetSpan::span).unwrap_or_default())
+            .map(|argument| {
+                argument
+                    .as_expression()
+                    .map(GetSpan::span)
+                    .unwrap_or_default()
+            })
             .collect();
         let mut leaves = Vec::with_capacity(proof.writes.len());
         for write in &proof.writes {
@@ -5228,7 +5430,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     }
 
     /// The caller binding a helper writes through.
-    fn helper_buffer(&self, argument: &HelperArgument, call: &CallExpression<'a>) -> Option<SymbolId> {
+    fn helper_buffer(
+        &self,
+        argument: &HelperArgument,
+        call: &CallExpression<'a>,
+    ) -> Option<SymbolId> {
         expression_symbol(self.helper_caller_expression(argument, call)?, self.scoping)
     }
 
@@ -5265,10 +5471,7 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     }
 
     /// A STRING writer's captured mask, read from the caller's writer value.
-    fn helper_string_mask(
-        &self,
-        writer: &Expression<'a>,
-    ) -> (Option<MaskInfo>, Option<String>) {
+    fn helper_string_mask(&self, writer: &Expression<'a>) -> (Option<MaskInfo>, Option<String>) {
         let mask = match writer.without_parentheses() {
             Expression::CallExpression(inner) => inner
                 .arguments
@@ -5296,7 +5499,10 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             .and_then(|expression| self.mask_info_for(expression));
         match &mask {
             Some(mask) => (Some(mask.clone()), Some(mask.argument.clone())),
-            None => (None, self.helper_argument(argument, call).map(|(_, text)| text)),
+            None => (
+                None,
+                self.helper_argument(argument, call).map(|(_, text)| text),
+            ),
         }
     }
 
@@ -5325,7 +5531,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                         .first()
                         .and_then(Argument::as_expression)
                         .and_then(|expression| self.mask_info_for(expression)),
-                    _ => self.writer_symbol(callee)
+                    _ => self
+                        .writer_symbol(callee)
                         .and_then(|symbol| self.string_writers.get(&symbol).cloned().flatten()),
                 };
                 (
@@ -5369,7 +5576,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         };
         // `t = [v, buf]; w(t[0], t[1], i)` writes the tuple's element `v`.
         let tuple_value = value_expr.and_then(|expression| self.tuple_value(expression));
-        let logical_span = tuple_value.or(value_expr.map(GetSpan::span)).unwrap_or(call_span);
+        let logical_span = tuple_value
+            .or(value_expr.map(GetSpan::span))
+            .unwrap_or(call_span);
         let leaf = ILeaf {
             index_span: None,
             writer_factory: self.writer_factory(callee, kind),
@@ -5401,16 +5610,25 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             helper_arguments: Vec::new(),
         };
         if let Some(Expression::ConditionalExpression(conditional)) = buffer_expr {
-            if let (Some(yes), Some(no)) = (self.buffer_symbol(&conditional.consequent),
-                self.buffer_symbol(&conditional.alternate)) {
-                let mut yes_leaf = leaf.clone(); yes_leaf.buffer = Some(yes);
-                let mut no_leaf = leaf; no_leaf.buffer = Some(no);
+            if let (Some(yes), Some(no)) = (
+                self.buffer_symbol(&conditional.consequent),
+                self.buffer_symbol(&conditional.alternate),
+            ) {
+                let mut yes_leaf = leaf.clone();
+                yes_leaf.buffer = Some(yes);
+                let mut no_leaf = leaf;
+                no_leaf.buffer = Some(no);
                 self.known_buffers.extend([yes, no]);
-                self.push_op(IOp::Choice(ChoiceSite {
-                    buffer_aliases: Vec::new(), kind: ChoiceKind::Conditional,
-                    span: conditional.span, condition: Some(self.slice(conditional.test.span())),
-                    labels: vec!["then".into(), "else".into()],
-                }, vec![IOp::Leaf(yes_leaf), IOp::Leaf(no_leaf)]));
+                self.push_op(IOp::Choice(
+                    ChoiceSite {
+                        buffer_aliases: Vec::new(),
+                        kind: ChoiceKind::Conditional,
+                        span: conditional.span,
+                        condition: Some(self.slice(conditional.test.span())),
+                        labels: vec!["then".into(), "else".into()],
+                    },
+                    vec![IOp::Leaf(yes_leaf), IOp::Leaf(no_leaf)],
+                ));
                 return;
             }
         }
@@ -5446,10 +5664,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let value_span = value.span();
         // `obj.c = x` with `x` a local whose latest value is one typed scalar
         // (including an if/else join of same-typed arms).
-        let kind = self.infer_kind(value).or_else(|| match self.resolve_scalar(value)? {
-            ScalarTree::Leaf { kind, .. } => Some(kind),
-            ScalarTree::Choice { .. } => None,
-        });
+        let kind = self
+            .infer_kind(value)
+            .or_else(|| match self.resolve_scalar(value)? {
+                ScalarTree::Leaf { kind, .. } => Some(kind),
+                ScalarTree::Choice { .. } => None,
+            });
         let fields = self.payload_objects.entry(owner).or_default();
         match fields.iter_mut().find(|entry| entry.key == field) {
             Some(entry) => {
@@ -5495,7 +5715,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 self.walk_expression(&member.object, depth);
                 field_owner = self.buffer_symbol(&member.object);
                 if self.site == EmissionSite::WorkerReply {
-                    if let Expression::Identifier(identifier) = member.object.without_parentheses() {
+                    if let Expression::Identifier(identifier) = member.object.without_parentheses()
+                    {
                         worker_owner = resolve_reference(identifier, self.scoping);
                     }
                 }
@@ -5539,8 +5760,10 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             // payload; other indexed writes are byte writes.
             if let Some(index) = parse_index(&index) {
                 self.payload_index.remove(&(buffer, index));
-                if let Some(value_buffer) = self.value_symbol(&assignment.right)
-                    .map(|buffer| self.resolve_buffer_alias(buffer)) {
+                if let Some(value_buffer) = self
+                    .value_symbol(&assignment.right)
+                    .map(|buffer| self.resolve_buffer_alias(buffer))
+                {
                     self.payload_index.insert((buffer, index), value_buffer);
                 }
             }
@@ -5693,22 +5916,29 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     /// without recording it as an ordered payload write.
     /// One raw-prefix byte store `buffer[index] = <seed byte>` (`store` is the
     /// whole store); the fourth byte of one seed completes the prefix.
-    fn record_prefix_part(&mut self, buffer: SymbolId, index: u32, seed: SymbolId, text: String, span: Span, store: Span) {
+    fn record_prefix_part(
+        &mut self,
+        buffer: SymbolId,
+        index: u32,
+        seed: SymbolId,
+        text: String,
+        span: Span,
+        store: Span,
+    ) {
         let complete = {
-            let parts =
-                self.prefix_parts
-                    .entry(buffer)
-                    .or_insert_with(|| PrefixParts {
-                        first_store: store.start,
-                        seed: Some(seed),
-                        elements: BTreeMap::new(),
-                    });
+            let parts = self
+                .prefix_parts
+                .entry(buffer)
+                .or_insert_with(|| PrefixParts {
+                    first_store: store.start,
+                    seed: Some(seed),
+                    elements: BTreeMap::new(),
+                });
             if parts.seed != Some(seed) {
                 parts.seed = None;
             }
             parts.elements.insert(index, (text, span));
-            parts.seed.is_some()
-                && (0..=3).all(|slot| parts.elements.contains_key(&slot))
+            parts.seed.is_some() && (0..=3).all(|slot| parts.elements.contains_key(&slot))
         };
         if complete {
             let (seed, elements) = {
@@ -5734,10 +5964,7 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     buffer,
                     node: PrefixNode {
                         seed_binding: Some(self.scoping.symbol_span(seed).into()),
-                        span: Span::new(
-                            self.prefix_parts[&buffer].first_store,
-                            store.end,
-                        ),
+                        span: Span::new(self.prefix_parts[&buffer].first_store, store.end),
                         spelling: PrefixSpelling::IndexStores,
                         seed_word: seed_word.clone(),
                         elements: elements.iter().map(|(text, _)| text.clone()).collect(),
@@ -5747,10 +5974,7 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     buffer,
                     PrefixInfo {
                         seed_binding: Some(self.scoping.symbol_span(seed).into()),
-                        span: Span::new(
-                            self.prefix_parts[&buffer].first_store,
-                            store.end,
-                        ),
+                        span: Span::new(self.prefix_parts[&buffer].first_store, store.end),
                         seed_word,
                         binding: self.name(seed),
                         elements,
@@ -5767,7 +5991,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         value: &Expression<'a>,
     ) {
         if let (Some(value_buffer), Some(index)) = (
-            self.value_symbol(value).map(|buffer| self.resolve_buffer_alias(buffer)),
+            self.value_symbol(value)
+                .map(|buffer| self.resolve_buffer_alias(buffer)),
             parse_index(index),
         ) {
             self.payload_index.insert((buffer, index), value_buffer);
@@ -5796,8 +6021,14 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         // `t = [value, buffer, buffer]; write(t[0], t[1], i)`: the tracer's
         // argument tuple names the buffer binding it holds.
         let symbol = expression_symbol(expression, self.scoping)
-            .or_else(|| self.tuple_element(expression).and_then(|(symbol, _)| *symbol))
-            .or_else(|| literal_tuple_element(expression).and_then(|element| expression_symbol(element, self.scoping)))?;
+            .or_else(|| {
+                self.tuple_element(expression)
+                    .and_then(|(symbol, _)| *symbol)
+            })
+            .or_else(|| {
+                literal_tuple_element(expression)
+                    .and_then(|element| expression_symbol(element, self.scoping))
+            })?;
         Some(self.resolve_buffer_alias(symbol))
     }
 
@@ -5819,8 +6050,14 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             .collect();
         let mut groups: BTreeMap<(SymbolId, SymbolId), Vec<SymbolId>> = BTreeMap::new();
         for name in names {
-            let roots = (resolve_alias_map(then_aliases, name), resolve_alias_map(else_aliases, name));
-            if roots.0 == roots.1 || !self.known_buffers.contains(&roots.0) || !self.known_buffers.contains(&roots.1) {
+            let roots = (
+                resolve_alias_map(then_aliases, name),
+                resolve_alias_map(else_aliases, name),
+            );
+            if roots.0 == roots.1
+                || !self.known_buffers.contains(&roots.0)
+                || !self.known_buffers.contains(&roots.1)
+            {
                 continue;
             }
             groups.entry(roots).or_default().push(name);
@@ -5896,7 +6133,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     /// `payload` is the `[aux, buffer]` buffer of `value`, resolved by the
     /// caller before this write rebinds `symbol`'s buffer alias:
     /// `w = buf; …; w = [[], w]` delivers `buf`.
-    fn record_value_binding(&mut self, symbol: SymbolId, value: &Expression<'a>, payload: Option<SymbolId>) {
+    fn record_value_binding(
+        &mut self,
+        symbol: SymbolId,
+        value: &Expression<'a>,
+        payload: Option<SymbolId>,
+    ) {
         // The value is read against the bindings' state before this write
         // (`r = [r >>> 24, ..]` reads the old `r`); only then does `symbol`
         // take its new seed alias, if any.
@@ -5940,7 +6182,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         }
     }
 
-    fn record_value_binding_role(&mut self, symbol: SymbolId, value: &Expression<'a>, payload: Option<SymbolId>) {
+    fn record_value_binding_role(
+        &mut self,
+        symbol: SymbolId,
+        value: &Expression<'a>,
+        payload: Option<SymbolId>,
+    ) {
         // A bare scalar is only the binding's latest value; any rebinding
         // replaces it (`x = a || b; x = x != null ? x.checked : ""`).
         self.payload_scalars.remove(&symbol);
@@ -6035,7 +6282,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                         // bits is the seed word.
                         let expression = match expression.without_parentheses() {
                             Expression::BinaryExpression(binary)
-                                if binary.operator == BinaryOperator::BitwiseOR && numeric_value(&binary.right) == Some(0.0) =>
+                                if binary.operator == BinaryOperator::BitwiseOR
+                                    && numeric_value(&binary.right) == Some(0.0) =>
                             {
                                 &binary.left
                             }
@@ -6063,9 +6311,12 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                             }
                             // `t = [[], …]` in a sealed tuple: the literal is
                             // a buffer of its own.
-                            if let Expression::ArrayExpression(literal) = expression.without_parentheses() {
+                            if let Expression::ArrayExpression(literal) =
+                                expression.without_parentheses()
+                            {
                                 if sealed && literal.elements.is_empty() {
-                                    let buffer = self.virtual_buffer(symbol, position, literal.span);
+                                    let buffer =
+                                        self.virtual_buffer(symbol, position, literal.span);
                                     return (Some(buffer), self.slice(expression.span()));
                                 }
                             }
@@ -6082,7 +6333,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     .filter_map(|element| element.as_expression())
                     .find(|expression| is_seed_word(expression, self.scoping))
                 {
-                    self.tuple_seed_words.insert(symbol, self.slice(draw.span()));
+                    self.tuple_seed_words
+                        .insert(symbol, self.slice(draw.span()));
                 }
                 if seeds.iter().any(Option::is_some) {
                     self.tuple_seeds.insert(symbol, seeds);
@@ -6091,17 +6343,25 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 let draws = array
                     .elements
                     .iter()
-                    .map(|element| match element.as_expression().map(Expression::without_parentheses) {
-                        Some(Expression::CallExpression(draw)) if draw.arguments.is_empty() => expression_symbol(&draw.callee, self.scoping)
-                            .and_then(|stream| self.masks.get(&stream).cloned())
-                            .or_else(|| self.mask_of(&draw.callee)),
-                        _ => None,
+                    .map(|element| {
+                        match element.as_expression().map(Expression::without_parentheses) {
+                            Some(Expression::CallExpression(draw)) if draw.arguments.is_empty() => {
+                                expression_symbol(&draw.callee, self.scoping)
+                                    .and_then(|stream| self.masks.get(&stream).cloned())
+                                    .or_else(|| self.mask_of(&draw.callee))
+                            }
+                            _ => None,
+                        }
                     })
                     .collect();
                 self.tuple_draws.insert(symbol, draws);
                 self.tuple_values.insert(
                     symbol,
-                    array.elements.iter().map(|element| element.as_expression().map(GetSpan::span)).collect(),
+                    array
+                        .elements
+                        .iter()
+                        .map(|element| element.as_expression().map(GetSpan::span))
+                        .collect(),
                 );
             }
         }
@@ -6171,7 +6431,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                     span: value.span(),
                     spelling: PrefixSpelling::ArrayLiteral,
                     seed_word: prefix.seed_word.clone(),
-                    elements: prefix.elements.iter().map(|(text, _)| text.clone()).collect(),
+                    elements: prefix
+                        .elements
+                        .iter()
+                        .map(|(text, _)| text.clone())
+                        .collect(),
                 },
             });
             let tail = prefix.elements.len();
@@ -6254,20 +6518,28 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             let mask = byte_write_mask(right, self.scoping)
                 .and_then(|symbol| self.masks.get(&symbol).cloned())
                 .or_else(|| self.inline_stream_draw(right));
-            let (mask_form, mask_source, logical_span) = match split_byte_mask(right, &self.masks, self.scoping) {
-                ByteMask::Stream { value, mask: mask_call } => (
-                    if mask.is_some() { MaskForm::Stream } else { MaskForm::Unresolved },
-                    Some(
-                        mask.as_ref()
-                            .map(|mask| mask.argument.clone())
-                            .filter(|argument| !argument.is_empty())
-                            .unwrap_or_else(|| self.slice(mask_call)),
+            let (mask_form, mask_source, logical_span) =
+                match split_byte_mask(right, &self.masks, self.scoping) {
+                    ByteMask::Stream {
+                        value,
+                        mask: mask_call,
+                    } => (
+                        if mask.is_some() {
+                            MaskForm::Stream
+                        } else {
+                            MaskForm::Unresolved
+                        },
+                        Some(
+                            mask.as_ref()
+                                .map(|mask| mask.argument.clone())
+                                .filter(|argument| !argument.is_empty())
+                                .unwrap_or_else(|| self.slice(mask_call)),
+                        ),
+                        value,
                     ),
-                    value,
-                ),
-                ByteMask::StaticXor { value } => (MaskForm::StaticXor, None, value),
-                ByteMask::None => (MaskForm::Unmasked, None, right.span()),
-            };
+                    ByteMask::StaticXor { value } => (MaskForm::StaticXor, None, value),
+                    ByteMask::None => (MaskForm::Unmasked, None, right.span()),
+                };
             self.push_op(IOp::Leaf(ILeaf {
                 index_span: None,
                 writer_factory: None,
@@ -6330,7 +6602,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         while let Some(current) = stack.pop() {
             match current {
                 Expression::ComputedMemberExpression(member) => {
-                    if let Expression::Identifier(identifier) = member.object.without_parentheses() {
+                    if let Expression::Identifier(identifier) = member.object.without_parentheses()
+                    {
                         if let Some(copy) = resolve_reference(identifier, self.scoping) {
                             if let Some(seed) = self.seed_copies.get(&copy) {
                                 found = Some(*seed);
@@ -6359,11 +6632,19 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
                 // An inline store helper's call value is its returned argument.
                 Expression::CallExpression(call) => {
                     if let Some(store) = inline_store_helper(&call.callee, self.scoping) {
-                        if let Some(argument) = call.arguments.get(store.returned).and_then(Argument::as_expression) {
+                        if let Some(argument) = call
+                            .arguments
+                            .get(store.returned)
+                            .and_then(Argument::as_expression)
+                        {
                             stack.push(argument);
                         }
                     } else if let Some(proof) = self.named_store_helper(call) {
-                        if let Some(argument) = call.arguments.get(proof.returned).and_then(Argument::as_expression) {
+                        if let Some(argument) = call
+                            .arguments
+                            .get(proof.returned)
+                            .and_then(Argument::as_expression)
+                        {
                             stack.push(argument);
                         }
                     }
@@ -6388,14 +6669,20 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let Some(store) = inline_store_helper(&call.callee, self.scoping) else {
             return self.record_named_prefix_store(call);
         };
-        let argument = |position: usize| call.arguments.get(position).and_then(Argument::as_expression);
+        let argument = |position: usize| {
+            call.arguments
+                .get(position)
+                .and_then(Argument::as_expression)
+        };
         let (Some(array), Some(index)) = (argument(store.written), argument(store.index)) else {
             return false;
         };
         let Some(buffer) = self.buffer_symbol(array) else {
             return false;
         };
-        let Some(index) = numeric_value(index).filter(|value| value.fract() == 0.0 && (0.0..=3.0).contains(value)) else {
+        let Some(index) = numeric_value(index)
+            .filter(|value| value.fract() == 0.0 && (0.0..=3.0).contains(value))
+        else {
             return false;
         };
         // A buffer that already has a (short-literal) prefix gets the byte as
@@ -6407,7 +6694,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         while let Some(current) = stack.pop() {
             match current.without_parentheses() {
                 Expression::Identifier(identifier) => {
-                    if let Some(position) = expression_parameter_index(current, &store.formals, self.scoping) {
+                    if let Some(position) =
+                        expression_parameter_index(current, &store.formals, self.scoping)
+                    {
                         references.push((identifier.span, position));
                     }
                 }
@@ -6434,8 +6723,13 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let mut text = self.slice(value_span);
         references.sort_by_key(|(span, _)| std::cmp::Reverse(span.start));
         for (span, position) in references {
-            let Some(caller) = argument(position) else { return false };
-            let (start, end) = ((span.start - value_span.start) as usize, (span.end - value_span.start) as usize);
+            let Some(caller) = argument(position) else {
+                return false;
+            };
+            let (start, end) = (
+                (span.start - value_span.start) as usize,
+                (span.end - value_span.start) as usize,
+            );
             if end > text.len() || !text.is_char_boundary(start) || !text.is_char_boundary(end) {
                 return false;
             }
@@ -6479,14 +6773,24 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         let Some(proof) = self.named_store_helper(call) else {
             return false;
         };
-        let argument = |position: usize| call.arguments.get(position).and_then(Argument::as_expression);
-        let (Some(array), Some(index), Some(value)) = (argument(proof.written), argument(proof.index), argument(proof.value)) else {
+        let argument = |position: usize| {
+            call.arguments
+                .get(position)
+                .and_then(Argument::as_expression)
+        };
+        let (Some(array), Some(index), Some(value)) = (
+            argument(proof.written),
+            argument(proof.index),
+            argument(proof.value),
+        ) else {
             return false;
         };
         let Some(buffer) = self.buffer_symbol(array) else {
             return false;
         };
-        let Some(index) = numeric_value(index).filter(|value| value.fract() == 0.0 && (0.0..=3.0).contains(value)) else {
+        let Some(index) = numeric_value(index)
+            .filter(|value| value.fract() == 0.0 && (0.0..=3.0).contains(value))
+        else {
             return false;
         };
         let Some(seed) = self.seed_symbol_in(value) else {
@@ -6565,7 +6869,8 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
     /// The binding a writer callee names: a plain binding or an element of
     /// the tracer's argument tuple (`t = [w, v, buf]; t[0](…)`).
     fn writer_symbol(&self, callee: &Expression<'a>) -> Option<SymbolId> {
-        expression_symbol(callee, self.scoping).or_else(|| self.tuple_element(callee).and_then(|(symbol, _)| *symbol))
+        expression_symbol(callee, self.scoping)
+            .or_else(|| self.tuple_element(callee).and_then(|(symbol, _)| *symbol))
     }
 
     fn write_kind(&self, callee: &Expression<'a>) -> Option<LeafKind> {
@@ -6604,7 +6909,9 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             Expression::Identifier(id) => resolve_reference(id, self.scoping)
                 .is_some_and(|symbol| self.string_writers.contains_key(&symbol)),
             Expression::CallExpression(inner) => expression_symbol(&inner.callee, self.scoping)
-                .is_some_and(|symbol| self.resolves_to_any_helper(symbol, &self.helpers.string_writer)),
+                .is_some_and(|symbol| {
+                    self.resolves_to_any_helper(symbol, &self.helpers.string_writer)
+                }),
             _ => false,
         };
         proven.then_some(LeafKind::String)
@@ -6853,7 +7160,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             Expression::StaticMemberExpression(member) => member.property.name == "checked",
             _ => false,
         };
-        let kind = if boolean { Some(LeafKind::Byte) } else { self.infer_kind(expression) }?;
+        let kind = if boolean {
+            Some(LeafKind::Byte)
+        } else {
+            self.infer_kind(expression)
+        }?;
         Some(ScalarTree::Leaf {
             kind,
             value: self.slice(expression.span()),
@@ -6924,9 +7235,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
             Expression::CallExpression(call) => self.infer_call_kind(call),
             // `parts[k]` of a `text.split("sep")` result: a string element.
             Expression::ComputedMemberExpression(member)
-                if matches!(member.expression.without_parentheses(), Expression::NumericLiteral(_))
-                    && expression_symbol(&member.object, self.scoping)
-                        .is_some_and(|symbol| self.split_results.contains(&symbol)) =>
+                if matches!(
+                    member.expression.without_parentheses(),
+                    Expression::NumericLiteral(_)
+                ) && expression_symbol(&member.object, self.scoping)
+                    .is_some_and(|symbol| self.split_results.contains(&symbol)) =>
             {
                 Some(LeafKind::String)
             }
@@ -7015,7 +7328,11 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         if !is_post {
             return None;
         }
-        let argument = call.arguments.first()?.as_expression()?.without_parentheses();
+        let argument = call
+            .arguments
+            .first()?
+            .as_expression()?
+            .without_parentheses();
         match argument {
             Expression::ArrayExpression(_) => self.array_payload_buffer(argument),
             Expression::ObjectExpression(_) => self.object_reply_buffer(argument),
@@ -7116,7 +7433,6 @@ impl<'s, 'a> CollectorScanner<'s, 'a> {
         }
         Some(self.slice(expression.span()))
     }
-
 
     /// The proven encoder role of a binding, if it is (or aliases) one of the
     /// helper roles the extractor already identified.
@@ -7534,9 +7850,9 @@ fn choice_co_names(site: &ChoiceSite, arms: usize, buffer: SymbolId) -> Vec<Symb
         .into_iter()
         .filter(|name| *name != buffer)
         .filter(|name| {
-            site.buffer_aliases
-                .iter()
-                .all(|aliases| resolve_alias_map(aliases, *name) == resolve_alias_map(aliases, buffer))
+            site.buffer_aliases.iter().all(|aliases| {
+                resolve_alias_map(aliases, *name) == resolve_alias_map(aliases, buffer)
+            })
         })
         .collect()
 }
@@ -7600,17 +7916,43 @@ fn same_wire_item(left: &GrammarNode, right: &GrammarNode) -> bool {
             a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_wire_item(a, b))
         }
         (
-            GrammarNode::Choice { kind: ka, condition: ca, arms: a, .. },
-            GrammarNode::Choice { kind: kb, condition: cb, arms: b, .. },
+            GrammarNode::Choice {
+                kind: ka,
+                condition: ca,
+                arms: a,
+                ..
+            },
+            GrammarNode::Choice {
+                kind: kb,
+                condition: cb,
+                arms: b,
+                ..
+            },
         ) => {
             ka == kb
                 && ca == cb
                 && a.len() == b.len()
-                && a.iter().zip(b).all(|(a, b)| a.label == b.label && same_wire_item(&a.body, &b.body))
+                && a.iter()
+                    .zip(b)
+                    .all(|(a, b)| a.label == b.label && same_wire_item(&a.body, &b.body))
         }
         (
-            GrammarNode::Repeat { loop_kind: la, direction: da, header: ha, count: ca, body: a, .. },
-            GrammarNode::Repeat { loop_kind: lb, direction: db, header: hb, count: cb, body: b, .. },
+            GrammarNode::Repeat {
+                loop_kind: la,
+                direction: da,
+                header: ha,
+                count: ca,
+                body: a,
+                ..
+            },
+            GrammarNode::Repeat {
+                loop_kind: lb,
+                direction: db,
+                header: hb,
+                count: cb,
+                body: b,
+                ..
+            },
         ) => la == lb && da == db && ha == hb && ca == cb && same_wire_item(a, b),
         _ => false,
     }
@@ -7623,10 +7965,20 @@ fn hoist_common_suffixes(items: Vec<GrammarNode>) -> Vec<GrammarNode> {
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         match item {
-            GrammarNode::Choice { kind, span, condition, mut arms } => {
+            GrammarNode::Choice {
+                kind,
+                span,
+                condition,
+                mut arms,
+            } => {
                 let suffix = split_common_suffix(&mut arms);
                 if suffix.is_empty() || !arms.iter().all(|arm| arm.body.is_empty()) {
-                    out.push(GrammarNode::Choice { kind, span, condition, arms });
+                    out.push(GrammarNode::Choice {
+                        kind,
+                        span,
+                        condition,
+                        arms,
+                    });
                 }
                 out.extend(hoist_common_suffixes(suffix));
             }
@@ -7653,7 +8005,10 @@ fn split_common_suffix(arms: &mut [ChoiceArm]) -> Vec<GrammarNode> {
     let mut suffix = Vec::new();
     loop {
         let Some(last) = lists[0].last() else { break };
-        if !lists.iter().all(|list| list.last().is_some_and(|item| same_wire_item(item, last))) {
+        if !lists
+            .iter()
+            .all(|list| list.last().is_some_and(|item| same_wire_item(item, last)))
+        {
             break;
         }
         suffix.push(last.clone());
@@ -7728,7 +8083,12 @@ fn group_prefix_stores(items: Vec<GrammarNode>) -> Vec<GrammarNode> {
     out
 }
 
-fn collect_buffer_writes(ops: &[IOp], buffer: SymbolId, scope: u32, out: &mut Vec<(u32, Span, String)>) {
+fn collect_buffer_writes(
+    ops: &[IOp],
+    buffer: SymbolId,
+    scope: u32,
+    out: &mut Vec<(u32, Span, String)>,
+) {
     for op in ops {
         match op {
             IOp::Seq(children) | IOp::Choice(_, children) => {
@@ -7959,20 +8319,25 @@ fn expression_symbol(expression: &Expression<'_>, scoping: &Scoping) -> Option<S
 /// of a local is treated as side-effect free.
 fn inert_statement(statement: &Statement<'_>, register: SymbolId, scoping: &Scoping) -> bool {
     match statement {
-        Statement::ExpressionStatement(statement) => match statement.expression.without_parentheses() {
-            Expression::AssignmentExpression(assignment) => {
-                identifier_target(&assignment.left, scoping).is_some_and(|target| target != register)
-                    && inert_expression(&assignment.right, scoping)
+        Statement::ExpressionStatement(statement) => {
+            match statement.expression.without_parentheses() {
+                Expression::AssignmentExpression(assignment) => {
+                    identifier_target(&assignment.left, scoping)
+                        .is_some_and(|target| target != register)
+                        && inert_expression(&assignment.right, scoping)
+                }
+                _ => false,
             }
-            _ => false,
-        },
-        Statement::VariableDeclaration(declaration) => declaration.declarations.iter().all(|declarator| {
-            matches!(declarator.id, BindingPattern::BindingIdentifier(_))
-                && declarator
-                    .init
-                    .as_ref()
-                    .is_none_or(|init| inert_expression(init, scoping))
-        }),
+        }
+        Statement::VariableDeclaration(declaration) => {
+            declaration.declarations.iter().all(|declarator| {
+                matches!(declarator.id, BindingPattern::BindingIdentifier(_))
+                    && declarator
+                        .init
+                        .as_ref()
+                        .is_none_or(|init| inert_expression(init, scoping))
+            })
+        }
         _ => false,
     }
 }
@@ -7988,8 +8353,10 @@ fn inert_expression(expression: &Expression<'_>, scoping: &Scoping) -> bool {
             unary.operator != UnaryOperator::Delete && inert_expression(&unary.argument, scoping)
         }
         Expression::BinaryExpression(binary) => {
-            !matches!(binary.operator, BinaryOperator::In | BinaryOperator::Instanceof)
-                && inert_expression(&binary.left, scoping)
+            !matches!(
+                binary.operator,
+                BinaryOperator::In | BinaryOperator::Instanceof
+            ) && inert_expression(&binary.left, scoping)
                 && inert_expression(&binary.right, scoping)
         }
         Expression::LogicalExpression(logical) => {
@@ -8234,7 +8601,6 @@ fn is_pure_builtin_call(callee: &Expression<'_>, scoping: &Scoping) -> bool {
     }
 }
 
-
 /// Host roots a collector context proxies (`ctx.global`, `ctx.Math`, ...).
 fn is_host_root_name(name: &str) -> bool {
     matches!(
@@ -8376,9 +8742,14 @@ fn mask_call_symbol(expression: &Expression<'_>, scoping: &Scoping) -> Option<Sy
 /// How one indexed byte store combines its value with a mask.
 enum ByteMask {
     /// `value ^ m()` (either operand order): `m` is a stream draw.
-    Stream { value: Span, mask: Span },
+    Stream {
+        value: Span,
+        mask: Span,
+    },
     /// `value ^ literal` with no stream draw.
-    StaticXor { value: Span },
+    StaticXor {
+        value: Span,
+    },
     None,
 }
 
@@ -8443,7 +8814,10 @@ fn split_byte_mask(
             );
             if arguments_empty
                 && (tuple_draw
-                    || matches!(draw.callee.without_parentheses(), Expression::CallExpression(_)))
+                    || matches!(
+                        draw.callee.without_parentheses(),
+                        Expression::CallExpression(_)
+                    ))
             {
                 return ByteMask::Stream {
                     value: value.span(),
@@ -8483,7 +8857,11 @@ where
     if let Some(test) = test {
         let mut symbols = BTreeSet::new();
         collect_symbols(test, scoping, &mut symbols);
-        counters.extend(symbols.into_iter().map(|symbol| canonical_counter(symbol, &aliases)));
+        counters.extend(
+            symbols
+                .into_iter()
+                .map(|symbol| canonical_counter(symbol, &aliases)),
+        );
     }
     for statement in &statements {
         if let Statement::IfStatement(guard) = statement {
@@ -8497,7 +8875,11 @@ where
             if breaks && guard.alternate.is_none() {
                 let mut symbols = BTreeSet::new();
                 collect_symbols(&guard.test, scoping, &mut symbols);
-                counters.extend(symbols.into_iter().map(|symbol| canonical_counter(symbol, &aliases)));
+                counters.extend(
+                    symbols
+                        .into_iter()
+                        .map(|symbol| canonical_counter(symbol, &aliases)),
+                );
             }
         }
     }
@@ -8576,7 +8958,11 @@ fn ends_continue(statements: &[Statement<'_>]) -> bool {
 }
 
 fn without_terminal_continue<'n, 'a>(statements: &'n [Statement<'a>]) -> Vec<&'n Statement<'a>> {
-    let end = if ends_continue(statements) { statements.len().saturating_sub(1) } else { statements.len() };
+    let end = if ends_continue(statements) {
+        statements.len().saturating_sub(1)
+    } else {
+        statements.len()
+    };
     statements[..end].iter().collect()
 }
 
@@ -8587,9 +8973,13 @@ fn is_lowered_for_in(test: &Expression<'_>, body: &[&Statement<'_>], scoping: &S
         }
         other => other,
     };
-    let Expression::BinaryExpression(binary) = test else { return false };
-    if !matches!(binary.operator, BinaryOperator::LessThan | BinaryOperator::LessEqualThan)
-        || !matches!(binary.left.without_parentheses(), Expression::Identifier(_))
+    let Expression::BinaryExpression(binary) = test else {
+        return false;
+    };
+    if !matches!(
+        binary.operator,
+        BinaryOperator::LessThan | BinaryOperator::LessEqualThan
+    ) || !matches!(binary.left.without_parentheses(), Expression::Identifier(_))
         || !matches!(
             binary.right.without_parentheses(),
             Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_)
@@ -8606,7 +8996,9 @@ fn is_lowered_for_in(test: &Expression<'_>, body: &[&Statement<'_>], scoping: &S
 fn collapse_lowered_wrapper(op: &mut IOp) {
     if let IOp::Choice(site, arms) = op {
         if site.kind == ChoiceKind::If && arms.len() == 2 {
-            let [then_arm, else_arm] = arms.as_mut_slice() else { return };
+            let [then_arm, else_arm] = arms.as_mut_slice() else {
+                return;
+            };
             if matches!(else_arm, IOp::Seq(parts) if parts.is_empty()) {
                 let replacement = std::mem::replace(then_arm, IOp::Seq(Vec::new()));
                 *op = replacement;
@@ -8635,10 +9027,15 @@ fn collapse_lowered_wrapper(op: &mut IOp) {
     }
 }
 
-fn guarded_loop<'n, 'a>(body: &'n Statement<'a>, own_label: Option<&str>) -> Option<GuardedLoop<'n, 'a>> {
+fn guarded_loop<'n, 'a>(
+    body: &'n Statement<'a>,
+    own_label: Option<&str>,
+) -> Option<GuardedLoop<'n, 'a>> {
     let statements = statement_list(body);
     for (index, statement) in statements.iter().enumerate() {
-        let Statement::IfStatement(guard) = statement else { continue };
+        let Statement::IfStatement(guard) = statement else {
+            continue;
+        };
         let consequent = statement_list(&guard.consequent);
         let prefix = statements[..index].iter();
         let suffix = &statements[index + 1..];
@@ -8646,7 +9043,9 @@ fn guarded_loop<'n, 'a>(body: &'n Statement<'a>, own_label: Option<&str>) -> Opt
         // `for (;;) { if (!(c)) { TAIL; continue outer; } … }`: continuing an
         // enclosing loop leaves this one, so TAIL (with its `continue`) runs
         // once after the iterations, on the enclosing loop's path.
-        if guard.alternate.is_none() && (ends_loop(consequent) || ends_outer_continue(consequent, own_label)) {
+        if guard.alternate.is_none()
+            && (ends_loop(consequent) || ends_outer_continue(consequent, own_label))
+        {
             return Some(GuardedLoop {
                 test: &guard.test,
                 negated: true,
@@ -8729,7 +9128,8 @@ fn collect_symbols(expression: &Expression<'_>, scoping: &Scoping, out: &mut BTr
         }
         Expression::UnaryExpression(unary) => collect_symbols(&unary.argument, scoping, out),
         Expression::UpdateExpression(update) => {
-            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument {
+            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument
+            {
                 if let Some(symbol) = resolve_reference(identifier, scoping) {
                     out.insert(symbol);
                 }
@@ -8748,11 +9148,19 @@ where
 {
     let mut aliases = BTreeMap::new();
     for statement in statements {
-        let Statement::VariableDeclaration(declaration) = statement else { continue };
+        let Statement::VariableDeclaration(declaration) = statement else {
+            continue;
+        };
         for declarator in &declaration.declarations {
-            let BindingPattern::BindingIdentifier(identifier) = &declarator.id else { continue };
-            let Some(left) = identifier.symbol_id.get() else { continue };
-            let Some(Expression::Identifier(right)) = declarator.init.as_ref() else { continue };
+            let BindingPattern::BindingIdentifier(identifier) = &declarator.id else {
+                continue;
+            };
+            let Some(left) = identifier.symbol_id.get() else {
+                continue;
+            };
+            let Some(Expression::Identifier(right)) = declarator.init.as_ref() else {
+                continue;
+            };
             if let Some(right) = resolve_reference(right, scoping) {
                 aliases.insert(left, right);
             }
@@ -8784,8 +9192,12 @@ fn collect_body_counter_updates(
         }
         Statement::VariableDeclaration(declaration) => {
             for declarator in &declaration.declarations {
-                let BindingPattern::BindingIdentifier(identifier) = &declarator.id else { continue };
-                let Some(symbol) = identifier.symbol_id.get() else { continue };
+                let BindingPattern::BindingIdentifier(identifier) = &declarator.id else {
+                    continue;
+                };
+                let Some(symbol) = identifier.symbol_id.get() else {
+                    continue;
+                };
                 let Some(Expression::BinaryExpression(binary)) = declarator
                     .init
                     .as_ref()
@@ -8793,10 +9205,15 @@ fn collect_body_counter_updates(
                 else {
                     continue;
                 };
-                if numeric_value(&binary.right).filter(|step| *step > 0.0).is_none() {
+                if numeric_value(&binary.right)
+                    .filter(|step| *step > 0.0)
+                    .is_none()
+                {
                     continue;
                 }
-                let Some(base) = expression_symbol(&binary.left, scoping) else { continue };
+                let Some(base) = expression_symbol(&binary.left, scoping) else {
+                    continue;
+                };
                 let direction = match binary.operator {
                     BinaryOperator::Addition => LoopDirection::Ascending,
                     BinaryOperator::Subtraction => LoopDirection::Descending,
@@ -8863,7 +9280,8 @@ fn collect_counter_updates(
             collect_counter_updates(&unary.argument, scoping, aliases, out);
         }
         Expression::UpdateExpression(update) => {
-            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument {
+            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument
+            {
                 if let Some(symbol) = resolve_reference(identifier, scoping) {
                     out.insert((
                         canonical_counter(symbol, aliases),
@@ -8881,12 +9299,17 @@ fn collect_counter_updates(
             };
             let step = |value: &Expression<'_>| numeric_value(value).filter(|step| *step > 0.0);
             let direction = match assignment.operator {
-                AssignmentOperator::Addition => step(&assignment.right).map(|_| LoopDirection::Ascending),
+                AssignmentOperator::Addition => {
+                    step(&assignment.right).map(|_| LoopDirection::Ascending)
+                }
                 AssignmentOperator::Subtraction => {
                     step(&assignment.right).map(|_| LoopDirection::Descending)
                 }
                 AssignmentOperator::Assign => match assignment.right.without_parentheses() {
-                    Expression::BinaryExpression(binary) if expression_symbol(&binary.left, scoping).is_some() && step(&binary.right).is_some() => {
+                    Expression::BinaryExpression(binary)
+                        if expression_symbol(&binary.left, scoping).is_some()
+                            && step(&binary.right).is_some() =>
+                    {
                         match binary.operator {
                             BinaryOperator::Addition => Some(LoopDirection::Ascending),
                             BinaryOperator::Subtraction => Some(LoopDirection::Descending),
@@ -9057,13 +9480,25 @@ fn scalar_grammar(tree: &ScalarTree) -> GrammarNode {
                 LeafKind::Byte => GrammarNode::Byte(write),
             }
         }
-        ScalarTree::Choice { kind, span, condition, then, other } => GrammarNode::Choice {
+        ScalarTree::Choice {
+            kind,
+            span,
+            condition,
+            then,
+            other,
+        } => GrammarNode::Choice {
             kind: *kind,
             span: *span,
             condition: Some(condition.clone()),
             arms: vec![
-                ChoiceArm { label: "then".into(), body: scalar_grammar(then) },
-                ChoiceArm { label: "else".into(), body: scalar_grammar(other) },
+                ChoiceArm {
+                    label: "then".into(),
+                    body: scalar_grammar(then),
+                },
+                ChoiceArm {
+                    label: "else".into(),
+                    body: scalar_grammar(other),
+                },
             ],
         },
     }
@@ -9083,7 +9518,9 @@ fn scalar_wire(tree: &ScalarTree) -> WireOp {
             xor_literal: None,
             byte_width: None,
         }),
-        ScalarTree::Choice { then, other, .. } => WireOp::Choice(vec![scalar_wire(then), scalar_wire(other)]),
+        ScalarTree::Choice { then, other, .. } => {
+            WireOp::Choice(vec![scalar_wire(then), scalar_wire(other)])
+        }
     }
 }
 
@@ -9123,7 +9560,11 @@ impl OpHistory<'_> {
             parts.push(*ops);
             current = prior;
         }
-        parts.into_iter().rev().flat_map(|ops| ops.iter().cloned()).collect()
+        parts
+            .into_iter()
+            .rev()
+            .flat_map(|ops| ops.iter().cloned())
+            .collect()
     }
 }
 
@@ -9142,7 +9583,11 @@ fn literal_tuple_element<'e, 'a>(expression: &'e Expression<'a>) -> Option<&'e E
     if index.value.fract() != 0.0 || index.value < 0.0 {
         return None;
     }
-    if array.elements.iter().any(|element| element.is_spread() || element.is_elision()) {
+    if array
+        .elements
+        .iter()
+        .any(|element| element.is_spread() || element.is_elision())
+    {
         return None;
     }
     array.elements.get(index.value as usize)?.as_expression()
@@ -9155,11 +9600,20 @@ mod alias_tests {
     /// The binding `name` resolves to after following the program's aliases.
     fn resolved(source: &str, name: &str) -> String {
         let allocator = Allocator::default();
-        let program = Parser::new(&allocator, source, SourceType::mjs()).parse().program;
-        let scoping = SemanticBuilder::new().build(&program).semantic.into_scoping();
+        let program = Parser::new(&allocator, source, SourceType::mjs())
+            .parse()
+            .program;
+        let scoping = SemanticBuilder::new()
+            .build(&program)
+            .semantic
+            .into_scoping();
         let aliases = AliasCollector::build(&scoping, &program);
-        let symbol = scoping.find_binding(scoping.root_scope_id(), name.into()).expect("binding");
-        scoping.symbol_name(follow_aliases(&aliases, symbol)).to_string()
+        let symbol = scoping
+            .find_binding(scoping.root_scope_id(), name.into())
+            .expect("binding");
+        scoping
+            .symbol_name(follow_aliases(&aliases, symbol))
+            .to_string()
     }
 
     #[test]

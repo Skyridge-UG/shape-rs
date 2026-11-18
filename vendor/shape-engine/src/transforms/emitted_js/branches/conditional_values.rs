@@ -2,13 +2,13 @@
 //! `value ? next : value` is `value && next`, preserving the actual falsy
 //! value. Only resolved lexical reads qualify; arbitrary getters do not.
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::Scoping;
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::UnaryOperator;
-use crate::transforms::emitted_js::support::unwrap;
 
 pub(crate) fn collapse_repeated_tests(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();

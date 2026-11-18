@@ -9,16 +9,12 @@
 use crate::naming::shared::*;
 use crate::naming::support::installer_events::*;
 use crate::naming::support::seeded_flow::{
-    arity, assign_symbol, assignment, callable_capture, capture_identity, data_capture,
-    directives,
+    arity, assign_symbol, assignment, callable_capture, capture_identity, data_capture, directives,
 };
 use crate::naming::*;
 use oxc_span::GetSpan;
 
-fn binary<'a>(
-    e: &'a Expression<'a>,
-    op: &str,
-) -> Option<(&'a Expression<'a>, &'a Expression<'a>)> {
+fn binary<'a>(e: &'a Expression<'a>, op: &str) -> Option<(&'a Expression<'a>, &'a Expression<'a>)> {
     let Expression::BinaryExpression(b) = e.without_parentheses() else {
         return None;
     };
@@ -309,9 +305,14 @@ fn throw_undefined_value_type_error(
     let [Argument::StringLiteral(message)] = error.arguments.as_slice() else {
         return None;
     };
-    (message.value == "Cannot read properties of undefined (reading 'value')").then(|| vec![
-        thrown.span.into(), error.span.into(), error.callee.span().into(), message.span.into(),
-    ])
+    (message.value == "Cannot read properties of undefined (reading 'value')").then(|| {
+        vec![
+            thrown.span.into(),
+            error.span.into(),
+            error.callee.span().into(),
+            message.span.into(),
+        ]
+    })
 }
 
 fn expression_assignment<'a>(
@@ -362,7 +363,8 @@ fn check_native_function_source(
     let [Statement::ReturnStatement(matched)] = block(&branch.consequent)? else {
         return None;
     };
-    let Expression::UnaryExpression(outer) = matched.argument.as_ref()?.without_parentheses() else {
+    let Expression::UnaryExpression(outer) = matched.argument.as_ref()?.without_parentheses()
+    else {
         return None;
     };
     let Expression::UnaryExpression(inner) = outer.argument.without_parentheses() else {
@@ -486,17 +488,8 @@ fn install_extension_registry(
     if !is_declaration(function) || !function.params.items.is_empty() || !directives(body) {
         return None;
     }
-    let [
-        Statement::VariableDeclaration(constructor_declaration),
-        Statement::FunctionDeclaration(constructor),
-        Statement::ExpressionStatement(constructor_store),
-        Statement::VariableDeclaration(descriptor_declaration),
-        Statement::FunctionDeclaration(register),
-        Statement::ExpressionStatement(register_store),
-        Statement::ExpressionStatement(descriptor_list),
-        Statement::ExpressionStatement(installation),
-        Statement::ReturnStatement(result),
-    ] = body.statements.as_slice()
+    let [Statement::VariableDeclaration(constructor_declaration), Statement::FunctionDeclaration(constructor), Statement::ExpressionStatement(constructor_store), Statement::VariableDeclaration(descriptor_declaration), Statement::FunctionDeclaration(register), Statement::ExpressionStatement(register_store), Statement::ExpressionStatement(descriptor_list), Statement::ExpressionStatement(installation), Statement::ReturnStatement(result)] =
+        body.statements.as_slice()
     else {
         return None;
     };
@@ -515,8 +508,14 @@ fn install_extension_registry(
         constructor,
     )
     .is_none()
-        || !crate::naming::functions::runtime::extension_registry::sibling_register(model, constructor_site)
-        || crate::naming::functions::runtime::extension_registry::register_extension(model, register).is_none()
+        || !crate::naming::functions::runtime::extension_registry::sibling_register(
+            model,
+            constructor_site,
+        )
+        || crate::naming::functions::runtime::extension_registry::register_extension(
+            model, register,
+        )
+        .is_none()
     {
         return None;
     }

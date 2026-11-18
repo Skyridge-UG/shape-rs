@@ -1,16 +1,20 @@
 //! `OfflineAudioRenderSamples`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `OfflineAudioRenderSamples`. Card: [`CARD`].
 ///
 /// Shape: `seed, count, R{N}` in either order of the seed. Evidence:
 /// `getChannelData` on the value path.
-pub(crate) fn recognize_offline_audio_render_samples(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_offline_audio_render_samples(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     claim_for(view, ctx, "OfflineAudioRenderSamples")
 }
 
@@ -25,13 +29,19 @@ pub(crate) fn bind_offline_audio_render_samples(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let pairs = count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
+        let pairs =
+            count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
         let [(count, samples)] = pairs.as_slice() else {
             return Err(refuse(SIGNAL, "expected one sample repeat"));
         };
-        let seeds: Vec<usize> = (0..fields.len()).filter(|i| i != count && i != samples).collect();
+        let seeds: Vec<usize> = (0..fields.len())
+            .filter(|i| i != count && i != samples)
+            .collect();
         let [seed] = seeds.as_slice() else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected seed, count and samples")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected seed, count and samples"),
+            ));
         };
         if !is_scalar(&fields[*seed].node) {
             return Err(refuse(SIGNAL, "seed is not a scalar"));

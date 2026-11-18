@@ -1,8 +1,8 @@
 //! Streaming wheel sample protocol with two independently proved numeric writes.
 use super::super::encoding::curried_seeded_emitter as seeded;
+use super::*;
 use crate::naming::support::media_entropy::*;
 use crate::naming::support::ordered_numeric::{eq, n, op, s};
-use super::*;
 fn inc(model: &Model<'_, '_>, site: FunctionSite, st: &Statement<'_>) -> Option<Symbol> {
     let Expression::UpdateExpression(u) = expression_statement(st)?.without_parentheses() else {
         return None;
@@ -72,9 +72,13 @@ fn prove(
     let seed = plain_binding(model, v, Some(1))?;
     let raw = v.init.as_ref()?;
     let (draw, integer_nonce) = if let Some((draw, zero)) = binary(raw, "|") {
-        if !number(zero, 0.0) { return None; }
+        if !number(zero, 0.0) {
+            return None;
+        }
         (draw, true)
-    } else { (raw, false) };
+    } else {
+        (raw, false)
+    };
     let Some((random, scale)) = binary(draw, "*") else {
         return None;
     };
@@ -100,7 +104,8 @@ fn prove(
         return None;
     }
     let (base, key) = binary(args[0], "^")?;
-    if !(eq(model, base, op("|", s(seed), n(0.0))) || integer_nonce && symbol(model, base) == Some(seed))
+    if !(eq(model, base, op("|", s(seed), n(0.0)))
+        || integer_nonce && symbol(model, base) == Some(seed))
         || !matches!(key.without_parentheses(), Expression::NumericLiteral(_))
     {
         return None;
@@ -116,36 +121,67 @@ fn prove(
         let writer = seeded::numeric_writer(model, site, writer_expr, proposals)?;
         let total = inc(model, site, second_slot)?;
         let assigned = assignment(third_slot)?;
-        if assigned_symbol(model, &assigned.left) != Some(cursor) { return None; }
+        if assigned_symbol(model, &assigned.left) != Some(cursor) {
+            return None;
+        }
         let first = call(&assigned.right)?;
         let args = call_arguments(first);
-        if symbol(model,&first.callee) != Some(cursor) || args.len()!=4 || args.len()!=first.arguments.len()
-            || symbol(model,args[0])!=Some(seed) || symbol(model,args[1])!=Some(total)
-            || symbol(model,args[2])!=Some(bytes) || !number(args[3],3.0) { return None; }
+        if symbol(model, &first.callee) != Some(cursor)
+            || args.len() != 4
+            || args.len() != first.arguments.len()
+            || symbol(model, args[0]) != Some(seed)
+            || symbol(model, args[1]) != Some(total)
+            || symbol(model, args[2]) != Some(bytes)
+            || !number(args[3], 3.0)
+        {
+            return None;
+        }
         let second = call(expression_statement(write)?)?;
         let args = call_arguments(second);
-        if symbol(model,&second.callee)!=Some(writer) || args.len()!=4 || args.len()!=second.arguments.len()
-            || symbol(model,args[0])!=Some(seed) || symbol(model,args[1])!=Some(slow)
-            || symbol(model,args[2])!=Some(bytes) || symbol(model,args[3])!=Some(cursor) { return None; }
-        (writer,cursor,slow,total)
+        if symbol(model, &second.callee) != Some(writer)
+            || args.len() != 4
+            || args.len() != second.arguments.len()
+            || symbol(model, args[0]) != Some(seed)
+            || symbol(model, args[1]) != Some(slow)
+            || symbol(model, args[2]) != Some(bytes)
+            || symbol(model, args[3]) != Some(cursor)
+        {
+            return None;
+        }
+        (writer, cursor, slow, total)
     } else {
         let cursor = plain_binding(model, first_v, Some(0))?;
         let first = call(first_v.init.as_ref()?)?;
         let writer = seeded::numeric_writer(model, site, &first.callee, proposals)?;
         let args = call_arguments(first);
-        if args.len()!=4 || args.len()!=first.arguments.len()
-            || symbol(model,args[0])!=Some(seed) || symbol(model,args[1])!=Some(slow)
-            || symbol(model,args[2])!=Some(bytes) || !number(args[3],3.0) { return None; }
+        if args.len() != 4
+            || args.len() != first.arguments.len()
+            || symbol(model, args[0]) != Some(seed)
+            || symbol(model, args[1]) != Some(slow)
+            || symbol(model, args[2]) != Some(bytes)
+            || !number(args[3], 3.0)
+        {
+            return None;
+        }
         let v = one_variable(second_slot)?;
-        let alias = plain_binding(model,v,Some(0))?;
-        if symbol(model,v.init.as_ref()?)!=Some(writer) { return None; }
-        let total=inc(model,site,third_slot)?;
-        let second=call(expression_statement(write)?)?;
-        let args=call_arguments(second);
-        if symbol(model,&second.callee)!=Some(alias) || args.len()!=4 || args.len()!=second.arguments.len()
-            || symbol(model,args[0])!=Some(seed) || symbol(model,args[1])!=Some(total)
-            || symbol(model,args[2])!=Some(bytes) || symbol(model,args[3])!=Some(cursor) { return None; }
-        (writer,cursor,slow,total)
+        let alias = plain_binding(model, v, Some(0))?;
+        if symbol(model, v.init.as_ref()?) != Some(writer) {
+            return None;
+        }
+        let total = inc(model, site, third_slot)?;
+        let second = call(expression_statement(write)?)?;
+        let args = call_arguments(second);
+        if symbol(model, &second.callee) != Some(alias)
+            || args.len() != 4
+            || args.len() != second.arguments.len()
+            || symbol(model, args[0]) != Some(seed)
+            || symbol(model, args[1]) != Some(total)
+            || symbol(model, args[2]) != Some(bytes)
+            || symbol(model, args[3]) != Some(cursor)
+        {
+            return None;
+        }
+        (writer, cursor, slow, total)
     };
     let _ = cursor;
     // Plain immutable local alias was tied above to the exact source-proved writer.
@@ -212,7 +248,9 @@ pub(in crate::naming) fn evaluate(
     proposals: &BTreeMap<u32, Vec<Proposal>>,
 ) -> Vec<Proposal> {
     if let Some(alias_first) = prove(model, site, proposals) {
-        if alias_first { return vec![proposal("emitWheelCounterFrame", "events_wheel_counter_frame_writer_cursor", "complete wheel callback with unchanged scoped clock/factory/writer proofs: update 500ms gap count and timestamp; pack exact 32-bit nonce header; derive keystream; initialize writer alias, increment total, consume that alias before replacing its slot by the first numeric-write cursor, then write gap count with that exact cursor; next empty payload/frame; catch forwards the same error then removes the same captured wheel listener with false capture flag", f)]; }
+        if alias_first {
+            return vec![proposal("emitWheelCounterFrame", "events_wheel_counter_frame_writer_cursor", "complete wheel callback with unchanged scoped clock/factory/writer proofs: update 500ms gap count and timestamp; pack exact 32-bit nonce header; derive keystream; initialize writer alias, increment total, consume that alias before replacing its slot by the first numeric-write cursor, then write gap count with that exact cursor; next empty payload/frame; catch forwards the same error then removes the same captured wheel listener with false capture flag", f)];
+        }
         vec![proposal("emitWheelCounterFrame","events_wheel_counter_frame","complete wheel callback: update 500ms gap count and timestamp, pack random 32-bit big-endian nonce, derive owned keystream from coerced nonce XOR literal, independently prove shared number writer and same writer alias, write gap count then incremented total into chained frame, next empty payload/frame; catch forwards error then removes captured wheel listener with false capture flag",f)]
     } else {
         Vec::new()

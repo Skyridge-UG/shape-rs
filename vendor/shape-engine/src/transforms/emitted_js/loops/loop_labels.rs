@@ -24,8 +24,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn remove_needless_loop_labels(source: &str) -> Result<(String, usize), String> {
     let (source, sunk) = sink_inner_exits(source)?;
@@ -48,7 +48,11 @@ fn drop_labels(source: &str) -> Result<(String, usize), String> {
         edits.push(analysis::Edit::delete(whole_line(source, *span)));
     }
     let count = scan.jumps.len() + edits.len();
-    edits.extend(scan.jumps.into_iter().map(|(span, text)| analysis::Edit::replace(span, text)));
+    edits.extend(
+        scan.jumps
+            .into_iter()
+            .map(|(span, text)| analysis::Edit::replace(span, text)),
+    );
     if count == 0 {
         return Ok((source.into(), 0));
     }
@@ -57,7 +61,8 @@ fn drop_labels(source: &str) -> Result<(String, usize), String> {
         return Err("loop label edits overlap".into());
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("loop label output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("loop label output: {error}"))?;
     Ok((applied.output, count))
 }
 
@@ -66,7 +71,10 @@ fn drop_labels(source: &str) -> Result<(String, usize), String> {
 fn sink_inner_exits(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
-    let mut sink = Sink { source, edits: Vec::new() };
+    let mut sink = Sink {
+        source,
+        edits: Vec::new(),
+    };
     sink.visit_program(&program);
     if sink.edits.is_empty() {
         return Ok((source.into(), 0));
@@ -78,7 +86,8 @@ fn sink_inner_exits(source: &str) -> Result<(String, usize), String> {
         return Ok((source.into(), 0));
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("inner loop exit output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("inner loop exit output: {error}"))?;
     Ok((applied.output, count))
 }
 
@@ -90,9 +99,10 @@ struct Sink<'s> {
 fn loop_body<'s, 'a>(statement: &'s Statement<'a>) -> Option<(&'s Statement<'a>, bool)> {
     match statement {
         Statement::ForStatement(inner) => Some((&inner.body, inner.test.is_none())),
-        Statement::WhileStatement(inner) => {
-            Some((&inner.body, matches!(inner.test, Expression::BooleanLiteral(ref literal) if literal.value)))
-        }
+        Statement::WhileStatement(inner) => Some((
+            &inner.body,
+            matches!(inner.test, Expression::BooleanLiteral(ref literal) if literal.value),
+        )),
         _ => None,
     }
 }
@@ -102,14 +112,23 @@ impl Sink<'_> {
     /// `inner`: the test leaves the header and `if (!(test)) exit` opens the
     /// body. None when the test reads a name the body binds (it would read the
     /// body's binding) or a `for` initializer binds names.
-    fn failed_test(&self, inner: &Statement<'_>, exit: &str, bound: &BTreeSet<String>) -> Option<Vec<analysis::Edit>> {
+    fn failed_test(
+        &self,
+        inner: &Statement<'_>,
+        exit: &str,
+        bound: &BTreeSet<String>,
+    ) -> Option<Vec<analysis::Edit>> {
         let (test, body, header) = match inner {
             Statement::WhileStatement(loop_) => (&loop_.test, &loop_.body, None),
             Statement::ForStatement(loop_) => {
                 if matches!(loop_.init, Some(ForStatementInit::VariableDeclaration(_))) {
                     return None;
                 }
-                (loop_.test.as_ref()?, &loop_.body, Some(loop_.test.as_ref()?.span()))
+                (
+                    loop_.test.as_ref()?,
+                    &loop_.body,
+                    Some(loop_.test.as_ref()?.span()),
+                )
             }
             _ => return None,
         };
@@ -124,13 +143,21 @@ impl Sink<'_> {
         let test_text = &self.source[test.span().start as usize..test.span().end as usize];
         let mut edits = vec![match header {
             // `while (c) ` → `for (;;) `
-            None => analysis::Edit::replace(Span::new(inner.span().start, block.span.start), "for (;;) "),
+            None => analysis::Edit::replace(
+                Span::new(inner.span().start, block.span.start),
+                "for (;;) ",
+            ),
             // `for (i; c; u)` → `for (i;; u)`
             Some(test) => analysis::Edit::delete(test),
         }];
         // The new first line takes the loop's indentation, one level in.
-        let line = self.source[..inner.span().start as usize].rfind('\n').map_or(0, |at| at + 1);
-        let indent: String = self.source[line..].chars().take_while(|c| *c == '\t' || *c == ' ').collect();
+        let line = self.source[..inner.span().start as usize]
+            .rfind('\n')
+            .map_or(0, |at| at + 1);
+        let indent: String = self.source[line..]
+            .chars()
+            .take_while(|c| *c == '\t' || *c == ' ')
+            .collect();
         edits.push(analysis::Edit::replace(
             Span::new(block.span.start, block.span.start + 1),
             format!("{{\n{indent}\tif (!({test_text})) {exit}"),
@@ -146,7 +173,9 @@ impl<'a> Visit<'a> for Sink<'_> {
             return;
         };
         let (inner, after) = match body.body.as_slice() {
-            [.., inner, after @ (Statement::ThrowStatement(_) | Statement::ReturnStatement(_))] => (inner, Some(after)),
+            [.., inner, after @ (Statement::ThrowStatement(_) | Statement::ReturnStatement(_))] => {
+                (inner, Some(after))
+            }
             [.., inner] => (inner, None),
             [] => return,
         };
@@ -160,7 +189,11 @@ impl<'a> Visit<'a> for Sink<'_> {
         let Some((inner_body, endless)) = loop_body(inner) else {
             return;
         };
-        let mut jumps = InnerJumps { outer: labeled.label.name.as_str(), own, ..InnerJumps::default() };
+        let mut jumps = InnerJumps {
+            outer: labeled.label.name.as_str(),
+            own,
+            ..InnerJumps::default()
+        };
         jumps.visit_statement(inner_body);
         if jumps.continues.is_empty() {
             return;
@@ -183,9 +216,17 @@ impl<'a> Visit<'a> for Sink<'_> {
                 }
                 _ => return,
             }
-            edits.push(analysis::Edit::delete(whole_line(self.source, after.span())));
+            edits.push(analysis::Edit::delete(whole_line(
+                self.source,
+                after.span(),
+            )));
         }
-        edits.extend(jumps.continues.iter().map(|span| analysis::Edit::replace(*span, "break;".to_string())));
+        edits.extend(
+            jumps
+                .continues
+                .iter()
+                .map(|span| analysis::Edit::replace(*span, "break;".to_string())),
+        );
         self.edits.extend(edits);
     }
 }
@@ -229,7 +270,12 @@ impl<'a> Visit<'a> for InnerJumps<'_> {
         }
     }
     fn visit_continue_statement(&mut self, statement: &ContinueStatement<'a>) {
-        if self.nested == 0 && statement.label.as_ref().is_some_and(|label| label.name == self.outer) {
+        if self.nested == 0
+            && statement
+                .label
+                .as_ref()
+                .is_some_and(|label| label.name == self.outer)
+        {
             self.continues.push(statement.span);
         }
     }
@@ -282,7 +328,13 @@ impl Scan {
         self.targets.push((target, label));
     }
 
-    fn jump(&mut self, span: Span, label: Option<&LabelIdentifier<'_>>, keyword: &str, continues: bool) {
+    fn jump(
+        &mut self,
+        span: Span,
+        label: Option<&LabelIdentifier<'_>>,
+        keyword: &str,
+        continues: bool,
+    ) {
         let Some(label) = label else {
             return;
         };
@@ -297,11 +349,20 @@ impl Scan {
             .rev()
             .find(|(target, _)| *target != Target::Switch || !continues);
         match nearest {
-            Some((Target::Loop, own)) if named(own) => self.jumps.push((span, format!("{keyword};"))),
+            Some((Target::Loop, own)) if named(own) => {
+                self.jumps.push((span, format!("{keyword};")))
+            }
             _ => {
-                let reached = self.targets.iter().rev().take_while(|(target, _)| *target != Target::Function);
+                let reached = self
+                    .targets
+                    .iter()
+                    .rev()
+                    .take_while(|(target, _)| *target != Target::Function);
                 // A label on something other than a loop is left alone.
-                if let Some(index) = reached.filter_map(|(_, index)| *index).find(|index| self.labels[*index].1 == name) {
+                if let Some(index) = reached
+                    .filter_map(|(_, index)| *index)
+                    .find(|index| self.labels[*index].1 == name)
+                {
                     self.kept.insert(index);
                 }
             }
@@ -316,8 +377,16 @@ impl Scan {
         let Some(Statement::ContinueStatement(jump)) = block.body.last() else {
             return;
         };
-        let own = self.targets.last().and_then(|(_, label)| *label).map(|index| self.labels[index].1.as_str());
-        if jump.label.as_ref().is_none_or(|label| Some(label.name.as_str()) == own) {
+        let own = self
+            .targets
+            .last()
+            .and_then(|(_, label)| *label)
+            .map(|index| self.labels[index].1.as_str());
+        if jump
+            .label
+            .as_ref()
+            .is_none_or(|label| Some(label.name.as_str()) == own)
+        {
             self.dropped.push(jump.span);
         }
     }
@@ -342,7 +411,10 @@ impl<'a> Visit<'a> for Scan {
             walk::walk_labeled_statement(self, labeled);
             return;
         }
-        self.labels.push((Span::new(labeled.span.start, labeled.body.span().start), labeled.label.name.to_string()));
+        self.labels.push((
+            Span::new(labeled.span.start, labeled.body.span().start),
+            labeled.label.name.to_string(),
+        ));
         self.pending = Some(self.labels.len() - 1);
         self.visit_statement(&labeled.body);
     }
@@ -475,7 +547,10 @@ mod tests {
         let source = "function f(a) {\n\tvm_loop_8: while (a()) {\n\t\tvm_loop_9: for (;;) {\n\t\t\tif (a()) {\n\t\t\t\tbreak vm_loop_9;\n\t\t\t}\n\t\t\tif (a()) {\n\t\t\t\tcontinue vm_loop_8;\n\t\t\t}\n\t\t}\n\t\tthrow new Error(\"x\");\n\t}\n}\n";
         let (code, _) = remove_needless_loop_labels(source).unwrap();
         assert!(!code.contains("vm_loop_"), "{code}");
-        assert!(code.contains("if (a()) {\n\t\t\t\tthrow new Error(\"x\");"), "{code}");
+        assert!(
+            code.contains("if (a()) {\n\t\t\t\tthrow new Error(\"x\");"),
+            "{code}"
+        );
     }
 
     #[test]
@@ -484,7 +559,10 @@ mod tests {
         let (code, _) = remove_needless_loop_labels(source).unwrap();
         assert!(!code.contains("vm_loop_"), "{code}");
         assert!(!code.contains("while"), "{code}");
-        assert!(code.contains("for (;;) {\n\t\t\tif (!(g !== void 0)) throw new TypeError(\"x\");"), "{code}");
+        assert!(
+            code.contains("for (;;) {\n\t\t\tif (!(g !== void 0)) throw new TypeError(\"x\");"),
+            "{code}"
+        );
         assert!(code.contains("} else {\n\t\t\t\tbreak;"), "{code}");
     }
 

@@ -1,16 +1,27 @@
 //! `AnchorIdnaUnicodeVersion`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::analysis::{leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `AnchorIdnaUnicodeVersion`. Card: [`CARD`].
-pub(crate) fn recognize_anchor_idna_unicode_version(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_anchor_idna_unicode_version(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
-    (count_then_bit_bytes(view) && census.string_containing("xn--") && census.calls_with("createElement", "a"))
-        .then(|| Claim::new(["anchor hostname IDNA serialisation (xn--)", "count + two bit bytes"]))
+    (count_then_bit_bytes(view)
+        && census.string_containing("xn--")
+        && census.calls_with("createElement", "a"))
+    .then(|| {
+        Claim::new([
+            "anchor hostname IDNA serialisation (xn--)",
+            "count + two bit bytes",
+        ])
+    })
 }
 
 pub(crate) fn bind_anchor_idna_unicode_version(

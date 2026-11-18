@@ -1,11 +1,12 @@
 //! `UiEventSamplesMouse`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, shape_text::*, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, shape_text::*, value_facts};
+use crate::signals::analysis::{
+    top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `UiEventSamplesMouse`. Card: [`CARD`].
 pub(crate) fn recognize_ui_event_samples_mouse(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -14,12 +15,15 @@ pub(crate) fn recognize_ui_event_samples_mouse(view: &SlotView, ctx: &FinderCtx)
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let mouse_roles = ctx
-        .slot_roles(view)
-        .iter()
-        .any(|role| role.starts_with("interaction_mouse") || role.starts_with("interaction_throttled_mouse"));
-    (facts.has_event(&["mousemove"]) || mouse_roles)
-        .then(|| Claim::new(["mouse listeners fill three record rings", "three count + list sections"]))
+    let mouse_roles = ctx.slot_roles(view).iter().any(|role| {
+        role.starts_with("interaction_mouse") || role.starts_with("interaction_throttled_mouse")
+    });
+    (facts.has_event(&["mousemove"]) || mouse_roles).then(|| {
+        Claim::new([
+            "mouse listeners fill three record rings",
+            "three count + list sections",
+        ])
+    })
 }
 
 pub(crate) fn bind_ui_event_samples_mouse(
@@ -36,31 +40,69 @@ pub(crate) fn bind_ui_event_samples_mouse(
     let filtered_by_definition = |field: &Field| {
         field.sites.iter().flatten().any(|site| {
             ctx.caller_write_value_node(site).is_some_and(|node| {
-                ctx.slice_of(node, FILTER_DEFINITION_HOPS).calls.keys().any(|(method, _, _)| method == "filter")
+                ctx.slice_of(node, FILTER_DEFINITION_HOPS)
+                    .calls
+                    .keys()
+                    .any(|(method, _, _)| method == "filter")
             })
         })
     };
-    let arrays: Vec<&Field> = binder.messages.iter().flatten().filter(|field| field.shape == Shape::Array).collect();
-    let by_definition = arrays.iter().filter(|field| filtered_by_definition(field)).count() == 1
-        && arrays.iter().filter(|field| field.merged().has_call("filter")).count() > 1;
+    let arrays: Vec<&Field> = binder
+        .messages
+        .iter()
+        .flatten()
+        .filter(|field| field.shape == Shape::Array)
+        .collect();
+    let by_definition = arrays
+        .iter()
+        .filter(|field| filtered_by_definition(field))
+        .count()
+        == 1
+        && arrays
+            .iter()
+            .filter(|field| field.merged().has_call("filter"))
+            .count()
+            > 1;
     let section = |field: &Field| -> Option<&'static str> {
         if field.leaf_kinds().contains(&LeafKind::String) {
             Some("button")
-        } else if if by_definition { filtered_by_definition(field) } else { field.merged().has_call("filter") } {
+        } else if if by_definition {
+            filtered_by_definition(field)
+        } else {
+            field.merged().has_call("filter")
+        } {
             Some("throttled")
         } else {
             Some("raw")
         }
     };
-    binder.top_sections(section, &[("button", "buttonEventCount", "buttonEvents"), ("throttled", "throttledMoveCount", "throttledMoves"), ("raw", "rawMoveCount", "rawMoves")])?;
+    binder.top_sections(
+        section,
+        &[
+            ("button", "buttonEventCount", "buttonEvents"),
+            ("throttled", "throttledMoveCount", "throttledMoves"),
+            ("raw", "rawMoveCount", "rawMoves"),
+        ],
+    )?;
     binder.records(|records, facts| {
         records.name_by_labels(facts, |field, meaning| {
             let coordinate = |axis: &str| meaning.has_member(&format!("page{axis}"));
-            let relative = |axis: &str| meaning.has_member(&format!("client{axis}")) || meaning.has_member(&format!("offset{axis}"));
+            let relative = |axis: &str| {
+                meaning.has_member(&format!("client{axis}"))
+                    || meaning.has_member(&format!("offset{axis}"))
+            };
             match field.kind() {
                 Some(LeafKind::Byte) => Some("flags"),
-                Some(LeafKind::String) if meaning.has_member("name") && !meaning.has_member("id") => Some("targetName"),
-                Some(LeafKind::String) if meaning.has_member("id") && !meaning.has_member("name") => Some("targetId"),
+                Some(LeafKind::String)
+                    if meaning.has_member("name") && !meaning.has_member("id") =>
+                {
+                    Some("targetName")
+                }
+                Some(LeafKind::String)
+                    if meaning.has_member("id") && !meaning.has_member("name") =>
+                {
+                    Some("targetId")
+                }
                 Some(LeafKind::Number) => {
                     if meaning.has_member("button") {
                         Some("button")

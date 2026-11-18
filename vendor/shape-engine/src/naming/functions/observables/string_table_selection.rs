@@ -1,8 +1,8 @@
 //! Standalone string-table selection. The legacy serializer finder requires an
 //! encoding-tag table before considering this otherwise self-contained helper.
 //! Prove the entire owned chain without that unrelated package precondition.
-use crate::naming::support::reassembly::*;
 use super::*;
+use crate::naming::support::reassembly::*;
 use oxc_semantic::SymbolId;
 
 fn binary<'a>(e: &'a Expression<'a>, op: &str) -> Option<(&'a Expression<'a>, &'a Expression<'a>)> {

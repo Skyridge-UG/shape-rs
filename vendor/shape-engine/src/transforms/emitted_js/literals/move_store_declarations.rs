@@ -38,7 +38,11 @@ pub(crate) fn move_store_declarations(source: &str) -> Result<(String, usize), S
         source,
         scoping: &scoping,
         nodes: &nodes,
-        comments: program.comments.iter().map(|comment| comment.span).collect(),
+        comments: program
+            .comments
+            .iter()
+            .map(|comment| comment.span)
+            .collect(),
         edits: Vec::new(),
         moved: 0,
     };
@@ -102,7 +106,8 @@ impl Scan<'_, '_> {
             self.edits.push(analysis::Edit::delete(line));
         }
         let top = whole_line(self.source, first.span()).start;
-        self.edits.push(analysis::Edit::replace(Span::new(top, top), text));
+        self.edits
+            .push(analysis::Edit::replace(Span::new(top, top), text));
         self.moved += moved.len();
     }
 
@@ -152,15 +157,22 @@ impl Scan<'_, '_> {
                     return None;
                 }
                 // The run must not read the alias before its new position.
-                if self.scoping.get_resolved_references(movable.symbol).any(|reference| {
-                    let span = self.nodes.kind(reference.node_id()).span();
-                    run_start <= span.start && span.end <= run_end
-                }) {
+                if self
+                    .scoping
+                    .get_resolved_references(movable.symbol)
+                    .any(|reference| {
+                        let span = self.nodes.kind(reference.node_id()).span();
+                        run_start <= span.start && span.end <= run_end
+                    })
+                {
                     return None;
                 }
             }
         }
-        Some(Run { end: index, interior })
+        Some(Run {
+            end: index,
+            interior,
+        })
     }
 
     /// `$X.k = value;` / `$X[k] = value;`: the receiver.
@@ -176,13 +188,17 @@ impl Scan<'_, '_> {
         }
         let object = match &assignment.left {
             AssignmentTarget::StaticMemberExpression(member) if !member.optional => &member.object,
-            AssignmentTarget::ComputedMemberExpression(member) if !member.optional => &member.object,
+            AssignmentTarget::ComputedMemberExpression(member) if !member.optional => {
+                &member.object
+            }
             _ => return None,
         };
         let Expression::Identifier(receiver) = object else {
             return None;
         };
-        self.scoping.get_reference(receiver.reference_id()).symbol_id()
+        self.scoping
+            .get_reference(receiver.reference_id())
+            .symbol_id()
     }
 
     fn movable(&self, statement: &Statement<'_>, at: usize) -> Option<Movable> {
@@ -193,7 +209,9 @@ impl Scan<'_, '_> {
                 symbol: function.id.as_ref()?.symbol_id.get()?,
                 init: None,
             }),
-            Statement::VariableDeclaration(declaration) if declaration.kind != VariableDeclarationKind::Var => {
+            Statement::VariableDeclaration(declaration)
+                if declaration.kind != VariableDeclarationKind::Var =>
+            {
                 let [declarator] = declaration.declarations.as_slice() else {
                     return None;
                 };
@@ -277,7 +295,8 @@ mod tests {
     #[test]
     fn keeps_declarations_at_the_edges_or_with_comments() {
         // The declaration is already after the run.
-        let after = "function f() {\n  let t = {};\n  t.a = 1;\n  function helper() {}\n  return t;\n}\n";
+        let after =
+            "function f() {\n  let t = {};\n  t.a = 1;\n  function helper() {}\n  return t;\n}\n";
         assert_eq!(moved(after), after);
         // A comment on the declaration keeps it in place.
         let commented = "function f() {\n  let t = {};\n  t.a = 1;\n  // keep\n  function helper() {}\n  t.b = 2;\n  return t;\n}\n";

@@ -30,8 +30,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, NodeId, Scoping};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 use crate::transforms::emitted_js::support::is_void_zero;
 
 pub(crate) fn arrow_callbacks(source: &str) -> Result<(String, usize), String> {
@@ -52,7 +52,11 @@ fn round(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let scan = Scan { source, scoping: &scoping, nodes: &nodes };
+    let scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+    };
     let mut candidates: Vec<Candidate> = Vec::new();
     for node in nodes.iter() {
         if let AstKind::Function(function) = node.kind() {
@@ -68,7 +72,8 @@ fn round(source: &str) -> Result<(String, usize), String> {
         .filter(|outer| {
             !candidates.iter().any(|inner| {
                 inner.declaration != outer.declaration
-                    && (outer.declaration.contains_inclusive(inner.declaration) || outer.declaration.contains_inclusive(inner.use_span))
+                    && (outer.declaration.contains_inclusive(inner.declaration)
+                        || outer.declaration.contains_inclusive(inner.use_span))
             })
         })
         .collect();
@@ -77,8 +82,14 @@ fn round(source: &str) -> Result<(String, usize), String> {
     }
     let mut edits = Vec::new();
     for candidate in &ready {
-        edits.push(analysis::Edit::delete(whole_line(source, candidate.declaration)));
-        edits.push(analysis::Edit::replace(candidate.use_span, candidate.arrow.clone()));
+        edits.push(analysis::Edit::delete(whole_line(
+            source,
+            candidate.declaration,
+        )));
+        edits.push(analysis::Edit::replace(
+            candidate.use_span,
+            candidate.arrow.clone(),
+        ));
     }
     let output = super::super::support::apply_checked(source, edits, "arrow callback")?;
     Ok((output, ready.len()))
@@ -138,8 +149,14 @@ impl<'a> Visit<'a> for Body<'a> {
     }
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
         if self.depth == 0 {
-            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) = (&member.object, &member.expression) {
-                if object.name == "arguments" && index.value.fract() == 0.0 && index.value >= 0.0 && index.value < 64.0 {
+            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) =
+                (&member.object, &member.expression)
+            {
+                if object.name == "arguments"
+                    && index.value.fract() == 0.0
+                    && index.value >= 0.0
+                    && index.value < 64.0
+                {
                     if self.arrows > 0 {
                         self.other_arguments = true;
                     }
@@ -154,14 +171,19 @@ impl<'a> Visit<'a> for Body<'a> {
         if self.depth == 0 && identifier.name == "arguments" {
             self.other_arguments = true;
         }
-        self.references.push((identifier.reference_id(), identifier.name));
+        self.references
+            .push((identifier.reference_id(), identifier.name));
     }
 }
 
 impl<'s, 'a> Scan<'s, 'a> {
     fn candidate(&self, node: NodeId, function: &'a Function<'a>) -> Option<Candidate> {
         let id = function.id.as_ref()?;
-        if !function.is_declaration() || !id.name.starts_with("$THREAD_") || function.r#async || function.generator {
+        if !function.is_declaration()
+            || !id.name.starts_with("$THREAD_")
+            || function.r#async
+            || function.generator
+        {
             return None;
         }
         if !function.params.items.is_empty() || function.params.rest.is_some() {
@@ -176,8 +198,16 @@ impl<'s, 'a> Scan<'s, 'a> {
         let use_span = self.nodes.get_node(use_node).span();
         // An argument of a call or `new`.
         let argument = match self.nodes.parent_kind(use_node) {
-            AstKind::CallExpression(call) => call.arguments.iter().any(|argument| argument.span() == use_span) && call.callee.span() != use_span,
-            AstKind::NewExpression(new) => new.arguments.iter().any(|argument| argument.span() == use_span),
+            AstKind::CallExpression(call) => {
+                call.arguments
+                    .iter()
+                    .any(|argument| argument.span() == use_span)
+                    && call.callee.span() != use_span
+            }
+            AstKind::NewExpression(new) => new
+                .arguments
+                .iter()
+                .any(|argument| argument.span() == use_span),
             _ => false,
         };
         if !argument {
@@ -185,7 +215,12 @@ impl<'s, 'a> Scan<'s, 'a> {
         }
         // Run at most once per run of the declaring function: no loop or
         // nested function between the use and that function.
-        let home = self.nodes.ancestor_ids(node).find(|&ancestor| matches!(self.nodes.kind(ancestor), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) | AstKind::Program(_)))?;
+        let home = self.nodes.ancestor_ids(node).find(|&ancestor| {
+            matches!(
+                self.nodes.kind(ancestor),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) | AstKind::Program(_)
+            )
+        })?;
         for ancestor in self.nodes.ancestor_ids(use_node) {
             if ancestor == home {
                 break;
@@ -206,7 +241,14 @@ impl<'s, 'a> Scan<'s, 'a> {
         }
         // `this` and `arguments`.
         let body = function.body.as_ref()?;
-        let mut uses_of = Body { depth: 0, arrows: 0, this: false, indexed: Vec::new(), other_arguments: false, references: Vec::new() };
+        let mut uses_of = Body {
+            depth: 0,
+            arrows: 0,
+            this: false,
+            indexed: Vec::new(),
+            other_arguments: false,
+            references: Vec::new(),
+        };
         uses_of.visit_function_body(body);
         if uses_of.this || uses_of.other_arguments {
             return None;
@@ -216,7 +258,10 @@ impl<'s, 'a> Scan<'s, 'a> {
         for &(reference, name) in &uses_of.references {
             let resolved = self.scoping.get_reference(reference).symbol_id();
             if let Some(resolved) = resolved {
-                if function.span.contains_inclusive(self.scoping.symbol_span(resolved)) {
+                if function
+                    .span
+                    .contains_inclusive(self.scoping.symbol_span(resolved))
+                {
                     continue;
                 }
             }
@@ -225,20 +270,38 @@ impl<'s, 'a> Scan<'s, 'a> {
             }
         }
         let arrow = self.arrow(function, body, &uses_of.indexed, use_node, use_span)?;
-        Some(Candidate { declaration: function.span, use_span, arrow })
+        Some(Candidate {
+            declaration: function.span,
+            use_span,
+            arrow,
+        })
     }
 
     /// The use runs in strict code already.
     fn strict_at(&self, node: NodeId) -> bool {
-        self.nodes.ancestor_ids(node).any(|ancestor| match self.nodes.kind(ancestor) {
-            AstKind::Function(function) => function.body.as_ref().is_some_and(|body| body.directives.iter().any(|d| d.directive == "use strict")),
-            AstKind::Class(_) => true,
-            AstKind::Program(program) => program.directives.iter().any(|d| d.directive == "use strict"),
-            _ => false,
-        })
+        self.nodes
+            .ancestor_ids(node)
+            .any(|ancestor| match self.nodes.kind(ancestor) {
+                AstKind::Function(function) => function.body.as_ref().is_some_and(|body| {
+                    body.directives.iter().any(|d| d.directive == "use strict")
+                }),
+                AstKind::Class(_) => true,
+                AstKind::Program(program) => program
+                    .directives
+                    .iter()
+                    .any(|d| d.directive == "use strict"),
+                _ => false,
+            })
     }
 
-    fn arrow(&self, function: &Function<'a>, body: &FunctionBody<'a>, indexed: &[(Span, usize)], use_node: NodeId, use_span: Span) -> Option<String> {
+    fn arrow(
+        &self,
+        function: &Function<'a>,
+        body: &FunctionBody<'a>,
+        indexed: &[(Span, usize)],
+        use_node: NodeId,
+        use_span: Span,
+    ) -> Option<String> {
         let parameters: Vec<String> = match indexed.iter().map(|(_, index)| *index).max() {
             Some(last) => (0..=last).map(|index| format!("$ARG_{index}")).collect(),
             None => Vec::new(),
@@ -259,7 +322,10 @@ impl<'s, 'a> Scan<'s, 'a> {
         let render = |span: Span| -> String {
             let mut out = String::new();
             let mut at = span.start;
-            let mut inside: Vec<&(Span, usize)> = indexed.iter().filter(|(read, _)| span.contains_inclusive(*read)).collect();
+            let mut inside: Vec<&(Span, usize)> = indexed
+                .iter()
+                .filter(|(read, _)| span.contains_inclusive(*read))
+                .collect();
             inside.sort_by_key(|(read, _)| read.start);
             for (read, index) in inside {
                 out.push_str(&self.source[at as usize..read.start as usize]);
@@ -274,16 +340,26 @@ impl<'s, 'a> Scan<'s, 'a> {
             if let [Statement::ReturnStatement(returned)] = statements.as_slice() {
                 let value = returned.argument.as_ref()?;
                 let text = render(value.span());
-                let wrapped = matches!(value.get_inner_expression(), Expression::ObjectExpression(_) | Expression::SequenceExpression(_));
+                let wrapped = matches!(
+                    value.get_inner_expression(),
+                    Expression::ObjectExpression(_) | Expression::SequenceExpression(_)
+                );
                 if !text.contains('\n') {
-                    return Some(if wrapped { format!("{head} => ({text})") } else { format!("{head} => {text}") });
+                    return Some(if wrapped {
+                        format!("{head} => ({text})")
+                    } else {
+                        format!("{head} => {text}")
+                    });
                 }
             }
         }
         // A block body, re-indented from the declaration to the use.
         let indent_of = |at: u32| {
             let line_start = self.source[..at as usize].rfind('\n').map_or(0, |p| p + 1);
-            self.source[line_start..].chars().take_while(|c| *c == '\t').count()
+            self.source[line_start..]
+                .chars()
+                .take_while(|c| *c == '\t')
+                .count()
         };
         let from = indent_of(function.span.start) + 1;
         let to = indent_of(use_span.start) + 1;

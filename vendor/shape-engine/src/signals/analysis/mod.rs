@@ -91,11 +91,13 @@ use oxc_span::{SourceType, Span};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
-use crate::signals::extract::contracts::{signal_contracts_from_inputs, ContractStatus, ProducerKind, SignalContract};
-use roles::FinderClaim;
 pub(crate) use crate::signals::catalog::SIGNALS;
+use crate::signals::extract::contracts::{
+    signal_contracts_from_inputs, ContractStatus, ProducerKind, SignalContract,
+};
 use crate::signals::extract::inputs::extract_program_inputs;
 use crate::signals::schema::{Confidence, LiteralValue, SourceIdentity, SourceSpan};
+use roles::FinderClaim;
 
 pub(crate) mod slot_view;
 pub(crate) mod write_sites;
@@ -123,7 +125,9 @@ pub use crate::signals::schema::{
     LayoutField, LayoutLeaf, LayoutNode, LeafKind, LeafMask, MessageLayout, Routing, SignalLayout,
 };
 #[allow(unused_imports)]
-pub(crate) use slot_view::{api_matches, CallFact, EmissionView, HostFacts, LeafOp, LeafView, SlotView, WriteSite};
+pub(crate) use slot_view::{
+    api_matches, CallFact, EmissionView, HostFacts, LeafOp, LeafView, SlotView, WriteSite,
+};
 
 // ===========================================================================
 // Registry
@@ -149,7 +153,8 @@ impl Claim {
 pub(crate) type Recognizer = fn(&SlotView, &FinderCtx) -> Option<Claim>;
 /// Binders get the same [`FinderCtx`] as recognizers (parse access, roles,
 /// and the per-analysis [`FinderCtx::memo`] where a recognizer leaves facts).
-pub(crate) type Binder = fn(&SlotView, &SignalLayout, &FinderCtx) -> Result<FieldBinding, BindRefusal>;
+pub(crate) type Binder =
+    fn(&SlotView, &SignalLayout, &FinderCtx) -> Result<FieldBinding, BindRefusal>;
 
 // ===========================================================================
 // Recognizer context
@@ -539,7 +544,9 @@ fn routing_map(routing: &Routing) -> Map<String, Value> {
 }
 
 /// The routing name of each descriptor, from the capture's own registry.
-fn descriptor_names(inputs: &crate::signals::extract::inputs::ProgramInputReport) -> BTreeMap<u32, Value> {
+fn descriptor_names(
+    inputs: &crate::signals::extract::inputs::ProgramInputReport,
+) -> BTreeMap<u32, Value> {
     let mut names = BTreeMap::new();
     if let Some(registry) = &inputs.wiring.descriptors {
         for entry in &registry.entries {
@@ -611,7 +618,8 @@ pub fn analyze_program_signals(
                 .expect("spawn finder-role thread")
         });
         let t = super::timing::span("inputs");
-        let inputs = extract_program_inputs(source).map_err(|error| SignalFinderError(error.to_string()));
+        let inputs =
+            extract_program_inputs(source).map_err(|error| SignalFinderError(error.to_string()));
         drop(t);
         let t = super::timing::span("contracts");
         let both = inputs.and_then(|inputs| {
@@ -680,13 +688,24 @@ pub fn analyze_program_signals(
         if std::env::var("SHAPE_SIGNAL_DUMP")
             .is_ok_and(|list| list.split(',').any(|address| address == view.address()))
         {
-            eprintln!("DUMP {} producer={:?} host={:?}", view.address(), view.producer_span(), view.host());
+            eprintln!(
+                "DUMP {} producer={:?} host={:?}",
+                view.address(),
+                view.producer_span(),
+                view.host()
+            );
             for emission in view.emissions() {
                 eprintln!("  emission {:?} {}", emission.phase, emission.shape);
                 for leaf in &emission.leaves {
                     eprintln!(
                         "    {:?} r{} c{} classes={:?} tf={:?} apis={:?} write={:?}",
-                        leaf.op, leaf.repeat_depth, leaf.choice_depth, leaf.classes, leaf.transforms, leaf.apis, leaf.write.span
+                        leaf.op,
+                        leaf.repeat_depth,
+                        leaf.choice_depth,
+                        leaf.classes,
+                        leaf.transforms,
+                        leaf.apis,
+                        leaf.write.span
                     );
                 }
             }
@@ -702,7 +721,11 @@ pub fn analyze_program_signals(
             routing,
             contract_status: contract.status,
             producer: view.producer_span(),
-            callbacks: view.callback_spans().iter().map(|(_, span)| *span).collect(),
+            callbacks: view
+                .callback_spans()
+                .iter()
+                .map(|(_, span)| *span)
+                .collect(),
             slot_roles: ctx.slot_roles(&view),
             roles_inside: ctx.roles_inside(&view),
             roles_enclosing: ctx.roles_enclosing(&view),
@@ -731,7 +754,11 @@ pub fn analyze_program_signals(
                 _ => None,
             },
             routing: routing_map(&slot.routing),
-            candidates: slot.candidates.iter().map(|name| name.to_string()).collect(),
+            candidates: slot
+                .candidates
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
             reason,
             contract_status: slot.contract_status,
             layout: if layout && options.layouts_only {
@@ -759,7 +786,8 @@ pub fn analyze_program_signals(
                         map.insert("address".into(), json!(slot.address));
                         let value = Value::Object(map);
                         let count = seen.entry(one).or_default();
-                        let key = crate::signals::wire::emitted_key(one, count, &reserved, &signals);
+                        let key =
+                            crate::signals::wire::emitted_key(one, count, &reserved, &signals);
                         slot.emitted_as = Some(key.clone());
                         signals.insert(key, value);
                         continue;
@@ -771,7 +799,9 @@ pub fn analyze_program_signals(
             } else {
                 "the contract pass reconstructed no emission"
             };
-            diagnostics.no_emission.push(diagnostic(reason.into(), false));
+            diagnostics
+                .no_emission
+                .push(diagnostic(reason.into(), false));
             continue;
         }
         let entry = match slot.candidates.as_slice() {
@@ -786,9 +816,10 @@ pub fn analyze_program_signals(
                 .find(|entry| entry.canonical == *one)
                 .expect("candidate comes from SIGNALS"),
             _ => {
-                diagnostics
-                    .ambiguous
-                    .push(diagnostic("more than one recognizer claimed this slot".into(), true));
+                diagnostics.ambiguous.push(diagnostic(
+                    "more than one recognizer claimed this slot".into(),
+                    true,
+                ));
                 continue;
             }
         };
@@ -798,7 +829,13 @@ pub fn analyze_program_signals(
                 // Packed flag bytes: bit positions from the write sites, bit
                 // names from the card (shared; signal binders need no edit).
                 // A field whose bits cannot all be named stays a `byte`.
-                for (field, reason) in crate::signals::flags::apply_flags_or_fall_back(entry.canonical, view, &slot.layout, &ctx, &mut binding) {
+                for (field, reason) in crate::signals::flags::apply_flags_or_fall_back(
+                    entry.canonical,
+                    view,
+                    &slot.layout,
+                    &ctx,
+                    &mut binding,
+                ) {
                     diagnostics.flags_fallback.push(FlagsFallback {
                         address: slot.address.clone(),
                         signal: entry.canonical.to_string(),
@@ -879,8 +916,15 @@ fn positional_registrations(
         let Some(calls) = ctx.registrar_calls(body) else {
             continue;
         };
-        let calls: Vec<_> = calls.into_iter().filter(|(position, _, _)| role(*position).is_some()).collect();
-        found.push((body, matches!(producer.kind, ProducerKind::Grouped { .. }), calls));
+        let calls: Vec<_> = calls
+            .into_iter()
+            .filter(|(position, _, _)| role(*position).is_some())
+            .collect();
+        found.push((
+            body,
+            matches!(producer.kind, ProducerKind::Grouped { .. }),
+            calls,
+        ));
     }
     let positions = |calls: &[write_sites::RegistrarCall]| -> std::collections::BTreeSet<usize> {
         calls.iter().map(|(position, _, _)| *position).collect()
@@ -892,7 +936,11 @@ fn positional_registrations(
         .collect();
     let mut out = HashMap::new();
     for (body, grouped, calls) in found {
-        let evidence = if grouped { grouped_positions.len() } else { positions(&calls).len() };
+        let evidence = if grouped {
+            grouped_positions.len()
+        } else {
+            positions(&calls).len()
+        };
         if evidence < 2 || calls.is_empty() {
             continue;
         }
@@ -925,7 +973,11 @@ fn with_registrations(
     let phase_at = |site: SourceSpan| {
         registrations
             .iter()
-            .filter_map(|registration| registration.callback.map(|callback| (registration.role, callback)))
+            .filter_map(|registration| {
+                registration
+                    .callback
+                    .map(|callback| (registration.role, callback))
+            })
             .filter(|(_, callback)| callback.start <= site.start && site.end <= callback.end)
             .min_by_key(|(_, callback)| callback.end - callback.start)
             .map(|(role, _)| role)

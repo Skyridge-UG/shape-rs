@@ -222,7 +222,8 @@ pub fn apply_local_names(
     options: LocalNameOptions,
 ) -> Result<LocalNamesResult, ProgramTransformError> {
     let allocator = Allocator::default();
-    let program = analysis::parse_program(&allocator, source).map_err(ProgramTransformError::Parse)?;
+    let program =
+        analysis::parse_program(&allocator, source).map_err(ProgramTransformError::Parse)?;
     let (scoping, nodes) = analysis::analyze(&program);
 
     let sites = collect_binding_identifiers(&program);
@@ -289,7 +290,8 @@ pub fn apply_local_names(
                 renamed_targets.insert(candidate.declaration_start, new_name.clone());
             }
             Err((reason, _)) => {
-                outcome.refusal = Some(LocalNameRefusal::UnsupportedBindingSite(reason.to_string()));
+                outcome.refusal =
+                    Some(LocalNameRefusal::UnsupportedBindingSite(reason.to_string()));
             }
         }
         outcomes.push(outcome);
@@ -334,23 +336,19 @@ pub fn apply_local_names(
         ));
     }
 
-    let remaining = match validate_rewrite(
-        &source_refs,
-        &applied.output,
-        &edit_info,
-        &renamed_targets,
-    ) {
-        Ok(remaining) => remaining,
-        Err(reason) => {
-            return Ok(reject_batch(
-                source,
-                outcomes,
-                candidates.len(),
-                reason,
-                options,
-            ))
-        }
-    };
+    let remaining =
+        match validate_rewrite(&source_refs, &applied.output, &edit_info, &renamed_targets) {
+            Ok(remaining) => remaining,
+            Err(reason) => {
+                return Ok(reject_batch(
+                    source,
+                    outcomes,
+                    candidates.len(),
+                    reason,
+                    options,
+                ))
+            }
+        };
     let refused = outcomes.iter().filter(|outcome| !outcome.applied).count();
     if remaining != refused {
         return Ok(reject_batch(
@@ -466,26 +464,30 @@ fn collect_candidates(
             continue;
         };
         let symbol_refs = refs.get(&symbol).map(Vec::as_slice).unwrap_or(&[]);
-        let returned = symbol_refs.iter().any(|node| {
-            matches!(nodes.parent_kind(*node), AstKind::ReturnStatement(_))
-        });
+        let returned = symbol_refs
+            .iter()
+            .any(|node| matches!(nodes.parent_kind(*node), AstKind::ReturnStatement(_)));
 
         let (kind, evidence) = if classified.kind == LocalBindingKind::LoopCounter {
             if is_loop_counter(nodes, symbol_refs, classified.loop_node) {
-                (LocalBindingKind::LoopCounter, "numeric for-loop counter".to_string())
+                (
+                    LocalBindingKind::LoopCounter,
+                    "numeric for-loop counter".to_string(),
+                )
             } else if let Some((base, evidence)) = &classified.init {
-                (LocalBindingKind::Variable, evidence_with_base(evidence, base))
+                (
+                    LocalBindingKind::Variable,
+                    evidence_with_base(evidence, base),
+                )
             } else {
-                (LocalBindingKind::Variable, "numeric loop variable".to_string())
+                (
+                    LocalBindingKind::Variable,
+                    "numeric loop variable".to_string(),
+                )
             }
         } else if classified.kind == LocalBindingKind::Parameter {
             let (mut base, evidence) = parameter_evidence(nodes, symbol_refs);
-            if is_weak_base(&base)
-                && classified
-                    .owner_name
-                    .as_deref()
-                    .is_some_and(callback_owner)
-            {
+            if is_weak_base(&base) && classified.owner_name.as_deref().is_some_and(callback_owner) {
                 base = "callback".to_string();
             }
             (classified.kind, evidence_with_base(&evidence, &base))
@@ -505,9 +507,7 @@ fn collect_candidates(
             let (base, evidence) = if is_weak_base(base) {
                 writes
                     .get(&symbol)
-                    .and_then(|shapes| {
-                        combined_shape(shapes).or_else(|| single_shape(shapes))
-                    })
+                    .and_then(|shapes| combined_shape(shapes).or_else(|| single_shape(shapes)))
                     .unwrap_or_else(|| {
                         if evidence.contains("void") {
                             ("placeholder".into(), "declared without a value".into())
@@ -524,9 +524,7 @@ fn collect_candidates(
                 .get(&symbol)
                 .and_then(|shapes| combined_shape(shapes).or_else(|| single_shape(shapes)))
             {
-                Some((base, evidence)) => {
-                    (classified.kind, evidence_with_base(&evidence, &base))
-                }
+                Some((base, evidence)) => (classified.kind, evidence_with_base(&evidence, &base)),
                 None => (
                     classified.kind,
                     "temporary with no single assignment; neutral fallback".to_string(),
@@ -612,7 +610,9 @@ fn classify_binding(nodes: &AstNodes, scoping: &Scoping, site: &BindingSite) -> 
                     if !destructured {
                         if let Some(expression) = declarator.init.as_ref() {
                             init = Some(expression_shape(expression));
-                            if let Expression::Identifier(identifier) = expression.without_parentheses() {
+                            if let Expression::Identifier(identifier) =
+                                expression.without_parentheses()
+                            {
                                 from = analysis::identifier_symbol(identifier, scoping);
                             }
                         }
@@ -836,9 +836,9 @@ fn expression_shape(expression: &Expression) -> (String, String) {
             UnaryOperator::Void => ("value".into(), "void expression".into()),
             UnaryOperator::LogicalNot => ("flag".into(), "boolean negation".into()),
             UnaryOperator::Typeof => ("text".into(), "typeof string".into()),
-            UnaryOperator::UnaryPlus
-            | UnaryOperator::UnaryNegation
-            | UnaryOperator::BitwiseNot => ("value".into(), "numeric unary expression".into()),
+            UnaryOperator::UnaryPlus | UnaryOperator::UnaryNegation | UnaryOperator::BitwiseNot => {
+                ("value".into(), "numeric unary expression".into())
+            }
             _ => ("value".into(), "unknown unary expression".into()),
         },
         Expression::BinaryExpression(binary) => {
@@ -907,13 +907,10 @@ fn expression_shape(expression: &Expression) -> (String, String) {
         Expression::ClassExpression(_) => ("value".into(), "class expression".into()),
         Expression::ThisExpression(_)
         | Expression::TaggedTemplateExpression(_)
-        | Expression::ParenthesizedExpression(_) => {
-            ("value".into(), "compound expression".into())
-        }
+        | Expression::ParenthesizedExpression(_) => ("value".into(), "compound expression".into()),
         _ => ("value".into(), "unknown initializer".into()),
     }
 }
-
 
 /// A readable noun for a value, from what the source actually names.
 fn member_base(name: &str) -> String {
@@ -939,7 +936,11 @@ fn member_base(name: &str) -> String {
         "random" => "random".into(),
         other => {
             let base = lower_camel(strip_accessor_prefix(other));
-            if is_generated_name(&base) { "value".into() } else { base }
+            if is_generated_name(&base) {
+                "value".into()
+            } else {
+                base
+            }
         }
     }
 }
@@ -1009,15 +1010,17 @@ fn call_base(callee: &Expression) -> String {
         "trunc" => "truncated".into(),
         other => call_verb_base(other),
     };
-    if is_generated_name(&base) { "result".into() } else { base }
+    if is_generated_name(&base) {
+        "result".into()
+    } else {
+        base
+    }
 }
 
 /// The value kind of a function invoked through `.call`/`.apply`.
 fn invoked_base(name: &str) -> String {
     match name {
-        "hasOwnProperty" | "propertyIsEnumerable" | "isPrototypeOf" | "includes" => {
-            "flag".into()
-        }
+        "hasOwnProperty" | "propertyIsEnumerable" | "isPrototypeOf" | "includes" => "flag".into(),
         "toString" | "toLocaleString" => "text".into(),
         "valueOf" => "value".into(),
         "push" | "unshift" => "count".into(),
@@ -1052,10 +1055,17 @@ fn call_verb_base(name: &str) -> String {
     let base = base.strip_suffix("Factory").unwrap_or(&base).to_string();
     // A lowercase, verb-less callee is a variable holding a function; its call
     // result is a result, not a value named after the variable.
-    if name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+    if name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    {
         return "result".into();
     }
-    if is_generated_name(&base) { "result".into() } else { base }
+    if is_generated_name(&base) {
+        "result".into()
+    } else {
+        base
+    }
 }
 
 fn new_base(callee: &Expression) -> String {
@@ -1089,7 +1099,11 @@ fn new_base(callee: &Expression) -> String {
         "Proxy" => "proxy".into(),
         other => {
             let base = lower_camel(other);
-            if is_generated_name(&base) { "instance".into() } else { base }
+            if is_generated_name(&base) {
+                "instance".into()
+            } else {
+                base
+            }
         }
     }
 }
@@ -1102,8 +1116,12 @@ fn identifier_base(name: &str) -> Option<String> {
 }
 
 fn is_weak_base(name: &str) -> bool {
-    matches!(name, "value" | "result" | "instance" | "data" | "other" | "placeholder")
-        || name.strip_prefix("value").is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty())
+    matches!(
+        name,
+        "value" | "result" | "instance" | "data" | "other" | "placeholder"
+    ) || name
+        .strip_prefix("value")
+        .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty())
 }
 
 fn strip_accessor_prefix(name: &str) -> &str {
@@ -1177,10 +1195,7 @@ fn assignment_shapes(
             };
             let shape = match assignment.operator {
                 AssignmentOperator::Assign => expression_shape(&assignment.right),
-                AssignmentOperator::Addition => (
-                    "total".into(),
-                    "accumulated addition".into(),
-                ),
+                AssignmentOperator::Addition => ("total".into(), "accumulated addition".into()),
                 AssignmentOperator::BitwiseAnd
                 | AssignmentOperator::BitwiseOR
                 | AssignmentOperator::BitwiseXOR
@@ -1196,8 +1211,7 @@ fn assignment_shapes(
 
         fn visit_update_expression(&mut self, update: &UpdateExpression<'a>) {
             walk::walk_update_expression(self, update);
-            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) =
-                &update.argument
+            if let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = &update.argument
             {
                 if let Some(symbol) = analysis::identifier_symbol(identifier, self.scoping) {
                     self.shapes
@@ -1245,7 +1259,10 @@ fn parameter_evidence(nodes: &AstNodes, refs: &[NodeId]) -> (String, String) {
                 only_property_reads = false;
             }
             AstKind::CallExpression(call)
-                if call.arguments.iter().any(|argument| argument.span() == span) =>
+                if call
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.span() == span) =>
             {
                 only_property_reads = false;
                 if let Some(name) = callee_name(&call.callee) {
@@ -1253,11 +1270,13 @@ fn parameter_evidence(nodes: &AstNodes, refs: &[NodeId]) -> (String, String) {
                         "addEventListener" | "removeEventListener" | "dispatchEvent" => {
                             event_arg = true
                         }
-                        "map" | "forEach" | "filter" | "some" | "every" | "find"
-                        | "findIndex" | "reduce" | "reduceRight" | "sort" => item_arg = true,
+                        "map" | "forEach" | "filter" | "some" | "every" | "find" | "findIndex"
+                        | "reduce" | "reduceRight" | "sort" => item_arg = true,
                         "then" | "finally" | "done" => callback_arg = true,
                         "catch" | "fail" => error = true,
-                        "setTimeout" | "setInterval" | "requestAnimationFrame"
+                        "setTimeout"
+                        | "setInterval"
+                        | "requestAnimationFrame"
                         | "queueMicrotask" => callback_arg = true,
                         _ => {}
                     }
@@ -1360,16 +1379,25 @@ fn parameter_evidence(nodes: &AstNodes, refs: &[NodeId]) -> (String, String) {
         return ("callback".into(), "called as a function".into());
     }
     if event || event_arg {
-        return ("event".into(), "reads event fields or is an event listener".into());
+        return (
+            "event".into(),
+            "reads event fields or is an event listener".into(),
+        );
     }
     if error {
         return ("error".into(), "reads error fields".into());
     }
     if item_arg {
-        return ("item".into(), "element callback of a collection method".into());
+        return (
+            "item".into(),
+            "element callback of a collection method".into(),
+        );
     }
     if callback_arg {
-        return ("callback".into(), "callback argument of a scheduling or promise call".into());
+        return (
+            "callback".into(),
+            "callback argument of a scheduling or promise call".into(),
+        );
     }
     if items {
         return (
@@ -1584,7 +1612,12 @@ fn assign_names(
     let unresolved = unresolved_names(program, scoping);
     let regions: BTreeMap<ScopeId, Span> = candidates
         .iter()
-        .map(|candidate| (candidate.scope, scope_region(scoping, nodes, candidate.scope)))
+        .map(|candidate| {
+            (
+                candidate.scope,
+                scope_region(scoping, nodes, candidate.scope),
+            )
+        })
         .collect();
 
     let mut assigned: BTreeMap<String, Vec<(SymbolId, ScopeId)>> = BTreeMap::new();
@@ -1595,7 +1628,10 @@ fn assign_names(
             names.push(None);
             continue;
         }
-        let symbol_refs = refs.get(&candidate.symbol).map(Vec::as_slice).unwrap_or(&[]);
+        let symbol_refs = refs
+            .get(&candidate.symbol)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let mut base = candidate_base(candidate, nodes, symbol_refs);
         // A copy of a binding that already has a readable name inherits it:
         // `let copy = canvas` is a canvas, not a generic value.
@@ -2078,7 +2114,8 @@ mod tests {
 
     #[test]
     fn catch_parameter_is_error_and_loop_counter_is_i() {
-        let result = run("function f(){ try {} catch ($E) {} for (let $K = 0; $K < 3; $K++) {} } f();");
+        let result =
+            run("function f(){ try {} catch ($E) {} for (let $K = 0; $K < 3; $K++) {} } f();");
         assert_eq!(name_of(&result, "$E"), Some("error"));
         assert_eq!(name_of(&result, "$K"), Some("i"));
         assert_eq!(result.renamed, 2);
@@ -2131,10 +2168,7 @@ mod tests {
 
     #[test]
     fn call_through_call_is_called() {
-        let result = run(
-            "function f($C){ $C.call(void 0, 1); } f(function(){});",
-        );
+        let result = run("function f($C){ $C.call(void 0, 1); } f(function(){});");
         assert_eq!(name_of(&result, "$C"), Some("handler"));
     }
-
 }

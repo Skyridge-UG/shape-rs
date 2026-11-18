@@ -1,10 +1,11 @@
 //! `DocumentReferrerHistory`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `DocumentReferrerHistory` evidence: history.length and document.referrer.
 pub(crate) fn is_document_referrer(leaves: &[&LeafView]) -> bool {
@@ -16,7 +17,10 @@ pub(crate) fn is_document_referrer(leaves: &[&LeafView]) -> bool {
 }
 
 /// `DocumentReferrerHistory`. Card: [`CARD`].
-pub(crate) fn recognize_document_referrer_history(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_document_referrer_history(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if is_document_referrer(&leaves_of(view)) {
         return claim(&["values read history.length and document.referrer"]);
     }
@@ -36,12 +40,17 @@ pub(crate) fn bind_document_referrer_history(
     // The cut is the call path itself or a transform of the referrer read.
     let prefix = |f: &Field| {
         f.writes(LeafKind::String)
-            && (f.api("document.referrer.substring()") || (f.api("document.referrer") && f.tr(".substring()")))
+            && (f.api("document.referrer.substring()")
+                || (f.api("document.referrer") && f.tr(".substring()")))
     };
     solve_all_messages(
         view,
         layout,
-        &[("historyLength", &length), ("referrerEmpty", &empty), ("referrerPrefix", &prefix)],
+        &[
+            ("historyLength", &length),
+            ("referrerEmpty", &empty),
+            ("referrerPrefix", &prefix),
+        ],
     )
 }
 

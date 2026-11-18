@@ -29,21 +29,33 @@ use oxc_syntax::operator::{
     AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator,
 };
 
+use crate::analysis;
+use crate::signals::analysis::roles::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 use crate::signals::extract::bindings::{object_members_of, property_key_name, ParameterSlots};
 use crate::signals::schema::Confidence;
-use crate::signals::analysis::roles::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -134,11 +146,20 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     // Time-budgeted task queue internals.
     function("task_queue_drain", "drainTaskQueue"),
     function("task_queue_step", "runNextQueuedTask"),
-    function("task_queue_step_schedule_empty", "scheduleEmptyListenerFromStep"),
+    function(
+        "task_queue_step_schedule_empty",
+        "scheduleEmptyListenerFromStep",
+    ),
     function("task_queue_schedule_error", "scheduleErrorListener"),
     function("task_queue_deliver_error", "deliverQueueError"),
-    function("task_queue_drain_schedule_empty", "scheduleEmptyListenerFromDrain"),
-    function("task_queue_discard_schedule_empty", "scheduleEmptyListenerFromDiscard"),
+    function(
+        "task_queue_drain_schedule_empty",
+        "scheduleEmptyListenerFromDrain",
+    ),
+    function(
+        "task_queue_discard_schedule_empty",
+        "scheduleEmptyListenerFromDiscard",
+    ),
     function("task_queue_deliver_late_error", "deliverLateQueueError"),
     binding("task_queue_default_clock_factory", "elapsedTimerFactory"),
 ];
@@ -193,9 +214,11 @@ impl<'a> Unit<'a> {
 
     fn statements(&self) -> &'a [Statement<'a>] {
         match self.func {
-            FnNode::Function(function) => {
-                function.body.as_ref().map(|body| body.statements.as_slice()).unwrap_or(&[])
-            }
+            FnNode::Function(function) => function
+                .body
+                .as_ref()
+                .map(|body| body.statements.as_slice())
+                .unwrap_or(&[]),
             FnNode::Arrow(arrow) => arrow.body.statements.as_slice(),
         }
     }
@@ -210,8 +233,11 @@ impl<'a> Unit<'a> {
     /// The values the function returns: every `return` argument, plus the body
     /// expression of a concise arrow.
     fn results(&self) -> Vec<&'a Expression<'a>> {
-        let mut out: Vec<&'a Expression<'a>> =
-            self.returns.iter().filter_map(|statement| statement.argument.as_ref()).collect();
+        let mut out: Vec<&'a Expression<'a>> = self
+            .returns
+            .iter()
+            .filter_map(|statement| statement.argument.as_ref())
+            .collect();
         if let FnNode::Arrow(arrow) = self.func {
             if arrow.expression {
                 if let Some(Statement::ExpressionStatement(statement)) =
@@ -308,9 +334,7 @@ impl<'c, 'a> Index<'c, 'a> {
             let owner = (owner != NONE).then_some(owner as usize);
             let func = match node.kind() {
                 AstKind::Function(function) => Some((function.span, FnNode::Function(function))),
-                AstKind::ArrowFunctionExpression(arrow) => {
-                    Some((arrow.span, FnNode::Arrow(arrow)))
-                }
+                AstKind::ArrowFunctionExpression(arrow) => Some((arrow.span, FnNode::Arrow(arrow))),
                 _ => None,
             };
             if let Some((span, func)) = func {
@@ -379,7 +403,10 @@ impl<'c, 'a> Index<'c, 'a> {
         match &assignment.left {
             AssignmentTarget::AssignmentTargetIdentifier(identifier) => {
                 if let Some(symbol) = analysis::identifier_symbol(identifier, scoping) {
-                    self.plain_writes.entry(symbol).or_default().push(&assignment.right);
+                    self.plain_writes
+                        .entry(symbol)
+                        .or_default()
+                        .push(&assignment.right);
                 }
             }
             target => {
@@ -396,7 +423,10 @@ impl<'c, 'a> Index<'c, 'a> {
                         .push((name.to_string(), &assignment.right));
                 } else if let Some((root, "prototype")) = expression_member(object) {
                     if let Some(symbol) = analysis::expression_symbol(strip(root), scoping) {
-                        self.prototype_writes.entry(symbol).or_default().insert(name.to_string());
+                        self.prototype_writes
+                            .entry(symbol)
+                            .or_default()
+                            .insert(name.to_string());
                     }
                 }
             }
@@ -419,9 +449,15 @@ impl<'c, 'a> Index<'c, 'a> {
         if !scoping.symbol_redeclarations(symbol).is_empty() {
             return None;
         }
-        let writes = self.plain_writes.get(&symbol).map(Vec::as_slice).unwrap_or(&[]);
-        let write_count =
-            scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).count();
+        let writes = self
+            .plain_writes
+            .get(&symbol)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        let write_count = scoping
+            .get_resolved_references(symbol)
+            .filter(|reference| reference.is_write())
+            .count();
         if write_count != writes.len() {
             return None;
         }
@@ -515,18 +551,30 @@ impl<'c, 'a> Index<'c, 'a> {
         let (object, name) = expression_member(&call.callee)?;
         let args = plain_arguments(call)?;
         if name == "call" {
-            if let (Some((receiver, inner)), Some(first)) = (expression_member(object), args.first())
+            if let (Some((receiver, inner)), Some(first)) =
+                (expression_member(object), args.first())
             {
                 if self.same_text(receiver, first) {
-                    return Some(MethodCall { receiver, name: inner, args: args[1..].to_vec() });
+                    return Some(MethodCall {
+                        receiver,
+                        name: inner,
+                        args: args[1..].to_vec(),
+                    });
                 }
             }
         }
-        Some(MethodCall { receiver: object, name, args })
+        Some(MethodCall {
+            receiver: object,
+            name,
+            args,
+        })
     }
 
     /// The callee and arguments of a plain call; `f.call(void 0, a)` is `f(a)`.
-    fn plain(&self, call: &'a CallExpression<'a>) -> Option<(&'a Expression<'a>, Vec<&'a Expression<'a>>)> {
+    fn plain(
+        &self,
+        call: &'a CallExpression<'a>,
+    ) -> Option<(&'a Expression<'a>, Vec<&'a Expression<'a>>)> {
         let args = plain_arguments(call)?;
         if let Some((object, "call")) = expression_member(&call.callee) {
             if args.first().is_some_and(|first| is_void0(first)) {
@@ -546,7 +594,10 @@ impl<'c, 'a> Index<'c, 'a> {
     }
 
     fn calls_sink(&self, unit: usize, sink: Val, name: &str) -> usize {
-        self.methods(unit, name).iter().filter(|method| self.val(method.receiver) == sink).count()
+        self.methods(unit, name)
+            .iter()
+            .filter(|method| self.val(method.receiver) == sink)
+            .count()
     }
 
     /// `fn(v) { sink.<name>(v) }` with `slot_arg`, or `fn() { sink.<name>() }`.
@@ -595,7 +646,10 @@ impl<'c, 'a> Index<'c, 'a> {
 
     /// Members of an object held by `expression`: literal keys, then the
     /// `object.key = value` writes that overwrite them.
-    fn object_members(&self, expression: &'a Expression<'a>) -> BTreeMap<String, &'a Expression<'a>> {
+    fn object_members(
+        &self,
+        expression: &'a Expression<'a>,
+    ) -> BTreeMap<String, &'a Expression<'a>> {
         let mut members = BTreeMap::new();
         let Some(symbol) = analysis::expression_symbol(strip(expression), self.ctx.scoping) else {
             return members;
@@ -606,7 +660,12 @@ impl<'c, 'a> Index<'c, 'a> {
         for member in object_members_of(object) {
             members.insert(member.name, member.value);
         }
-        for (name, value) in self.member_writes.get(&symbol).map(Vec::as_slice).unwrap_or(&[]) {
+        for (name, value) in self
+            .member_writes
+            .get(&symbol)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+        {
             members.insert(name.clone(), *value);
         }
         members
@@ -616,9 +675,11 @@ impl<'c, 'a> Index<'c, 'a> {
     /// callbacks or one observer object.
     fn observer(&self, args: &[&'a Expression<'a>]) -> Option<[usize; 3]> {
         match args {
-            [next, error, complete] => {
-                Some([self.fn_val(next)?, self.fn_val(error)?, self.fn_val(complete)?])
-            }
+            [next, error, complete] => Some([
+                self.fn_val(next)?,
+                self.fn_val(error)?,
+                self.fn_val(complete)?,
+            ]),
             [object] => {
                 let members = self.object_members(object);
                 Some([
@@ -682,11 +743,15 @@ impl<'c, 'a> Index<'c, 'a> {
             let Expression::BinaryExpression(test) = strip(&statement.test) else {
                 continue;
             };
-            if !matches!(test.operator, BinaryOperator::StrictEquality | BinaryOperator::StrictInequality) {
+            if !matches!(
+                test.operator,
+                BinaryOperator::StrictEquality | BinaryOperator::StrictInequality
+            ) {
                 continue;
             }
             for side in [&test.left, &test.right] {
-                let Some(symbol) = analysis::expression_symbol(strip(side), self.ctx.scoping) else {
+                let Some(symbol) = analysis::expression_symbol(strip(side), self.ctx.scoping)
+                else {
                     continue;
                 };
                 if self.is_main_sentinel(symbol, main) {
@@ -823,7 +888,12 @@ struct Run<'r, 'c, 'a> {
 /// Structural claims of this package.
 pub(crate) fn find(ctx: &FinderCtx) -> Vec<FinderClaim> {
     let index = Index::new(ctx);
-    let mut run = Run { index: &index, claims: Vec::new(), observable: None, main: None };
+    let mut run = Run {
+        index: &index,
+        claims: Vec::new(),
+        observable: None,
+        main: None,
+    };
     run.observable_constructor();
     run.registry();
     run.subscribe_normalizer();
@@ -854,12 +924,17 @@ fn one_function_per_role(claims: Vec<FinderClaim>) -> Vec<FinderClaim> {
     for claim in &claims {
         let span = match claim {
             FinderClaim::Function { function_span, .. } => *function_span,
-            FinderClaim::MainBinding { identifier_span, .. } => *identifier_span,
+            FinderClaim::MainBinding {
+                identifier_span, ..
+            } => *identifier_span,
             FinderClaim::ClassBinding { class_span, .. } => *class_span,
         };
         spans.entry(claim.role()).or_default().insert(span);
     }
-    claims.into_iter().filter(|claim| spans[claim.role()].len() == 1).collect()
+    claims
+        .into_iter()
+        .filter(|claim| spans[claim.role()].len() == 1)
+        .collect()
 }
 
 impl<'a> Run<'_, '_, 'a> {
@@ -867,7 +942,13 @@ impl<'a> Run<'_, '_, 'a> {
         self.claim(role, unit, None, evidence);
     }
 
-    fn claim(&mut self, role: &'static str, unit: usize, alias_role: Option<&'static str>, evidence: &str) {
+    fn claim(
+        &mut self,
+        role: &'static str,
+        unit: usize,
+        alias_role: Option<&'static str>,
+        evidence: &str,
+    ) {
         self.claims.push(FinderClaim::Function {
             role,
             function_span: self.index.units[unit].span,
@@ -916,7 +997,11 @@ impl<'a> Run<'_, '_, 'a> {
                         _ => None,
                     })
                     .collect(),
-                None => index.prototype_writes.get(&symbol).cloned().unwrap_or_default(),
+                None => index
+                    .prototype_writes
+                    .get(&symbol)
+                    .cloned()
+                    .unwrap_or_default(),
             },
             Val::Fn(class) => {
                 let FnNode::Function(function) = index.units[class].func else {
@@ -939,8 +1024,12 @@ impl<'a> Run<'_, '_, 'a> {
     fn observable_constructor(&mut self) {
         let index = self.index;
         let mut found: Vec<(Span, usize)> = Vec::new();
-        let symbols: BTreeSet<SymbolId> =
-            index.plain_writes.keys().chain(&index.initialized).copied().collect();
+        let symbols: BTreeSet<SymbolId> = index
+            .plain_writes
+            .keys()
+            .chain(&index.initialized)
+            .copied()
+            .collect();
         for symbol in symbols {
             let Some(Expression::CallExpression(call)) = index.origin(symbol).map(strip) else {
                 continue;
@@ -991,7 +1080,16 @@ impl<'a> Run<'_, '_, 'a> {
         }
         let [next, error, complete] = index.observer(&site.args)?;
         let teardown = index.returned_fn(executor)?;
-        Some(Operator { operator, executor, site, site_span, next, error, complete, teardown })
+        Some(Operator {
+            operator,
+            executor,
+            site,
+            site_span,
+            next,
+            error,
+            complete,
+            teardown,
+        })
     }
 
     // -----------------------------------------------------------------------
@@ -1037,13 +1135,33 @@ impl<'a> Run<'_, '_, 'a> {
                 Some("scan_factory_alias"),
                 "operator factory whose next folds slot 0 over an accumulator that starts at a no-seed sentinel",
             );
-            self.function("scan_operator", op.operator, "operator function of the scan factory: returns a new Observable over its source");
-            self.function("scan_executor", op.executor, "executor subscribing the scan source and returning its teardown");
+            self.function(
+                "scan_operator",
+                op.operator,
+                "operator function of the scan factory: returns a new Observable over its source",
+            );
+            self.function(
+                "scan_executor",
+                op.executor,
+                "executor subscribing the scan source and returning its teardown",
+            );
             self.function("scan_next", op.next, "adopts the first value on the sentinel, then emits slot-0 projections and turns a throw into error");
-            self.function("scan_error", op.error, "forwards its slot 0 to the subscriber error");
+            self.function(
+                "scan_error",
+                op.error,
+                "forwards its slot 0 to the subscriber error",
+            );
             self.function("scan_complete", op.complete, "completes the subscriber");
-            self.function("scan_teardown", op.teardown, "unsubscribes the source subscription");
-            self.binding("scan_no_seed_sentinel", sentinel, "MAIN empty object compared by identity as the missing-seed marker of scan");
+            self.function(
+                "scan_teardown",
+                op.teardown,
+                "unsubscribes the source subscription",
+            );
+            self.binding(
+                "scan_no_seed_sentinel",
+                sentinel,
+                "MAIN empty object compared by identity as the missing-seed marker of scan",
+            );
             factories.push(factory);
         }
         factories
@@ -1087,13 +1205,37 @@ impl<'a> Run<'_, '_, 'a> {
                 Some("last_factory_alias"),
                 "operator factory that stores accepted values and emits the final one or its slot-1 default on completion",
             );
-            self.function("last_operator", op.operator, "operator function of the last factory: returns a new Observable over its source");
-            self.function("last_executor", op.executor, "executor subscribing the last source and returning its teardown");
+            self.function(
+                "last_operator",
+                op.operator,
+                "operator function of the last factory: returns a new Observable over its source",
+            );
+            self.function(
+                "last_executor",
+                op.executor,
+                "executor subscribing the last source and returning its teardown",
+            );
             self.function("last_next", op.next, "stores the value when slot 0 of the factory accepts it, or always without a predicate");
-            self.function("last_error", op.error, "forwards its slot 0 to the subscriber error");
-            self.function("last_complete", op.complete, "emits the stored value or the default, or errors on an empty sequence");
-            self.function("last_teardown", op.teardown, "unsubscribes the source subscription");
-            self.binding("last_no_value_sentinel", sentinel, "MAIN empty object compared by identity as the nothing-stored marker of last");
+            self.function(
+                "last_error",
+                op.error,
+                "forwards its slot 0 to the subscriber error",
+            );
+            self.function(
+                "last_complete",
+                op.complete,
+                "emits the stored value or the default, or errors on an empty sequence",
+            );
+            self.function(
+                "last_teardown",
+                op.teardown,
+                "unsubscribes the source subscription",
+            );
+            self.binding(
+                "last_no_value_sentinel",
+                sentinel,
+                "MAIN empty object compared by identity as the nothing-stored marker of last",
+            );
             factories.push(factory);
         }
         factories
@@ -1127,7 +1269,9 @@ impl<'a> Run<'_, '_, 'a> {
                 let (callee, args) = index.plain(call)?;
                 Some((index.fn_val(callee)?, args))
             };
-            let (Some((scanner, scan_args)), Some((taker, take_args))) = (stage(first), stage(second)) else {
+            let (Some((scanner, scan_args)), Some((taker, take_args))) =
+                (stage(first), stage(second))
+            else {
                 continue;
             };
             let matches_stages = scan.contains(&scanner)
@@ -1138,7 +1282,11 @@ impl<'a> Run<'_, '_, 'a> {
                     if is_void0(filter) && index.is_slot(seed, factory, 1));
             if matches_stages {
                 self.function("reduce_factory", factory, "operator factory piping its source through the proven scan and last with one seed");
-                self.function("reduce_operator", operator, "pipes its source through scan(project, seed) then last(undefined, seed)");
+                self.function(
+                    "reduce_operator",
+                    operator,
+                    "pipes its source through scan(project, seed) then last(undefined, seed)",
+                );
             }
         }
     }
@@ -1172,13 +1320,33 @@ impl<'a> Run<'_, '_, 'a> {
             {
                 continue;
             }
-            self.function("map_factory", factory, "operator factory emitting slot 0 of each value and turning a throw into error");
-            self.function("map_operator", op.operator, "operator function of the map factory: returns a new Observable over its source");
+            self.function(
+                "map_factory",
+                factory,
+                "operator factory emitting slot 0 of each value and turning a throw into error",
+            );
+            self.function(
+                "map_operator",
+                op.operator,
+                "operator function of the map factory: returns a new Observable over its source",
+            );
             self.function("map_executor", op.executor, "executor building the observer object, subscribing the source and returning its teardown");
-            self.function("map_next", op.next, "emits the factory's slot-0 projection of its value; a throw becomes error");
-            self.function("map_error", op.error, "forwards its slot 0 to the subscriber error");
+            self.function(
+                "map_next",
+                op.next,
+                "emits the factory's slot-0 projection of its value; a throw becomes error",
+            );
+            self.function(
+                "map_error",
+                op.error,
+                "forwards its slot 0 to the subscriber error",
+            );
             self.function("map_complete", op.complete, "completes the subscriber");
-            self.function("map_teardown", op.teardown, "unsubscribes the source subscription");
+            self.function(
+                "map_teardown",
+                op.teardown,
+                "unsubscribes the source subscription",
+            );
         }
     }
 
@@ -1193,11 +1361,12 @@ impl<'a> Run<'_, '_, 'a> {
                 continue;
             };
             let projected = matches!(strip(index.terminal(inner.receiver)),
-                Expression::CallExpression(call) if index.plain(call).is_some_and(|(callee, args)| {
-                    index.is_slot(callee, factory, 0)
-                        && matches!(args.as_slice(), [value] if index.is_slot(value, op.next, 0))
-                }));
-            let Some([inner_next, inner_error, inner_complete]) = index.observer(&inner.args) else {
+            Expression::CallExpression(call) if index.plain(call).is_some_and(|(callee, args)| {
+                index.is_slot(callee, factory, 0)
+                    && matches!(args.as_slice(), [value] if index.is_slot(value, op.next, 0))
+            }));
+            let Some([inner_next, inner_error, inner_complete]) = index.observer(&inner.args)
+            else {
                 continue;
             };
             let Some(each) = index.unsubscribe_each(op.teardown) else {
@@ -1220,12 +1389,36 @@ impl<'a> Run<'_, '_, 'a> {
             self.function("flat_map_factory", factory, "operator factory subscribing slot 0 of each value and forwarding every inner stream unordered");
             self.function("flat_map_operator", op.operator, "operator function of the flat-map factory: returns a new Observable over its source");
             self.function("flat_map_executor", op.executor, "executor tracking active streams and every subscription, subscribing the outer source");
-            self.function("flat_map_inner_next", inner_next, "forwards an inner value to the subscriber");
-            self.function("flat_map_error", op.error, "forwards an outer or inner error to the subscriber");
-            self.function("flat_map_complete", op.complete, "shared by outer and inner completion: counts down and completes at zero");
-            self.function("flat_map_outer_next", op.next, "counts up, subscribes the projected inner stream and records its subscription");
-            self.function("flat_map_teardown", op.teardown, "unsubscribes every recorded subscription");
-            self.function("flat_map_teardown_each", each, "unsubscribes one recorded subscription");
+            self.function(
+                "flat_map_inner_next",
+                inner_next,
+                "forwards an inner value to the subscriber",
+            );
+            self.function(
+                "flat_map_error",
+                op.error,
+                "forwards an outer or inner error to the subscriber",
+            );
+            self.function(
+                "flat_map_complete",
+                op.complete,
+                "shared by outer and inner completion: counts down and completes at zero",
+            );
+            self.function(
+                "flat_map_outer_next",
+                op.next,
+                "counts up, subscribes the projected inner stream and records its subscription",
+            );
+            self.function(
+                "flat_map_teardown",
+                op.teardown,
+                "unsubscribes every recorded subscription",
+            );
+            self.function(
+                "flat_map_teardown_each",
+                each,
+                "unsubscribes one recorded subscription",
+            );
         }
     }
 
@@ -1254,9 +1447,10 @@ impl<'a> Run<'_, '_, 'a> {
             let Some(teardown) = index.returned_fn(executor) else {
                 continue;
             };
-            let (Some(teardown_each), Some(error_each)) =
-                (index.unsubscribe_each(teardown), index.unsubscribe_each(error))
-            else {
+            let (Some(teardown_each), Some(error_each)) = (
+                index.unsubscribe_each(teardown),
+                index.unsubscribe_each(error),
+            ) else {
                 continue;
             };
             let stores_by_index = index.units[next].assignments.iter().any(|assignment| {
@@ -1279,15 +1473,47 @@ impl<'a> Run<'_, '_, 'a> {
             {
                 continue;
             }
-            self.function("fork_join_factory", factory, "returns a new Observable joining every source of its slot-0 list");
-            self.function("fork_join_executor", executor, "emits an empty list at once, or subscribes every source and returns the teardown");
-            self.function("fork_join_subscribe_source", source, "builds an index-bound observer and subscribes one source");
-            self.function("fork_join_next", next, "stores the value at the source index");
-            self.function("fork_join_complete", complete, "counts down; at zero emits the results and completes");
-            self.function("fork_join_error", error, "errors the subscriber, then unsubscribes every source");
-            self.function("fork_join_error_each", error_each, "unsubscribes one source after an error");
+            self.function(
+                "fork_join_factory",
+                factory,
+                "returns a new Observable joining every source of its slot-0 list",
+            );
+            self.function(
+                "fork_join_executor",
+                executor,
+                "emits an empty list at once, or subscribes every source and returns the teardown",
+            );
+            self.function(
+                "fork_join_subscribe_source",
+                source,
+                "builds an index-bound observer and subscribes one source",
+            );
+            self.function(
+                "fork_join_next",
+                next,
+                "stores the value at the source index",
+            );
+            self.function(
+                "fork_join_complete",
+                complete,
+                "counts down; at zero emits the results and completes",
+            );
+            self.function(
+                "fork_join_error",
+                error,
+                "errors the subscriber, then unsubscribes every source",
+            );
+            self.function(
+                "fork_join_error_each",
+                error_each,
+                "unsubscribes one source after an error",
+            );
             self.function("fork_join_teardown", teardown, "unsubscribes every source");
-            self.function("fork_join_teardown_each", teardown_each, "unsubscribes one source");
+            self.function(
+                "fork_join_teardown_each",
+                teardown_each,
+                "unsubscribes one source",
+            );
         }
     }
 
@@ -1316,7 +1542,8 @@ impl<'a> Run<'_, '_, 'a> {
             let [success, failure] = concat.args.as_slice() else {
                 continue;
             };
-            let (Some(success), Some(failure)) = (index.fn_val(success), index.fn_val(failure)) else {
+            let (Some(success), Some(failure)) = (index.fn_val(success), index.fn_val(failure))
+            else {
                 continue;
             };
             if concat.name != "concat"
@@ -1329,10 +1556,26 @@ impl<'a> Run<'_, '_, 'a> {
             {
                 continue;
             }
-            self.function("from_callback_factory", factory, "wraps slot 0 in a function returning a cold Observable over it");
-            self.function("from_callback_wrapper", wrapper, "copies its arguments and returns a new Observable");
-            self.function("from_callback_executor", executor, "applies the wrapped function with its arguments and two appended callbacks");
-            self.function("from_callback_success", success, "emits its value and completes");
+            self.function(
+                "from_callback_factory",
+                factory,
+                "wraps slot 0 in a function returning a cold Observable over it",
+            );
+            self.function(
+                "from_callback_wrapper",
+                wrapper,
+                "copies its arguments and returns a new Observable",
+            );
+            self.function(
+                "from_callback_executor",
+                executor,
+                "applies the wrapped function with its arguments and two appended callbacks",
+            );
+            self.function(
+                "from_callback_success",
+                success,
+                "emits its value and completes",
+            );
             self.function("from_callback_failure", failure, "errors the subscriber");
         }
     }
@@ -1354,12 +1597,21 @@ impl<'a> Run<'_, '_, 'a> {
             let runs = index.is_slot(callee, unit, 0)
                 && matches!(args.as_slice(), [value] if index.is_slot(value, unit, 1));
             let closes = index.unsubscribes(*closure, call.span);
-            let returns_closure = facts.results().iter().any(|result| index.fn_val(result) == Some(*closure));
-            let returns_value =
-                facts.results().iter().any(|result| index.val(result) == Val::Expr(call.span));
+            let returns_closure = facts
+                .results()
+                .iter()
+                .any(|result| index.fn_val(result) == Some(*closure));
+            let returns_value = facts
+                .results()
+                .iter()
+                .any(|result| index.val(result) == Val::Expr(call.span));
             if runs && closes && returns_closure && returns_value && facts.throws == 1 {
                 self.function("subscribe_run_executor", unit, "runs slot 0 on slot 1 and normalizes its result to a teardown function or undefined");
-                self.function("subscribe_unsubscribe_closure", *closure, "teardown calling unsubscribe on the executor's returned subscription");
+                self.function(
+                    "subscribe_unsubscribe_closure",
+                    *closure,
+                    "teardown calling unsubscribe on the executor's returned subscription",
+                );
             }
         }
     }
@@ -1394,15 +1646,18 @@ impl<'a> Run<'_, '_, 'a> {
             return false;
         };
         let facts = &index.units[wrapper];
-        let ([statement], [assignment], [call]) =
-            (facts.ifs.as_slice(), facts.assignments.as_slice(), facts.calls.as_slice())
-        else {
+        let ([statement], [assignment], [call]) = (
+            facts.ifs.as_slice(),
+            facts.assignments.as_slice(),
+            facts.calls.as_slice(),
+        ) else {
             return false;
         };
         let Expression::UnaryExpression(test) = strip(&statement.test) else {
             return false;
         };
-        let Some(latch) = analysis::expression_symbol(strip(&test.argument), index.ctx.scoping) else {
+        let Some(latch) = analysis::expression_symbol(strip(&test.argument), index.ctx.scoping)
+        else {
             return false;
         };
         test.operator == UnaryOperator::LogicalNot
@@ -1446,10 +1701,14 @@ impl<'a> Run<'_, '_, 'a> {
                 continue;
             };
             let scheduled = index.all_calls.iter().any(|timer| {
-                index.plain(timer).is_some_and(|(timer_callee, timer_args)| {
-                    index.is_slot(timer_callee, queue, 1)
-                        && timer_args.first().is_some_and(|value| index.fn_val(value) == Some(thunk))
-                })
+                index
+                    .plain(timer)
+                    .is_some_and(|(timer_callee, timer_args)| {
+                        index.is_slot(timer_callee, queue, 1)
+                            && timer_args
+                                .first()
+                                .is_some_and(|value| index.fn_val(value) == Some(thunk))
+                    })
             });
             if scheduled && once_args.len() == 1 && self.is_once_factory(factory) {
                 factories.insert(factory);
@@ -1476,7 +1735,11 @@ impl<'a> Run<'_, '_, 'a> {
             };
             let references: Vec<_> = index.ctx.scoping.get_resolved_references(symbol).collect();
             match references.as_slice() {
-                [] => self.function("unreferenced_noop", unit, "empty MAIN function nothing references"),
+                [] => self.function(
+                    "unreferenced_noop",
+                    unit,
+                    "empty MAIN function nothing references",
+                ),
                 [reference] => {
                     let parent = index.ctx.nodes.parent_id(reference.node_id());
                     let holder = match index.ctx.nodes.kind(parent) {
@@ -1493,10 +1756,18 @@ impl<'a> Run<'_, '_, 'a> {
                         _ => None,
                     };
                     let unread = holder.is_some_and(|holder| {
-                        index.ctx.scoping.get_resolved_references(holder).all(|read| !read.is_read())
+                        index
+                            .ctx
+                            .scoping
+                            .get_resolved_references(holder)
+                            .all(|read| !read.is_read())
                     });
                     if unread {
-                        self.function("held_noop", unit, "empty MAIN function stored once in a binding nothing reads");
+                        self.function(
+                            "held_noop",
+                            unit,
+                            "empty MAIN function stored once in a binding nothing reads",
+                        );
                     }
                 }
                 _ => {}
@@ -1519,9 +1790,21 @@ impl<'a> Run<'_, '_, 'a> {
                     })
                 });
                 if registered {
-                    self.function("ready_queue_flush", unit, "DOMContentLoaded listener running every queued callback once");
-                    self.binding("ready_queue_pending", queue, "queue the ready listener runs and then clears to null");
-                    self.binding("ready_queue_flushed", flag, "gate the ready listener tests and sets before running the queue");
+                    self.function(
+                        "ready_queue_flush",
+                        unit,
+                        "DOMContentLoaded listener running every queued callback once",
+                    );
+                    self.binding(
+                        "ready_queue_pending",
+                        queue,
+                        "queue the ready listener runs and then clears to null",
+                    );
+                    self.binding(
+                        "ready_queue_flushed",
+                        flag,
+                        "gate the ready listener tests and sets before running the queue",
+                    );
                     continue;
                 }
             }
@@ -1548,7 +1831,8 @@ impl<'a> Run<'_, '_, 'a> {
                 target(&assignment, flag) && matches!(strip(&assignment.right), Expression::BooleanLiteral(value) if value.value)
             });
             let clears_queue = facts.assignments.iter().any(|assignment| {
-                target(&assignment, queue) && matches!(strip(&assignment.right), Expression::NullLiteral(_))
+                target(&assignment, queue)
+                    && matches!(strip(&assignment.right), Expression::NullLiteral(_))
             });
             let runs_entries = facts.calls.iter().any(|call| {
                 matches!(strip(&call.callee), Expression::ComputedMemberExpression(member)
@@ -1570,9 +1854,21 @@ impl<'a> Run<'_, '_, 'a> {
                 && runs_entries
                 && registered
             {
-                self.function("ready_queue_flush", unit, "DOMContentLoaded listener running every queued callback once");
-                self.binding("ready_queue_pending", queue, "queue the ready listener runs and then clears to null");
-                self.binding("ready_queue_flushed", flag, "gate the ready listener tests and sets before running the queue");
+                self.function(
+                    "ready_queue_flush",
+                    unit,
+                    "DOMContentLoaded listener running every queued callback once",
+                );
+                self.binding(
+                    "ready_queue_pending",
+                    queue,
+                    "queue the ready listener runs and then clears to null",
+                );
+                self.binding(
+                    "ready_queue_flushed",
+                    flag,
+                    "gate the ready listener tests and sets before running the queue",
+                );
             }
         }
     }
@@ -1692,7 +1988,10 @@ impl<'a> Run<'_, '_, 'a> {
         if assigned_symbol(set_true, scoping) != Some(flag)
             || !matches!(strip(&set_true.right), Expression::BooleanLiteral(value) if value.value)
             || assigned_symbol(assignment_statement(clear_queue)?, scoping) != Some(queue)
-            || !matches!(strip(&assignment_statement(clear_queue)?.right), Expression::NullLiteral(_))
+            || !matches!(
+                strip(&assignment_statement(clear_queue)?.right),
+                Expression::NullLiteral(_)
+            )
         {
             return None;
         }
@@ -1778,11 +2077,21 @@ impl<'a> Run<'_, '_, 'a> {
                     if matches!(strip(object), Expression::ObjectExpression(_)))
             });
             let copies = facts.assignments.iter().any(|assignment| {
-                assignment.left.as_member_expression().is_some_and(|member| {
-                    matches!(member, MemberExpression::ComputedMemberExpression(_))
-                }) && matches!(strip(&assignment.right), Expression::ComputedMemberExpression(_))
+                assignment
+                    .left
+                    .as_member_expression()
+                    .is_some_and(|member| {
+                        matches!(member, MemberExpression::ComputedMemberExpression(_))
+                    })
+                    && matches!(
+                        strip(&assignment.right),
+                        Expression::ComputedMemberExpression(_)
+                    )
             });
-            let boxed_error = facts.news.iter().any(|new| is_unbound(index, &new.callee, "TypeError"));
+            let boxed_error = facts
+                .news
+                .iter()
+                .any(|new| is_unbound(index, &new.callee, "TypeError"));
             if delegates && own_check && copies && boxed_error && facts.loops >= 2 {
                 self.function("object_assign_helper", unit, "delegates to Object.assign when it exists, otherwise copies own enumerable keys into the boxed target");
             }
@@ -1805,10 +2114,13 @@ impl<'a> Run<'_, '_, 'a> {
             let Some(method) = index.method(call) else {
                 continue;
             };
-            let Some(holder) = analysis::expression_symbol(strip(method.receiver), index.ctx.scoping) else {
+            let Some(holder) =
+                analysis::expression_symbol(strip(method.receiver), index.ctx.scoping)
+            else {
                 continue;
             };
-            let Some((object, "hasOwnProperty")) = index.origin(holder).and_then(expression_member) else {
+            let Some((object, "hasOwnProperty")) = index.origin(holder).and_then(expression_member)
+            else {
                 continue;
             };
             if method.name == "call"
@@ -1816,8 +2128,16 @@ impl<'a> Run<'_, '_, 'a> {
                 && matches!(method.args.as_slice(), [target, key]
                     if index.is_slot(target, unit, 0) && index.is_slot(key, unit, 1))
             {
-                self.function("has_own_property_helper", unit, "calls the held hasOwnProperty on slot 0 with key slot 1");
-                self.binding("has_own_property_method", holder, "holds {}.hasOwnProperty and is called with an explicit receiver");
+                self.function(
+                    "has_own_property_helper",
+                    unit,
+                    "calls the held hasOwnProperty on slot 0 with key slot 1",
+                );
+                self.binding(
+                    "has_own_property_method",
+                    holder,
+                    "holds {}.hasOwnProperty and is called with an explicit receiver",
+                );
             }
         }
     }
@@ -1847,8 +2167,16 @@ impl<'a> Run<'_, '_, 'a> {
                     && index.reads_symbol(&test.left, cache)
                     && matches!(strip(&test.right), Expression::NullLiteral(_)));
             if constructs && tests_null && facts.tries == 1 && index.declared_in(cache, factory) {
-                self.function("singleton_factory", factory, "owns a null cache and returns its constructing getter");
-                self.function("singleton_getter", getter, "constructs slot 0 once into the cache, swallows a throw and returns the cache");
+                self.function(
+                    "singleton_factory",
+                    factory,
+                    "owns a null cache and returns its constructing getter",
+                );
+                self.function(
+                    "singleton_getter",
+                    getter,
+                    "constructs slot 0 once into the cache, swallows a throw and returns the cache",
+                );
             }
         }
     }
@@ -1858,7 +2186,10 @@ impl<'a> Run<'_, '_, 'a> {
     // -----------------------------------------------------------------------
 
     /// The `(holder, method-holder)` of `invoke(method, this.list, ...)`.
-    fn registry_call(&self, call: &'a CallExpression<'a>) -> Option<(SymbolId, SymbolId, Vec<&'a Expression<'a>>)> {
+    fn registry_call(
+        &self,
+        call: &'a CallExpression<'a>,
+    ) -> Option<(SymbolId, SymbolId, Vec<&'a Expression<'a>>)> {
         let index = self.index;
         let (callee, args) = index.plain(call)?;
         let invoke = analysis::expression_symbol(strip(callee), index.ctx.scoping)?;
@@ -1906,44 +2237,97 @@ impl<'a> Run<'_, '_, 'a> {
             };
             let members = index.object_members(result);
             let method = |name: &str| members.get(name).and_then(|value| index.fn_val(value));
-            let (Some(notify), Some(register), Some(unregister), Some(merge)) =
-                (method("notify"), method("register"), method("unregister"), method("__merge"))
-            else {
+            let (Some(notify), Some(register), Some(unregister), Some(merge)) = (
+                method("notify"),
+                method("register"),
+                method("unregister"),
+                method("__merge"),
+            ) else {
                 continue;
             };
             let only_call = |unit: usize| match index.units[unit].calls.as_slice() {
                 [call] => self.registry_call(call),
                 _ => None,
             };
-            let notify_call = index.units[notify].calls.iter().find_map(|call| self.registry_call(call));
-            let (Some((invoke, slice, _)), Some((_, push, _)), Some((_, find, find_args)), Some((_, concat, concat_args))) =
-                (notify_call, only_call(register), only_call(unregister), only_call(merge))
+            let notify_call = index.units[notify]
+                .calls
+                .iter()
+                .find_map(|call| self.registry_call(call));
+            let (
+                Some((invoke, slice, _)),
+                Some((_, push, _)),
+                Some((_, find, find_args)),
+                Some((_, concat, concat_args)),
+            ) = (
+                notify_call,
+                only_call(register),
+                only_call(unregister),
+                only_call(merge),
+            )
             else {
                 continue;
             };
-            let clears = index.units[unregister].assignments.iter().any(|assignment| {
-                matches!(strip(&assignment.right), Expression::NullLiteral(_))
-                    && assignment.left.as_member_expression().is_some_and(|member| {
-                        matches!(member, MemberExpression::ComputedMemberExpression(_))
-                    })
-            });
+            let clears = index.units[unregister]
+                .assignments
+                .iter()
+                .any(|assignment| {
+                    matches!(strip(&assignment.right), Expression::NullLiteral(_))
+                        && assignment
+                            .left
+                            .as_member_expression()
+                            .is_some_and(|member| {
+                                matches!(member, MemberExpression::ComputedMemberExpression(_))
+                            })
+                });
             let finds_slot = matches!(find_args.as_slice(), [_, _, value] if index.is_slot(value, unregister, 0));
             let merges_other = matches!(concat_args.as_slice(), [_, _, value]
                 if matches!(expression_member(value), Some((object, _)) if index.is_slot(object, merge, 0)));
             if clears && finds_slot {
-                self.function("callback_registry_unregister", unregister, "finds its slot 0 in the registry list and nulls that entry");
+                self.function(
+                    "callback_registry_unregister",
+                    unregister,
+                    "finds its slot 0 in the registry list and nulls that entry",
+                );
             }
             if merges_other && index.units[merge].assignments.len() == 1 {
-                self.function("callback_registry_merge", merge, "replaces the registry list with its concatenation with slot 0's list");
+                self.function(
+                    "callback_registry_merge",
+                    merge,
+                    "replaces the registry list with its concatenation with slot 0's list",
+                );
             }
             if self.is_uncurried_call(invoke) {
-                self.binding("registry_invoke_method", invoke, "uncurried Function.prototype.call, called by every registry method");
+                self.binding(
+                    "registry_invoke_method",
+                    invoke,
+                    "uncurried Function.prototype.call, called by every registry method",
+                );
             }
             for (role, symbol, name, evidence) in [
-                ("registry_find_index_method", find, "indexOf", "Array.prototype.indexOf held for unregister"),
-                ("registry_append_method", push, "push", "Array.prototype.push held for register"),
-                ("registry_concat_method", concat, "concat", "Array.prototype.concat held for __merge"),
-                ("registry_slice_method", slice, "slice", "Array.prototype.slice held for notify"),
+                (
+                    "registry_find_index_method",
+                    find,
+                    "indexOf",
+                    "Array.prototype.indexOf held for unregister",
+                ),
+                (
+                    "registry_append_method",
+                    push,
+                    "push",
+                    "Array.prototype.push held for register",
+                ),
+                (
+                    "registry_concat_method",
+                    concat,
+                    "concat",
+                    "Array.prototype.concat held for __merge",
+                ),
+                (
+                    "registry_slice_method",
+                    slice,
+                    "slice",
+                    "Array.prototype.slice held for notify",
+                ),
             ] {
                 if self.array_method_holder(symbol, name) {
                     self.binding(role, symbol, evidence);
@@ -1964,7 +2348,9 @@ impl<'a> Run<'_, '_, 'a> {
             let [call] = index.units[callback].calls.as_slice() else {
                 return None;
             };
-            index.is_slot(index.timer_argument(call)?, callback, 0).then_some(callback)
+            index
+                .is_slot(index.timer_argument(call)?, callback, 0)
+                .then_some(callback)
         })
     }
 
@@ -1978,7 +2364,8 @@ impl<'a> Run<'_, '_, 'a> {
                 return None;
             };
             let body = index.fn_val(index.timer_argument(call)?)?;
-            self.calls_slot_with_value(body, callback, 0).then_some((callback, body))
+            self.calls_slot_with_value(body, callback, 0)
+                .then_some((callback, body))
         })
     }
 
@@ -1988,9 +2375,9 @@ impl<'a> Run<'_, '_, 'a> {
         let [call] = index.units[unit].calls.as_slice() else {
             return false;
         };
-        index.plain(call).is_some_and(|(callee, args)| {
-            args.len() == 1 && index.is_slot(callee, owner, slot)
-        })
+        index
+            .plain(call)
+            .is_some_and(|(callee, args)| args.len() == 1 && index.is_slot(callee, owner, slot))
     }
 
     fn task_queue(&mut self) {
@@ -2043,24 +2430,49 @@ impl<'a> Run<'_, '_, 'a> {
             self.function("task_queue_drain", drain, "runs the step while the rolling average cost fits the slot-1 budget and reschedules itself");
             self.function("task_queue_step", step, "shifts one task and runs slot 0 on it, timing it; returns 0 on empty or a thrown task");
             if let Some(callback) = self.schedule_callback(step) {
-                self.function("task_queue_step_schedule_empty", callback, "schedules one empty listener when the step finds no task");
+                self.function(
+                    "task_queue_step_schedule_empty",
+                    callback,
+                    "schedules one empty listener when the step finds no task",
+                );
             }
             if let Some((callback, body)) = self.deferred_error_callback(step) {
-                self.function("task_queue_schedule_error", callback, "schedules one error listener with the caught error");
-                self.function("task_queue_deliver_error", body, "timer body calling the error listener with the caught error");
+                self.function(
+                    "task_queue_schedule_error",
+                    callback,
+                    "schedules one error listener with the caught error",
+                );
+                self.function(
+                    "task_queue_deliver_error",
+                    body,
+                    "timer body calling the error listener with the caught error",
+                );
             }
             if let Some(callback) = self.schedule_callback(drain) {
-                self.function("task_queue_drain_schedule_empty", callback, "schedules one empty listener from the drain tail");
+                self.function(
+                    "task_queue_drain_schedule_empty",
+                    callback,
+                    "schedules one empty listener from the drain tail",
+                );
             }
             if let Some(callback) = self.schedule_callback(empty) {
-                self.function("task_queue_discard_schedule_empty", callback, "schedules one empty listener when pending tasks are discarded");
+                self.function(
+                    "task_queue_discard_schedule_empty",
+                    callback,
+                    "schedules one empty listener when pending tasks are discarded",
+                );
             }
             let late = index.units[on_error].calls.iter().find_map(|call| {
                 let body = index.fn_val(index.timer_argument(call)?)?;
-                self.calls_slot_with_value(body, on_error, 0).then_some(body)
+                self.calls_slot_with_value(body, on_error, 0)
+                    .then_some(body)
             });
             if let Some(body) = late {
-                self.function("task_queue_deliver_late_error", body, "timer body calling a late-registered listener with the stored error");
+                self.function(
+                    "task_queue_deliver_late_error",
+                    body,
+                    "timer body calling a late-registered listener with the stored error",
+                );
             }
             self.default_clock(factory);
         }
@@ -2083,9 +2495,10 @@ impl<'a> Run<'_, '_, 'a> {
             let Some(clock) = index.fn_val(callee) else {
                 continue;
             };
-            let reads_clock = index.methods(clock, "bind").iter().any(|method| {
-                matches!(expression_member(method.receiver), Some((_, "now")))
-            });
+            let reads_clock = index
+                .methods(clock, "bind")
+                .iter()
+                .any(|method| matches!(expression_member(method.receiver), Some((_, "now"))));
             if reads_clock && !index.decl_fn.contains_key(&holder) {
                 self.binding("task_queue_default_clock_factory", holder, "alias the queue calls with window for its default clock; the held function binds performance.now");
             }

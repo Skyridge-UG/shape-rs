@@ -167,7 +167,9 @@ fn envelope_consumer(model: &Model<'_, '_>, callee: &Expression<'_>) -> Option<(
 }
 
 fn envelope(model: &Model<'_, '_>, site: FunctionSite, function: &Function<'_>) -> Option<()> {
-    use crate::naming::support::seeded_flow::{assignment, member, plain_params, symbol, unchanged};
+    use crate::naming::support::seeded_flow::{
+        assignment, member, plain_params, symbol, unchanged,
+    };
     if function.params.items.len() != 1 || !plain_params(model, &function.params) {
         return None;
     }

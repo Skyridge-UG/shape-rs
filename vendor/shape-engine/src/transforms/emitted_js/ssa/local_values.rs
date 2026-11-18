@@ -163,7 +163,11 @@ impl Scan<'_, '_> {
             }
             let mut group = vec![analysis::Edit::replace(
                 decl.0,
-                if self.regions.directive_barrier { ";" } else { "" },
+                if self.regions.directive_barrier {
+                    ";"
+                } else {
+                    ""
+                },
             )];
             let mut valid = true;
             for reference in refs {
@@ -180,9 +184,10 @@ impl Scan<'_, '_> {
                         !self.owned(*dependency, span)
                             || (self.immutable.contains_key(dependency)
                                 && !self.dominated(*dependency, span))
-                            || self.scoping
-                                .find_binding(reference.scope_id(), self.scoping.symbol_ident(*dependency))
-                                != Some(*dependency)
+                            || self.scoping.find_binding(
+                                reference.scope_id(),
+                                self.scoping.symbol_ident(*dependency),
+                            ) != Some(*dependency)
                     })
                 {
                     valid = false;

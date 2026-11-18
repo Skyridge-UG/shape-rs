@@ -323,8 +323,10 @@ struct WirePayload<'a> {
 impl Serialize for WirePayload<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let fields =
-            19 + usize::from(self.wasm.is_some()) + usize::from(!self.number_tables.is_empty()) + usize::from(!self.native_functions.is_empty());
+        let fields = 19
+            + usize::from(self.wasm.is_some())
+            + usize::from(!self.number_tables.is_empty())
+            + usize::from(!self.native_functions.is_empty());
         let mut state = serializer.serialize_struct("payload", fields)?;
         state.serialize_field("bytecode", &self.bytecode)?;
         state.serialize_field("dispatch_cells", self.dispatch_cells)?;
@@ -2261,19 +2263,36 @@ fn native_catalogue(deobfuscated: &str) -> Vec<String> {
     };
     // The kernel is one function expression: `(function vmEntry(…) { … })(…)`.
     let body = program.body.iter().find_map(|statement| {
-        let Statement::ExpressionStatement(statement) = statement else { return None };
-        let Expression::CallExpression(call) = statement.expression.get_inner_expression() else { return None };
-        let Expression::FunctionExpression(function) = call.callee.get_inner_expression() else { return None };
+        let Statement::ExpressionStatement(statement) = statement else {
+            return None;
+        };
+        let Expression::CallExpression(call) = statement.expression.get_inner_expression() else {
+            return None;
+        };
+        let Expression::FunctionExpression(function) = call.callee.get_inner_expression() else {
+            return None;
+        };
         function.body.as_ref()
     });
-    for statement in body.map(|body| body.statements.as_slice()).unwrap_or_default() {
-        let Statement::VariableDeclaration(declaration) = statement else { continue };
+    for statement in body
+        .map(|body| body.statements.as_slice())
+        .unwrap_or_default()
+    {
+        let Statement::VariableDeclaration(declaration) = statement else {
+            continue;
+        };
         for declarator in &declaration.declarations {
-            let BindingPattern::BindingIdentifier(id) = &declarator.id else { continue };
+            let BindingPattern::BindingIdentifier(id) = &declarator.id else {
+                continue;
+            };
             if id.name != "vmNativeFunctions" {
                 continue;
             }
-            let Some(Expression::ArrayExpression(array)) = declarator.init.as_ref().map(|init| init.get_inner_expression()) else {
+            let Some(Expression::ArrayExpression(array)) = declarator
+                .init
+                .as_ref()
+                .map(|init| init.get_inner_expression())
+            else {
                 return Vec::new();
             };
             let mut entries = Vec::new();

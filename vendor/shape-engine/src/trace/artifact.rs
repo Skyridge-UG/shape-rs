@@ -5,9 +5,7 @@ const MAX_STDIN_BYTES: usize = 16 * 1024 * 1024;
 /// Read one source-free kernel artifact from a file or bounded stdin. This is
 /// deliberately the only consumer-side loader: validation and deserialization
 /// remain owned by `KernelArtifact::from_json`.
-pub fn read_kernel_artifact(
-    path: &std::path::Path,
-) -> Result<crate::KernelArtifact, String> {
+pub fn read_kernel_artifact(path: &std::path::Path) -> Result<crate::KernelArtifact, String> {
     let json = if path == std::path::Path::new("-") {
         let mut bytes = Vec::new();
         io::stdin()

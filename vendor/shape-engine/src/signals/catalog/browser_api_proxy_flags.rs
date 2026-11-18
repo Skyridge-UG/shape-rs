@@ -1,11 +1,12 @@
 //! `BrowserApiProxyFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, native_checks::*, flag_bytes::*};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use buffer_writes::slot_info;
 
 // ===========================================================================
 // Recognizers and binders
@@ -17,9 +18,15 @@ pub(crate) fn recognize_browser_api_proxy_flags(view: &SlotView, ctx: &FinderCtx
         return None;
     }
     let info = slot_info(view, ctx);
-    (proxy_kind(&byte_counts(view), &info.facts, &info.store_facts()) == Some(ProxyKind::ApiDetectors))
-        .then(|| claim(&["flag bytes of typeof object/function detector checks", "Proxy availability"]))
-        .flatten()
+    (proxy_kind(&byte_counts(view), &info.facts, &info.store_facts())
+        == Some(ProxyKind::ApiDetectors))
+    .then(|| {
+        claim(&[
+            "flag bytes of typeof object/function detector checks",
+            "Proxy availability",
+        ])
+    })
+    .flatten()
 }
 
 pub(crate) fn bind_browser_api_proxy_flags(

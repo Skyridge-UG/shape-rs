@@ -222,9 +222,8 @@ impl TraceSession {
         while let Some(id) = blocks.pop() {
             let kind = executor.arena.statements[id as usize].kind.clone();
             blocks.extend(block_children(&kind));
-            let handed = executor.handed_on(&kind, true, |handle| {
-                param_name(executor, handle).is_some()
-            });
+            let handed =
+                executor.handed_on(&kind, true, |handle| param_name(executor, handle).is_some());
             for &handle in &handed {
                 if let Some(name) = param_name(executor, handle) {
                     escaped.insert(name);
@@ -232,10 +231,12 @@ impl TraceSession {
             }
             let definition = match &kind {
                 TraceStatementKind::Evaluate { value } | TraceStatementKind::Let { value, .. } => {
-                    executor.plain_definition(*value).and_then(|(object, key, descriptor, value)| {
-                        let name = param_name(executor, executor.object_handle(object))?;
-                        Some((name, key, descriptor, value))
-                    })
+                    executor.plain_definition(*value).and_then(
+                        |(object, key, descriptor, value)| {
+                            let name = param_name(executor, executor.object_handle(object))?;
+                            Some((name, key, descriptor, value))
+                        },
+                    )
                 }
                 _ => None,
             };
@@ -522,8 +523,11 @@ impl TraceSession {
         // properties on it (see `SubroutineSummary::param_defines`): what
         // the path knew of it, with those properties, before the call hands
         // it on.
-        let mut definitions: Vec<(TraceNodeId, BTreeMap<String, SymbolicValue>, Vec<(Option<SymbolicValue>, Option<SymbolicValue>)>)> =
-            Vec::new();
+        let mut definitions: Vec<(
+            TraceNodeId,
+            BTreeMap<String, SymbolicValue>,
+            Vec<(Option<SymbolicValue>, Option<SymbolicValue>)>,
+        )> = Vec::new();
         for (index, defines) in summary.param_defines.iter().enumerate() {
             let Some(defines) = defines else { continue };
             let handle = handles[index];
@@ -562,7 +566,10 @@ impl TraceSession {
             Some((name, bound.node))
         };
         // The call's result is the object passed to the parameter it returns.
-        if let Some(&argument) = summary.returns_param.and_then(|index| argument_nodes.get(index)) {
+        if let Some(&argument) = summary
+            .returns_param
+            .and_then(|index| argument_nodes.get(index))
+        {
             executor.returned_arguments.insert(call, argument);
         }
         for (handle, properties, applied) in definitions {

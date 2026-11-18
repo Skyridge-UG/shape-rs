@@ -293,11 +293,13 @@ fn arithmetic(lowering: usize) -> (String, &'static str, &'static str) {
             declarations = "let exponent,fraction;";
             fraction = "fraction";
             exponent = "exponent";
-            normal.push_str(r#"let normalExponent=Math.min(Math.floor(Math.log(magnitude)/Math.LN2),1023);
+            normal.push_str(
+                r#"let normalExponent=Math.min(Math.floor(Math.log(magnitude)/Math.LN2),1023);
  magnitude=magnitude/Math.pow(2,normalExponent);let scaled=magnitude<1;
  normalExponent=scaled?normalExponent-1:normalExponent;scaled=scaled?magnitude*2:magnitude;
  let biased=scaled>=2;scaled=biased?scaled/2:scaled;
- let unit=Math.pow(2,52);let rounded=Math.floor(scaled*unit);"#);
+ let unit=Math.pow(2,52);let rounded=Math.floor(scaled*unit);"#,
+            );
             normal.push_str(&tuple_round("scaled*unit", "rounded"));
             normal.push_str("biased=(biased?normalExponent+1:normalExponent)+1023;fraction=(rounded-unit)/unit>=1;exponent=fraction?biased+1:biased;fraction=fraction?0:rounded-unit;if(exponent>2046){exponent=2047;fraction=0;}");
             subnormal = format!(

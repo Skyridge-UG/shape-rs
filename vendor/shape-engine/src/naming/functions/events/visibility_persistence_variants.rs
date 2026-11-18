@@ -598,12 +598,8 @@ fn zero_field(e: &Expression<'_>, key: &str) -> Option<()> {
 fn protocol(model: &Model<'_, '_>, site: FunctionSite, body: &FunctionBody<'_>) -> Option<()> {
     // First package supports the direct transform form only. Staged transforms
     // need their own write-count/temporal proof and deliberately decline.
-    let [
-        Statement::IfStatement(state),
-        add,
-        encoded,
-        Statement::IfStatement(guard),
-    ] = body.statements.as_slice()
+    let [Statement::IfStatement(state), add, encoded, Statement::IfStatement(guard)] =
+        body.statements.as_slice()
     else {
         return None;
     };

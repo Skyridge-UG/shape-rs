@@ -169,7 +169,9 @@ fn ends_iteration(statement: &Statement<'_>, name: &str) -> bool {
 /// body, ends on: itself, or the last of a trailing block or `if` arm.
 fn tail_continues(statement: &Statement<'_>, name: &str, out: &mut Vec<Span>) {
     match statement {
-        Statement::ContinueStatement(jump) if targets(jump.label.as_ref(), name) => out.push(jump.span),
+        Statement::ContinueStatement(jump) if targets(jump.label.as_ref(), name) => {
+            out.push(jump.span)
+        }
         Statement::BlockStatement(body) => {
             if let Some(last) = body.body.last() {
                 tail_continues(last, name, out);
@@ -533,7 +535,12 @@ impl Scan<'_, '_> {
     }
 
     /// [`Self::run_text`], with the `continue`s at `dropped` removed.
-    fn run_text_without(&self, run: &[Statement<'_>], jumps: &Jumps<'_>, dropped: &[Span]) -> String {
+    fn run_text_without(
+        &self,
+        run: &[Statement<'_>],
+        jumps: &Jumps<'_>,
+        dropped: &[Span],
+    ) -> String {
         run.iter()
             .map(|s| {
                 let span = s.span();

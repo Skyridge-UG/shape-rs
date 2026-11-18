@@ -47,23 +47,35 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::analysis;
 use crate::signals::extract::bindings::{
     array_elements, numeric_index, object_members_of, static_member_name, ParameterSlots,
 };
 use crate::signals::schema::Confidence;
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -89,9 +101,15 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     binding("function_source_stringifier", "stringifyFunctionSource"),
     // Media-feature measurement.
     function("measure_max_media_feature", "measureMaxMediaFeatureValue"),
-    function("evaluate_media_feature_values", "evaluateMediaFeatureValues"),
+    function(
+        "evaluate_media_feature_values",
+        "evaluateMediaFeatureValues",
+    ),
     function("media_feature_match_probe", "matchesMediaFeatureValue"),
-    function("measure_ratio_media_feature", "measureRatioMediaFeatureFraction"),
+    function(
+        "measure_ratio_media_feature",
+        "measureRatioMediaFeatureFraction",
+    ),
     function("deliver_ratio_result", "deliverRatioResultAsync"),
     function("notify_ratio_error", "notifyErrorAsync"),
     function("ratio_result_callback", "invokeRatioResultCallback"),
@@ -107,24 +125,54 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     binding("deferred_callback_argument", "deferredCallbackArgument"),
     binding("ice_gatherer_holder", "iceCandidateCollector"),
     // Aggregate environment collectors.
-    function("location_tamper_collector", "collectLocationWebGLTamperSignals"),
-    function("browser_environment_collector", "collectBrowserEnvironmentSignals"),
-    function("device_orientation_collector", "collectDeviceOrientationAndCanvasFingerprint"),
-    function("input_automation_collector", "collectInputAndAutomationProbeSignals"),
-    function("touch_environment_collector", "collectEnvironmentAndTouchSignals"),
-    function("timing_environment_collector", "timingAndEnvironmentCollector"),
-    function("pointer_native_api_collector", "collectPointerAndNativeApiSignals"),
-    function("environment_encoding_collector", "emitEncodedEnvironmentSignal"),
+    function(
+        "location_tamper_collector",
+        "collectLocationWebGLTamperSignals",
+    ),
+    function(
+        "browser_environment_collector",
+        "collectBrowserEnvironmentSignals",
+    ),
+    function(
+        "device_orientation_collector",
+        "collectDeviceOrientationAndCanvasFingerprint",
+    ),
+    function(
+        "input_automation_collector",
+        "collectInputAndAutomationProbeSignals",
+    ),
+    function(
+        "touch_environment_collector",
+        "collectEnvironmentAndTouchSignals",
+    ),
+    function(
+        "timing_environment_collector",
+        "timingAndEnvironmentCollector",
+    ),
+    function(
+        "pointer_native_api_collector",
+        "collectPointerAndNativeApiSignals",
+    ),
+    function(
+        "environment_encoding_collector",
+        "emitEncodedEnvironmentSignal",
+    ),
     function("location_tamper_init", "initializeLocationTamperProbe"),
     function("keyboard_probe_init", "initializeKeyboardProbes"),
-    function("device_orientation_init", "initializeDeviceOrientationProbe"),
+    function(
+        "device_orientation_init",
+        "initializeDeviceOrientationProbe",
+    ),
     function("input_automation_last_chance", "flushInputAutomationProbe"),
     function("touch_probe_init", "initializeTouchProbes"),
     function("native_type_error_probe", "triggerNativeTypeErrorProbe"),
     function("touch_records_last_chance", "flushTouchRecords"),
     function("timing_environment_emit", "emitTimingEnvironmentSignal"),
     function("pointer_probe_init", "initializePointerAndWebRtcProbes"),
-    function("constructor_probe_table_replay", "replayHostConstructorProbeTable"),
+    function(
+        "constructor_probe_table_replay",
+        "replayHostConstructorProbeTable",
+    ),
     function("native_global_census_emit", "emitNativeGlobalApiCensus"),
     function("native_global_count_emit", "emitNativeGlobalApiCount"),
     function("client_hints_then", "encodeUserAgentClientHints"),
@@ -135,20 +183,35 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     function("seed_stream_error", "forwardSeedStreamError"),
     function("forward_scan_error", "forwardSortedNameError"),
     function("emit_sorted_name_hash", "emitSortedNameHash"),
-    function("webauthentication_capability_bits", "emitWebAuthenticationCapabilityBits"),
+    function(
+        "webauthentication_capability_bits",
+        "emitWebAuthenticationCapabilityBits",
+    ),
     function("native_global_scan_error", "forwardNativeGlobalScanError"),
     function("seed_snapshot_last_chance", "reemitSeededSnapshot"),
     function("intersection_observer_stub", "stubIntersectionObserver"),
     function("mutation_observer_stub", "stubMutationObserver"),
     function("performance_observer_stub", "stubPerformanceObserver"),
     binding("automation_global_names", "globalAutomationProbeNames"),
-    binding("automation_document_property_names", "documentAutomationProbeNames"),
+    binding(
+        "automation_document_property_names",
+        "documentAutomationProbeNames",
+    ),
     binding("automation_global_markers", "globalAutomationMarkerNames"),
-    binding("automation_document_markers", "documentAutomationMarkerNames"),
+    binding(
+        "automation_document_markers",
+        "documentAutomationMarkerNames",
+    ),
     binding("automation_body_markers", "bodyAutomationMarkerNames"),
-    binding("automation_navigator_markers", "navigatorAutomationMarkerNames"),
+    binding(
+        "automation_navigator_markers",
+        "navigatorAutomationMarkerNames",
+    ),
     binding("automation_crypto_markers", "cryptoAutomationMarkerNames"),
-    binding("automation_external_markers", "externalAutomationMarkerNames"),
+    binding(
+        "automation_external_markers",
+        "externalAutomationMarkerNames",
+    ),
     binding("browser_global_probe_names", "browserGlobalProbeNames"),
     binding("font_probe_config", "fontProbeConfig"),
     binding("location_field_codes", "locationFieldCodeTable"),
@@ -228,11 +291,17 @@ fn member<'e, 'a>(expression: &'e Expression<'a>) -> Option<(&'e Expression<'a>,
 }
 
 fn args<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 fn new_args<'e, 'a>(call: &'e NewExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 fn string_value<'e>(expression: &'e Expression<'_>) -> Option<&'e str> {
@@ -338,7 +407,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 
     /// True when `function` owns a callable inspector anywhere in its subtree.
     fn owns_probe_inspector(&self, function: usize) -> bool {
-        self.probe_inspectors.iter().any(|inspector| self.within(*inspector, function))
+        self.probe_inspectors
+            .iter()
+            .any(|inspector| self.within(*inspector, function))
     }
 
     /// True when `function`'s WebGL proof is a canvas collection closure: the
@@ -352,10 +423,14 @@ impl<'c, 'a> Ix<'c, 'a> {
                 continue;
             }
             let gets_webgl = self.own[index].calls.iter().any(|call| {
-                self.method(call).is_some_and(|(_, name)| name == "getContext")
-                    && args(call).first().and_then(|argument| string_value(argument)).is_some_and(
-                        |kind| kind.starts_with("webgl") || kind.starts_with("experimental-webgl"),
-                    )
+                self.method(call)
+                    .is_some_and(|(_, name)| name == "getContext")
+                    && args(call)
+                        .first()
+                        .and_then(|argument| string_value(argument))
+                        .is_some_and(|kind| {
+                            kind.starts_with("webgl") || kind.starts_with("experimental-webgl")
+                        })
             });
             if !gets_webgl {
                 continue;
@@ -370,10 +445,10 @@ impl<'c, 'a> Ix<'c, 'a> {
                     self.method(call)
                         .and_then(|(receiver, _)| self.symbol(receiver))
                         .is_some_and(|receiver| {
-                            let declaration =
-                                self.nodes
-                                    .get_node(self.scoping.symbol_declaration(receiver))
-                                    .span();
+                            let declaration = self
+                                .nodes
+                                .get_node(self.scoping.symbol_declaration(receiver))
+                                .span();
                             declaration.start < body.start || declaration.end > body.end
                         })
                 })
@@ -392,13 +467,18 @@ impl<'c, 'a> Ix<'c, 'a> {
             let owner = if parent == id {
                 None
             } else {
-                self.fn_of_node.get(&parent).copied().or(self.owner[parent.index()])
+                self.fn_of_node
+                    .get(&parent)
+                    .copied()
+                    .or(self.owner[parent.index()])
             };
             self.owner[id.index()] = owner;
             let func = match node.kind() {
-                AstKind::Function(found) => {
-                    Some((found.span, FnNode::Function(found), found.params.items.len()))
-                }
+                AstKind::Function(found) => Some((
+                    found.span,
+                    FnNode::Function(found),
+                    found.params.items.len(),
+                )),
                 AstKind::ArrowFunctionExpression(found) => {
                     Some((found.span, FnNode::Arrow(found), found.params.items.len()))
                 }
@@ -407,7 +487,14 @@ impl<'c, 'a> Ix<'c, 'a> {
             if let Some((span, func, params)) = func {
                 let index = self.fns.len();
                 let is_arrow = matches!(func, FnNode::Arrow(_));
-                self.fns.push(FnEntry { node: id, span, func, parent: owner, params, is_arrow });
+                self.fns.push(FnEntry {
+                    node: id,
+                    span,
+                    func,
+                    parent: owner,
+                    params,
+                    is_arrow,
+                });
                 self.own.push(Own::default());
                 self.fn_of_node.insert(id, index);
                 if let Some(owner) = owner {
@@ -552,8 +639,9 @@ impl<'c, 'a> Ix<'c, 'a> {
     /// `Object.prototype.toString`-style path rooted at an unbound global.
     fn path(&self, expression: &Expression<'a>) -> Option<String> {
         match strip(expression) {
-            Expression::Identifier(identifier) => (self.symbol(expression).is_none())
-                .then(|| identifier.name.to_string()),
+            Expression::Identifier(identifier) => {
+                (self.symbol(expression).is_none()).then(|| identifier.name.to_string())
+            }
             _ => {
                 let (object, name) = member(expression)?;
                 Some(format!("{}.{name}", self.path(object)?))
@@ -578,7 +666,10 @@ impl<'c, 'a> Ix<'c, 'a> {
             return Some(index);
         }
         let symbol = self.symbol(expression)?;
-        let declaration = self.nodes.get_node(self.scoping.symbol_declaration(symbol)).span();
+        let declaration = self
+            .nodes
+            .get_node(self.scoping.symbol_declaration(symbol))
+            .span();
         let body = self.fns[function].span;
         if declaration.start < body.start || declaration.end > body.end {
             return None;
@@ -649,7 +740,10 @@ impl<'c, 'a> Ix<'c, 'a> {
         let symbol = self.symbol(expression)?;
         if let Some(index) = self.decl_fn.get(&symbol).copied() {
             let immutable = self.scoping.symbol_declarations(symbol).count() == 1
-                && !self.scoping.get_resolved_references(symbol).any(|r| r.is_write());
+                && !self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|r| r.is_write());
             return immutable.then_some(index);
         }
         self.resolve_fn_depth(self.single_origin(symbol)?, depth - 1)
@@ -657,12 +751,17 @@ impl<'c, 'a> Ix<'c, 'a> {
 
     /// The functions that read `symbol` in their own body.
     fn readers(&self, symbol: SymbolId) -> Vec<usize> {
-        (0..self.fns.len()).filter(|index| self.own[*index].reads.contains(&symbol)).collect()
+        (0..self.fns.len())
+            .filter(|index| self.own[*index].reads.contains(&symbol))
+            .collect()
     }
 
     /// True when `symbol` is declared outside the function `function`.
     fn is_outer(&self, symbol: SymbolId, function: usize) -> bool {
-        let declaration = self.nodes.get_node(self.scoping.symbol_declaration(symbol)).span();
+        let declaration = self
+            .nodes
+            .get_node(self.scoping.symbol_declaration(symbol))
+            .span();
         let body = self.fns[function].span;
         declaration.start < body.start || declaration.end > body.end
     }
@@ -814,9 +913,10 @@ impl<'c, 'a> Ix<'c, 'a> {
 
     fn is_empty_body(&self, function: usize) -> bool {
         match self.fns[function].func {
-            FnNode::Function(found) => {
-                found.body.as_ref().is_some_and(|body| body.statements.is_empty())
-            }
+            FnNode::Function(found) => found
+                .body
+                .as_ref()
+                .is_some_and(|body| body.statements.is_empty()),
             FnNode::Arrow(found) => !found.expression && found.body.statements.is_empty(),
         }
     }
@@ -872,8 +972,14 @@ impl<'c, 'a> Ix<'c, 'a> {
                 continue;
             }
             for call in &self.own[index].calls {
-                if self.method(call).is_some_and(|(_, name)| name == "addEventListener") {
-                    if let Some(event) = self.call_arguments(call).first().and_then(|a| string_value(a))
+                if self
+                    .method(call)
+                    .is_some_and(|(_, name)| name == "addEventListener")
+                {
+                    if let Some(event) = self
+                        .call_arguments(call)
+                        .first()
+                        .and_then(|a| string_value(a))
                     {
                         out.insert(event.to_string());
                     }
@@ -897,7 +1003,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 
     fn for_each_callback(&self, function: usize) -> Option<usize> {
         let call = self.for_each_call(function)?;
-        self.call_arguments(call).first().and_then(|value| self.resolve_fn(value))
+        self.call_arguments(call)
+            .first()
+            .and_then(|value| self.resolve_fn(value))
     }
 
     /// The main array a settle function iterates with `forEach`.
@@ -922,7 +1030,8 @@ impl<'c, 'a> Ix<'c, 'a> {
             let Some(symbol) = analysis::identifier_symbol(identifier, self.scoping) else {
                 continue;
             };
-            if self.is_outer(symbol, function) && self.slot_index(&assignment.right, function) == Some(1)
+            if self.is_outer(symbol, function)
+                && self.slot_index(&assignment.right, function) == Some(1)
             {
                 out.insert(symbol);
             }
@@ -957,7 +1066,10 @@ impl<'c, 'a> Ix<'c, 'a> {
             return false;
         };
         self.own[callback].calls.iter().any(|call| {
-            if self.method(call).is_none_or(|(_, name)| name != "setTimeout") {
+            if self
+                .method(call)
+                .is_none_or(|(_, name)| name != "setTimeout")
+            {
                 return false;
             }
             let arguments = self.call_arguments(call);
@@ -965,17 +1077,18 @@ impl<'c, 'a> Ix<'c, 'a> {
                 .first()
                 .is_some_and(|waiter| self.slot_value(waiter, callback) == Some(0))
                 && arguments.iter().any(|argument| {
-                    self.symbol(argument).is_some_and(|symbol| cached.contains(&symbol))
+                    self.symbol(argument)
+                        .is_some_and(|symbol| cached.contains(&symbol))
                 })
         })
     }
 
     /// The call argument of a `setTimeout(fn, …)` call the setter makes.
     fn delivered_arrow(&self, setter: usize) -> Option<usize> {
-        let call = self.own[setter]
-            .calls
-            .iter()
-            .find(|call| self.method(call).is_some_and(|(_, name)| name == "setTimeout"))?;
+        let call = self.own[setter].calls.iter().find(|call| {
+            self.method(call)
+                .is_some_and(|(_, name)| name == "setTimeout")
+        })?;
         let only = self.call_arguments(call).first().copied()?;
         self.resolve_fn(only)
     }
@@ -1116,8 +1229,9 @@ pub(crate) fn find(ctx: &FinderCtx) -> Vec<FinderClaim> {
 fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     // The native-code pattern: a `RegExp(...)` whose text contains the stable
     // `native code` marker.
-    let identity: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_native_identity_check(*index)).collect();
+    let identity: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_native_identity_check(*index))
+        .collect();
     out.unique_function_with_alias(
         ix,
         "is_native_function",
@@ -1142,8 +1256,9 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     }
 
     // The prototype-behavior probe and its Proxy handler.
-    let probes: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.proxy_handler(*index).is_some()).collect();
+    let probes: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.proxy_handler(*index).is_some())
+        .collect();
     let mut alias_role = None;
     if let [probe] = probes.as_slice() {
         if let Some(handler) = ix.proxy_handler(*probe) {
@@ -1172,7 +1287,9 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
                 .copied()
                 .filter(|symbol| {
                     ix.origins(*symbol).is_some_and(|origins| {
-                        origins.iter().any(|origin| ix.origin_has_path(origin, path, 3))
+                        origins
+                            .iter()
+                            .any(|origin| ix.origin_has_path(origin, path, 3))
                     })
                 })
                 .collect()
@@ -1198,9 +1315,13 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     if let [probe] = probes.as_slice() {
         let evidence = "creates a Proxy with a getPrototypeOf/has/get handler and re-parents its argument through captured prototype accessors, restoring it in `finally`";
         match alias_role {
-            Some(alias_role) => {
-                out.function_with_alias(ix, "prototype_behavior_probe", alias_role, *probe, evidence)
-            }
+            Some(alias_role) => out.function_with_alias(
+                ix,
+                "prototype_behavior_probe",
+                alias_role,
+                *probe,
+                evidence,
+            ),
             None => out.function(ix, "prototype_behavior_probe", *probe, evidence),
         }
     }
@@ -1232,8 +1353,9 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     );
 
     // The filter predicate over a native API list.
-    let predicates: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_non_native_predicate(*index)).collect();
+    let predicates: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_non_native_predicate(*index))
+        .collect();
     out.unique_function(
         ix,
         "non_native_function_predicate",
@@ -1241,12 +1363,19 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
         "filter callback that negates the native-code pattern's test on a function's recorded source text",
     );
 
-    let binders: Vec<SymbolId> =
-        ix.all_symbols().into_iter().filter(|symbol| ix.is_tostring_binder(*symbol)).collect();
+    let binders: Vec<SymbolId> = ix
+        .all_symbols()
+        .into_iter()
+        .filter(|symbol| ix.is_tostring_binder(*symbol))
+        .collect();
     let bound: Vec<SymbolId> = binders
         .iter()
         .copied()
-        .filter(|symbol| predicates.iter().any(|predicate| ix.own[*predicate].reads.contains(symbol)))
+        .filter(|symbol| {
+            predicates
+                .iter()
+                .any(|predicate| ix.own[*predicate].reads.contains(symbol))
+        })
         .collect();
     out.unique_binding(
         ix,
@@ -1255,8 +1384,9 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
         "call-bound native `Function.prototype.toString`, read by the non-native filter predicate",
     );
 
-    let tamper_scans: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_descriptor_tamper_scan(*index)).collect();
+    let tamper_scans: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_descriptor_tamper_scan(*index))
+        .collect();
     out.unique_function(
         ix,
         "descriptor_tamper_scan",
@@ -1266,7 +1396,11 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     let descriptor_source: Vec<SymbolId> = binders
         .iter()
         .copied()
-        .filter(|symbol| tamper_scans.iter().any(|scan| ix.own[*scan].reads.contains(symbol)))
+        .filter(|symbol| {
+            tamper_scans
+                .iter()
+                .any(|scan| ix.own[*scan].reads.contains(symbol))
+        })
         .collect();
     out.unique_binding(
         ix,
@@ -1275,8 +1409,9 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
         "call-bound native `Function.prototype.toString`, read by the descriptor tamper scan",
     );
 
-    let scans: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_native_global_scan(*index)).collect();
+    let scans: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_native_global_scan(*index))
+        .collect();
     out.unique_function(
         ix,
         "native_global_scan",
@@ -1286,7 +1421,11 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
     let census_source: Vec<SymbolId> = binders
         .iter()
         .copied()
-        .filter(|symbol| scans.iter().any(|scan| ix.own[*scan].reads.contains(symbol)))
+        .filter(|symbol| {
+            scans
+                .iter()
+                .any(|scan| ix.own[*scan].reads.contains(symbol))
+        })
         .collect();
     out.unique_binding(
         ix,
@@ -1299,14 +1438,24 @@ fn native_tamper(ix: &Ix<'_, '_>, out: &mut Out) {
 impl<'c, 'a> Ix<'c, 'a> {
     fn is_native_identity_check(&self, function: usize) -> bool {
         let own = &self.own[function];
-        if own.returns.len() != 2 || !own.ifs.iter().any(|statement| self.identity_test(&statement.test))
+        if own.returns.len() != 2
+            || !own
+                .ifs
+                .iter()
+                .any(|statement| self.identity_test(&statement.test))
         {
             return false;
         }
-        let Some(receiver) = own.returns.iter().find_map(|value| self.exec_receiver(value)) else {
+        let Some(receiver) = own
+            .returns
+            .iter()
+            .find_map(|value| self.exec_receiver(value))
+        else {
             return false;
         };
-        own.returns.iter().any(|value| bool_value(value) == Some(false))
+        own.returns
+            .iter()
+            .any(|value| bool_value(value) == Some(false))
             && self.native_code_pattern(receiver)
     }
 
@@ -1353,7 +1502,9 @@ impl<'c, 'a> Ix<'c, 'a> {
             return false;
         }
         let sides = [&binary.left, &binary.right];
-        sides.iter().any(|side| member(side).is_some_and(|(_, name)| name == "toString"))
+        sides
+            .iter()
+            .any(|side| member(side).is_some_and(|(_, name)| name == "toString"))
             && sides
                 .iter()
                 .any(|side| self.path(side).as_deref() == Some("Function.prototype.toString"))
@@ -1441,13 +1592,12 @@ impl<'c, 'a> Ix<'c, 'a> {
             Expression::ObjectExpression(object) => (Some(object), None),
             expression => (None, self.symbol(expression)),
         };
-        let mut getter = descriptor
-            .and_then(|object| {
-                object_members_of(object)
-                    .into_iter()
-                    .find(|entry| entry.name == "get")
-                    .and_then(|entry| self.resolve_fn(entry.value))
-            });
+        let mut getter = descriptor.and_then(|object| {
+            object_members_of(object)
+                .into_iter()
+                .find(|entry| entry.name == "get")
+                .and_then(|entry| self.resolve_fn(entry.value))
+        });
         if getter.is_none() {
             if let Some(symbol) = descriptor_symbol {
                 getter = self
@@ -1506,11 +1656,17 @@ impl<'c, 'a> Ix<'c, 'a> {
         let Some((target, "bind")) = self.method(call) else {
             return false;
         };
-        if !self.path(target).as_deref().is_some_and(|path| path.ends_with(".call")) {
+        if !self
+            .path(target)
+            .as_deref()
+            .is_some_and(|path| path.ends_with(".call"))
+        {
             return false;
         }
         self.call_arguments(call).last().is_some_and(|argument| {
-            self.path(argument).as_deref().is_some_and(|path| path == "Function.prototype.toString")
+            self.path(argument)
+                .as_deref()
+                .is_some_and(|path| path == "Function.prototype.toString")
         })
     }
 
@@ -1522,7 +1678,10 @@ impl<'c, 'a> Ix<'c, 'a> {
         own.members.contains("getOwnPropertyDescriptor")
             && own.members.contains("test")
             && own.updates == 0
-            && own.calls.iter().any(|call| self.method(call).is_some_and(|(_, name)| name == "push"))
+            && own
+                .calls
+                .iter()
+                .any(|call| self.method(call).is_some_and(|(_, name)| name == "push"))
     }
 
     fn is_native_global_scan(&self, function: usize) -> bool {
@@ -1541,8 +1700,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 // ===========================================================================
 
 fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
-    let max_measures: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_max_feature_measure(*index)).collect();
+    let max_measures: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_max_feature_measure(*index))
+        .collect();
     out.unique_function(
         ix,
         "measure_max_media_feature",
@@ -1550,8 +1710,9 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
         "builds `(<feature>: <value>)` media queries, doubles until one stops matching, binary-searches the smallest matching integer and returns it",
     );
 
-    let evaluators: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_feature_value_mapper(*index)).collect();
+    let evaluators: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_feature_value_mapper(*index))
+        .collect();
     out.unique_function(
         ix,
         "evaluate_media_feature_values",
@@ -1559,12 +1720,15 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
         "maps each candidate value to `matchMedia(\"(<feature>: <value>)\").matches`",
     );
     if let [evaluator] = evaluators.as_slice() {
-        let mappers: Vec<usize> = ix
-            .own[*evaluator]
+        let mappers: Vec<usize> = ix.own[*evaluator]
             .calls
             .iter()
             .filter(|call| ix.method(call).is_some_and(|(_, name)| name == "map"))
-            .flat_map(|call| ix.call_arguments(call).into_iter().filter_map(|value| ix.resolve_fn(value)))
+            .flat_map(|call| {
+                ix.call_arguments(call)
+                    .into_iter()
+                    .filter_map(|value| ix.resolve_fn(value))
+            })
             .collect();
         out.unique_function(
             ix,
@@ -1574,8 +1738,9 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
         );
     }
 
-    let ratio_measures: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_ratio_feature_measure(*index)).collect();
+    let ratio_measures: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_ratio_feature_measure(*index))
+        .collect();
     out.unique_function(
         ix,
         "measure_ratio_media_feature",
@@ -1583,12 +1748,15 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
         "searches `(max-<feature>: <n>/<d>)` queries for the resolution boundary and hands the fraction to asynchronous result/error setters",
     );
     if let [ratio] = ratio_measures.as_slice() {
-        let steps: Vec<usize> = ix
-            .own[*ratio]
+        let steps: Vec<usize> = ix.own[*ratio]
             .calls
             .iter()
             .filter(|call| ix.method(call).is_some_and(|(_, name)| name == "schedule"))
-            .flat_map(|call| ix.call_arguments(call).into_iter().filter_map(|value| ix.resolve_fn(value)))
+            .flat_map(|call| {
+                ix.call_arguments(call)
+                    .into_iter()
+                    .filter_map(|value| ix.resolve_fn(value))
+            })
             .collect();
         out.unique_function(
             ix,
@@ -1656,7 +1824,10 @@ impl<'c, 'a> Ix<'c, 'a> {
         let own = &self.own[function];
         own.members.contains("matchMedia")
             && own.members.contains("matches")
-            && own.calls.iter().any(|call| self.method(call).is_some_and(|(_, name)| name == "floor"))
+            && own
+                .calls
+                .iter()
+                .any(|call| self.method(call).is_some_and(|(_, name)| name == "floor"))
             && !own.returns.is_empty()
     }
 
@@ -1665,9 +1836,11 @@ impl<'c, 'a> Ix<'c, 'a> {
         if own.returns.len() != 1 {
             return false;
         }
-        let Some(call) = own.calls.iter().find(|call| {
-            self.method(call).is_some_and(|(_, name)| name == "map")
-        }) else {
+        let Some(call) = own
+            .calls
+            .iter()
+            .find(|call| self.method(call).is_some_and(|(_, name)| name == "map"))
+        else {
             return false;
         };
         let callbacks: Vec<usize> = self
@@ -1685,8 +1858,13 @@ impl<'c, 'a> Ix<'c, 'a> {
     fn is_ratio_feature_measure(&self, function: usize) -> bool {
         let own = &self.own[function];
         own.members.contains("matchMedia")
-            && self.strings_sub[function].iter().any(|text| text.starts_with("(max-"))
-            && own.calls.iter().any(|call| self.method(call).is_some_and(|(_, name)| name == "schedule"))
+            && self.strings_sub[function]
+                .iter()
+                .any(|text| text.starts_with("(max-"))
+            && own.calls.iter().any(|call| {
+                self.method(call)
+                    .is_some_and(|(_, name)| name == "schedule")
+            })
     }
 }
 
@@ -1695,8 +1873,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 // ===========================================================================
 
 fn deferred_results(ix: &Ix<'_, '_>, out: &mut Out) {
-    let settles: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_deferred_settle(*index)).collect();
+    let settles: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_deferred_settle(*index))
+        .collect();
     let mut successes = Vec::new();
     let mut failures = Vec::new();
     for settle in settles {
@@ -1915,10 +2094,12 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
         out.unique_function(ix, role, candidates, evidence);
     }
     let body = |role: &str| -> Option<usize> {
-        groups.get(role).and_then(|candidates| match candidates.as_slice() {
-            [only] => Some(*only),
-            _ => None,
-        })
+        groups
+            .get(role)
+            .and_then(|candidates| match candidates.as_slice() {
+                [only] => Some(*only),
+                _ => None,
+            })
     };
 
     // One callback per role, addressed by the registrar slot of the collector
@@ -1930,8 +2111,7 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
         ix.registrations(body)
             .into_iter()
             .filter(|registration| {
-                registration.slot == slot
-                    && flag.is_none_or(|flag| registration.flag == Some(flag))
+                registration.slot == slot && flag.is_none_or(|flag| registration.flag == Some(flag))
             })
             .map(|registration| registration.callback)
             .collect()
@@ -2053,13 +2233,14 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
             census,
             "emit callback that collects the host environment, then runs the native global API census",
         );
-        let on_empty: Vec<usize> = ix
-            .own[census]
+        let on_empty: Vec<usize> = ix.own[census]
             .calls
             .iter()
             .filter(|call| ix.method_name(call).as_deref() == Some("onEmpty"))
             .flat_map(|call| {
-                ix.call_arguments(call).into_iter().filter_map(|value| ix.resolve_fn(value))
+                ix.call_arguments(call)
+                    .into_iter()
+                    .filter_map(|value| ix.resolve_fn(value))
             })
             .collect();
         out.unique_function(
@@ -2068,13 +2249,14 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
             &on_empty,
             "`onEmpty` callback that emits the counted native globals",
         );
-        let on_error: Vec<usize> = ix
-            .own[census]
+        let on_error: Vec<usize> = ix.own[census]
             .calls
             .iter()
             .filter(|call| ix.method_name(call).as_deref() == Some("onError"))
             .flat_map(|call| {
-                ix.call_arguments(call).into_iter().filter_map(|value| ix.resolve_fn(value))
+                ix.call_arguments(call)
+                    .into_iter()
+                    .filter_map(|value| ix.resolve_fn(value))
             })
             .collect();
         out.unique_function(
@@ -2099,7 +2281,9 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
                 .iter()
                 .filter(|call| ix.method_name(call).as_deref() == Some("then"))
                 .flat_map(|call| {
-                    ix.call_arguments(call).into_iter().filter_map(|value| ix.resolve_fn(value))
+                    ix.call_arguments(call)
+                        .into_iter()
+                        .filter_map(|value| ix.resolve_fn(value))
                 })
                 .collect();
             out.unique_function(
@@ -2143,7 +2327,9 @@ fn collectors(ix: &Ix<'_, '_>, out: &mut Out) {
 
 impl<'c, 'a> Ix<'c, 'a> {
     fn collector_bodies(&self) -> Vec<usize> {
-        (0..self.fns.len()).filter(|function| collector_kind(self, *function).is_some()).collect()
+        (0..self.fns.len())
+            .filter(|function| collector_kind(self, *function).is_some())
+            .collect()
     }
 
     fn is_native_type_error_probe(&self, function: usize) -> bool {
@@ -2450,8 +2636,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 // ===========================================================================
 
 fn observable_probes(ix: &Ix<'_, '_>, out: &mut Out) {
-    let walkers: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_path_walker(*index)).collect();
+    let walkers: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_path_walker(*index))
+        .collect();
     out.unique_function(
         ix,
         "path_walk_probe",
@@ -2459,8 +2646,9 @@ fn observable_probes(ix: &Ix<'_, '_>, out: &mut Out) {
         "walks a property path into a host object, collects the enumerated keys and pushes the encodings into the observable",
     );
 
-    let operators: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| ix.is_pipe_operator(*index)).collect();
+    let operators: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| ix.is_pipe_operator(*index))
+        .collect();
     out.unique_function(
         ix,
         "path_walk_operator",
@@ -2474,8 +2662,11 @@ fn observable_probes(ix: &Ix<'_, '_>, out: &mut Out) {
         .filter_map(|call| ix.call_arguments(call).first().copied())
         .filter_map(|value| ix.resolve_fn(value))
         .collect();
-    let subscribers: Vec<usize> =
-        on_empty.iter().copied().filter(|index| ix.own[*index].members.contains("subscribe")).collect();
+    let subscribers: Vec<usize> = on_empty
+        .iter()
+        .copied()
+        .filter(|index| ix.own[*index].members.contains("subscribe"))
+        .collect();
     out.unique_function(
         ix,
         "seed_stream_subscribe",
@@ -2519,7 +2710,9 @@ fn observable_probes(ix: &Ix<'_, '_>, out: &mut Out) {
         .copied()
         .filter(|index| {
             let own = &ix.own[*index];
-            own.members.contains("sort") && own.members.contains("join") && own.members.contains("next")
+            own.members.contains("sort")
+                && own.members.contains("join")
+                && own.members.contains("next")
         })
         .collect();
     out.unique_function(
@@ -2670,9 +2863,10 @@ fn exchange_adapters(ix: &Ix<'_, '_>, out: &mut Out) {
         .filter(|(symbol, set)| {
             set.contains("structuredClone")
                 && set.contains("SharedArrayBuffer")
-                && ix.readers(*symbol).iter().any(|reader| {
-                    ix.own[*reader].members.contains("hasOwnProperty")
-                })
+                && ix
+                    .readers(*symbol)
+                    .iter()
+                    .any(|reader| ix.own[*reader].members.contains("hasOwnProperty"))
         })
         .map(|(symbol, _)| *symbol)
         .collect();
@@ -2711,8 +2905,11 @@ fn exchange_adapters(ix: &Ix<'_, '_>, out: &mut Out) {
     );
 
     // A fixed millisecond value consumed only as `new Date(value).toString()`.
-    let dates: Vec<SymbolId> =
-        ix.all_symbols().into_iter().filter(|symbol| ix.is_encoded_date(*symbol)).collect();
+    let dates: Vec<SymbolId> = ix
+        .all_symbols()
+        .into_iter()
+        .filter(|symbol| ix.is_encoded_date(*symbol))
+        .collect();
     out.unique_binding(
         ix,
         "payload_date_millis",
@@ -2735,8 +2932,11 @@ fn exchange_adapters(ix: &Ix<'_, '_>, out: &mut Out) {
     );
 
     // The throttle wrapper alias.
-    let throttles: Vec<SymbolId> =
-        ix.all_symbols().into_iter().filter(|symbol| ix.is_throttle_alias(*symbol)).collect();
+    let throttles: Vec<SymbolId> = ix
+        .all_symbols()
+        .into_iter()
+        .filter(|symbol| ix.is_throttle_alias(*symbol))
+        .collect();
     out.unique_binding(
         ix,
         "throttle_factory_alias",
@@ -2781,8 +2981,14 @@ fn exchange_adapters(ix: &Ix<'_, '_>, out: &mut Out) {
             "property_descriptor_lookup",
             "`Object.getOwnPropertyDescriptor` read by an environment collector",
         ),
-        ("prototype_lookup", "`Object.getPrototypeOf` read by an environment collector"),
-        ("object_tag_reader", "`Object.prototype.toString` read by an environment collector"),
+        (
+            "prototype_lookup",
+            "`Object.getPrototypeOf` read by an environment collector",
+        ),
+        (
+            "object_tag_reader",
+            "`Object.prototype.toString` read by an environment collector",
+        ),
     ] {
         let candidates: Vec<SymbolId> = host_readers
             .iter()
@@ -2800,7 +3006,10 @@ impl<'c, 'a> Ix<'c, 'a> {
             && self.fns[function].params == 1
             && own.members.contains("join")
             && own.members.contains("pipe")
-            && own.calls.iter().any(|call| self.method(call).is_some_and(|(_, name)| name == "push"))
+            && own
+                .calls
+                .iter()
+                .any(|call| self.method(call).is_some_and(|(_, name)| name == "push"))
     }
 
     fn is_pipe_operator(&self, function: usize) -> bool {
@@ -2835,10 +3044,15 @@ impl<'c, 'a> Ix<'c, 'a> {
             return false;
         };
         self.method(call).is_some_and(|(target, name)| {
-            name == "bind" && self.path(target).as_deref().is_some_and(|found| found.ends_with(".call"))
-        }) && self.call_arguments(call).last().is_some_and(|argument| {
-            self.path(argument).as_deref() == Some(path)
-        })
+            name == "bind"
+                && self
+                    .path(target)
+                    .as_deref()
+                    .is_some_and(|found| found.ends_with(".call"))
+        }) && self
+            .call_arguments(call)
+            .last()
+            .is_some_and(|argument| self.path(argument).as_deref() == Some(path))
     }
 
     fn is_font_probe_config(&self, symbol: SymbolId) -> bool {
@@ -2965,7 +3179,8 @@ impl<'c, 'a> Ix<'c, 'a> {
             return false;
         };
         let returns_nested = self.own[factory].returns.iter().any(|value| {
-            self.resolve_fn(value).is_some_and(|nested| !self.own[nested].news.is_empty())
+            self.resolve_fn(value)
+                .is_some_and(|nested| !self.own[nested].news.is_empty())
         });
         if !returns_nested {
             return false;
@@ -3015,15 +3230,21 @@ impl<'c, 'a> Ix<'c, 'a> {
                     )
             })
         });
-        let timer = (0..self.fns.len()).filter(|index| self.within(*index, target)).any(|index| {
-            self.own[index].calls.iter().any(|call| {
-                self.method(call).is_some_and(|(_, name)| name == "setTimeout")
-                    || self.is_global_call(call, "setTimeout")
-            })
-        });
+        let timer = (0..self.fns.len())
+            .filter(|index| self.within(*index, target))
+            .any(|index| {
+                self.own[index].calls.iter().any(|call| {
+                    self.method(call)
+                        .is_some_and(|(_, name)| name == "setTimeout")
+                        || self.is_global_call(call, "setTimeout")
+                })
+            });
         applies_this
             && timer
-            && self.own[target].returns.iter().any(|value| self.resolve_fn(value).is_some())
+            && self.own[target]
+                .returns
+                .iter()
+                .any(|value| self.resolve_fn(value).is_some())
     }
 }
 

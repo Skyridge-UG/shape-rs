@@ -252,4 +252,3 @@ pub(super) fn decode_proven_base64(
     }
     Ok(output)
 }
-

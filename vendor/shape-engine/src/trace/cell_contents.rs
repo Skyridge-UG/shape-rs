@@ -222,11 +222,7 @@ impl CellGraph {
     }
 
     /// What each function's cells can hold (see [`cell_contents`]).
-    pub fn contents(
-        &self,
-        summaries: &BTreeMap<Function, Summary>,
-        strict: bool,
-    ) -> CellContents {
+    pub fn contents(&self, summaries: &BTreeMap<Function, Summary>, strict: bool) -> CellContents {
         let (cells, holders) = (&self.cells, &self.holders);
         let content = |cell: Cell| -> Option<CellContent> {
             let Cell::Owned(..) = cell else {

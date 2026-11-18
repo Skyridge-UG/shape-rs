@@ -1,10 +1,12 @@
 //! `ConstantEmptyString`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout,
+    SlotView,
+};
+use crate::signals::analysis::{leaf_checks::*, shape_text::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `ConstantEmptyString` evidence: one STRING written from a literal only.
 pub(crate) fn is_constant_string(shapes: &[&str], leaves: &[&LeafView]) -> bool {

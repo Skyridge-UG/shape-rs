@@ -19,25 +19,36 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::Span;
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::analysis;
 use crate::signals::extract::bindings::{
     object_members_of, property_key_name, static_member_name, ParameterSlots,
 };
 use crate::signals::schema::Confidence;
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Host members the installers capture: path, role.
 const HOOK_HOST_MEMBERS: &[(&str, &str)] = &[
     ("Object.getPrototypeOf", "hook_get_prototype_of"),
-    ("Object.getOwnPropertyDescriptor", "hook_get_own_property_descriptor"),
+    (
+        "Object.getOwnPropertyDescriptor",
+        "hook_get_own_property_descriptor",
+    ),
     ("Object.getOwnPropertyNames", "hook_get_own_property_names"),
     ("Object.defineProperty", "hook_define_property"),
     ("Object.hasOwnProperty", "hook_has_own_property"),
@@ -48,7 +59,10 @@ const HOOK_HOST_MEMBERS: &[(&str, &str)] = &[
 
 /// Host members the probe registrar captures: path, role.
 const PROBE_HOST_MEMBERS: &[(&str, &str)] = &[
-    ("Object.getOwnPropertyDescriptor", "probe_get_own_property_descriptor"),
+    (
+        "Object.getOwnPropertyDescriptor",
+        "probe_get_own_property_descriptor",
+    ),
     ("Object.getPrototypeOf", "probe_get_prototype_of"),
     ("Object.prototype.toString", "probe_object_to_string"),
 ];
@@ -57,28 +71,58 @@ const PROBE_HOST_MEMBERS: &[(&str, &str)] = &[
 pub(crate) const VOCABULARY: &[FinderRole] = &[
     function("function_to_string_facade", "readRecordedFunctionSource"),
     function("reflect_construct_fallback", "reflectConstructFallback"),
-    function("adopt_instrumentation_records", "adoptInstrumentationRecords"),
-    function("share_instrumentation_records", "shareInstrumentationRecords"),
-    function("handle_platform_instrumentation_exchange", "handlePlatformInstrumentationExchange"),
+    function(
+        "adopt_instrumentation_records",
+        "adoptInstrumentationRecords",
+    ),
+    function(
+        "share_instrumentation_records",
+        "shareInstrumentationRecords",
+    ),
+    function(
+        "handle_platform_instrumentation_exchange",
+        "handlePlatformInstrumentationExchange",
+    ),
     function("install_interceptor_spec", "installInterceptorSpec"),
-    function("lazy_hook_registry_class_factory", "createRegistryClassWithLazyHookInstall"),
-    function("lazy_hook_registry_constructor", "forwardLazyHookRegistryArguments"),
-    function("lazy_hook_registry_register", "registerAfterInstallingHooks"),
-    function("dom_structure_census_registrar", "registerDomStructureCensus"),
+    function(
+        "lazy_hook_registry_class_factory",
+        "createRegistryClassWithLazyHookInstall",
+    ),
+    function(
+        "lazy_hook_registry_constructor",
+        "forwardLazyHookRegistryArguments",
+    ),
+    function(
+        "lazy_hook_registry_register",
+        "registerAfterInstallingHooks",
+    ),
+    function(
+        "dom_structure_census_registrar",
+        "registerDomStructureCensus",
+    ),
     function("dom_structure_census", "collectDomStructureCensus"),
     function("dom_structure_element_counter", "countDomStructureElement"),
     function("dom_structure_squared_sum", "addSquaredChildCount"),
-    function("browser_probe_registrar", "registerBrowserFingerprintProbes"),
+    function(
+        "browser_probe_registrar",
+        "registerBrowserFingerprintProbes",
+    ),
     function("inspect_callable_metadata", "inspectCallableMetadata"),
     function("frame_probe_routine", "runFrameProbeRoutine"),
     function("frame_stack_access_getter", "emitStackAccessProbe"),
-    function("body_attribute_mutation_handler", "emitBodyAttributeMutationProbe"),
+    function(
+        "body_attribute_mutation_handler",
+        "emitBodyAttributeMutationProbe",
+    ),
     function("last_chance_probe_routine", "emitLastChanceProbe"),
     function("descriptor_census_routine", "runDescriptorCensus"),
     function("console_stack_access_getter", "errorStackGetterProbe"),
     function("probe_cleanup_routine", "disconnectBodyAttributeObserver"),
     binding("hook_get_prototype_of", "getPrototype"),
-    binding("hook_get_own_property_descriptor", "getOwnPropertyDescriptor"),
+    binding(
+        "hook_get_own_property_descriptor",
+        "getOwnPropertyDescriptor",
+    ),
     binding("hook_get_own_property_names", "getOwnPropertyNames"),
     binding("hook_define_property", "defineProperty"),
     binding("hook_has_own_property", "objectHasOwnProperty"),
@@ -87,7 +131,10 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     binding("hook_array_index_of", "findRestrictedPropertyIndex"),
     binding("hook_uncurried_apply", "applyMethod"),
     binding("hook_uncurried_call", "functionCall"),
-    binding("restricted_function_properties", "restrictedFunctionProperties"),
+    binding(
+        "restricted_function_properties",
+        "restrictedFunctionProperties",
+    ),
     binding("reflect_construct", "reflectConstruct"),
     binding("native_function_bind", "nativeFunctionBind"),
     binding("instrumentation_records", "instrumentationRecords"),
@@ -96,12 +143,18 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     binding("function_to_string_shim", "functionToStringShim"),
     binding("native_function_to_string", "nativeFunctionToString"),
     binding("hook_form_interceptor_installer", "installInterceptors"),
-    binding("probe_get_own_property_descriptor", "propertyDescriptorReader"),
+    binding(
+        "probe_get_own_property_descriptor",
+        "propertyDescriptorReader",
+    ),
     binding("probe_get_prototype_of", "prototypeReader"),
     binding("probe_object_to_string", "collectionTagReader"),
     binding("probe_has_own_property", "hasOwnPropertyBound"),
     binding("probe_unavailable_elapsed_time", "unavailableElapsedTime"),
-    binding("native_function_source_pattern", "nativeFunctionSourcePattern"),
+    binding(
+        "native_function_source_pattern",
+        "nativeFunctionSourcePattern",
+    ),
     binding("page_run_script_error_pattern", "pageRunScriptErrorPattern"),
 ];
 
@@ -179,7 +232,10 @@ fn target_member_object<'e, 'a>(target: &'e AssignmentTarget<'a>) -> Option<&'e 
 }
 
 fn args<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 fn string_value<'e>(expression: &'e Expression<'_>) -> Option<&'e str> {
@@ -215,7 +271,10 @@ impl<'c, 'a> Ix<'c, 'a> {
             let owner = if parent == id {
                 None
             } else {
-                self.fn_of_node.get(&parent).copied().or(self.owner[parent.index()])
+                self.fn_of_node
+                    .get(&parent)
+                    .copied()
+                    .or(self.owner[parent.index()])
             };
             self.owner[id.index()] = owner;
             let func = match node.kind() {
@@ -225,7 +284,12 @@ impl<'c, 'a> Ix<'c, 'a> {
             };
             if let Some((span, func)) = func {
                 let index = self.fns.len();
-                self.fns.push(FnEntry { node: id, span, func, parent: owner });
+                self.fns.push(FnEntry {
+                    node: id,
+                    span,
+                    func,
+                    parent: owner,
+                });
                 self.own.push(Own::default());
                 self.fn_of_node.insert(id, index);
                 if let Some(owner) = owner {
@@ -335,8 +399,9 @@ impl<'c, 'a> Ix<'c, 'a> {
     /// `Object.prototype.toString`-style path rooted at an unbound global.
     fn path(&self, expression: &Expression<'a>) -> Option<String> {
         match strip(expression) {
-            Expression::Identifier(identifier) => (self.symbol(expression).is_none())
-                .then(|| identifier.name.to_string()),
+            Expression::Identifier(identifier) => {
+                (self.symbol(expression).is_none()).then(|| identifier.name.to_string())
+            }
             _ => {
                 let (object, name) = member(expression)?;
                 Some(format!("{}.{name}", self.path(object)?))
@@ -407,7 +472,10 @@ impl<'c, 'a> Ix<'c, 'a> {
         let symbol = self.symbol(expression)?;
         if let Some(index) = self.decl_fn.get(&symbol).copied() {
             let immutable = self.scoping.symbol_declarations(symbol).count() == 1
-                && !self.scoping.get_resolved_references(symbol).any(|r| r.is_write());
+                && !self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|r| r.is_write());
             return immutable.then_some(index);
         }
         self.resolve_fn_depth(self.single_origin(symbol)?, depth - 1)
@@ -428,7 +496,9 @@ impl<'c, 'a> Ix<'c, 'a> {
         }
         reads.retain(|symbol| {
             let owner = self.owner[self.scoping.symbol_declaration(*symbol).index()];
-            !functions.iter().any(|function| owner.is_some_and(|owner| self.within(owner, *function)))
+            !functions
+                .iter()
+                .any(|function| owner.is_some_and(|owner| self.within(owner, *function)))
                 && !self.decl_fn.contains_key(symbol)
         });
         reads
@@ -450,7 +520,9 @@ impl<'c, 'a> Ix<'c, 'a> {
 
     /// `x.call.bind(x.bind, x.call)`, directly or through one binding.
     fn is_uncurrier(&self, expression: &Expression<'a>) -> bool {
-        let value = self.symbol(expression).and_then(|symbol| self.single_origin(symbol));
+        let value = self
+            .symbol(expression)
+            .and_then(|symbol| self.single_origin(symbol));
         let Expression::CallExpression(call) = strip(value.unwrap_or(expression)) else {
             return false;
         };
@@ -465,7 +537,10 @@ impl<'c, 'a> Ix<'c, 'a> {
     /// The callee and arguments of a call, seen through the target cohort's
     /// `callee.call(receiver, ...)` form. A plain binding's `.call` stays as
     /// written: only a member or slot callee is forwarded.
-    fn invocation<'e>(&self, call: &'e CallExpression<'a>) -> (&'e Expression<'a>, Vec<&'e Expression<'a>>) {
+    fn invocation<'e>(
+        &self,
+        call: &'e CallExpression<'a>,
+    ) -> (&'e Expression<'a>, Vec<&'e Expression<'a>>) {
         let arguments = args(call);
         if let Some((inner, "call")) = member(&call.callee) {
             if !arguments.is_empty() && (member(inner).is_some() || self.is_incoming(inner)) {
@@ -496,7 +571,11 @@ impl<'c, 'a> Ix<'c, 'a> {
     }
 
     fn nested_arg_fns(&self, call: &CallExpression<'a>) -> Vec<usize> {
-        self.invocation(call).1.into_iter().filter_map(|argument| self.resolve_fn(argument)).collect()
+        self.invocation(call)
+            .1
+            .into_iter()
+            .filter_map(|argument| self.resolve_fn(argument))
+            .collect()
     }
 
     fn span(&self, index: usize) -> Span {
@@ -550,11 +629,16 @@ pub(crate) fn find(ctx: &FinderCtx) -> Vec<FinderClaim> {
 }
 
 fn hook_engine(ix: &Ix<'_, '_>, out: &mut Out) {
-    let has = |index: usize, keys: [&str; 2]| keys.iter().all(|key| ix.own[index].written_keys.contains(*key));
-    let methods: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| has(*index, ["onBeforeInvoke", "onAfterInvoke"])).collect();
-    let accessors: Vec<usize> =
-        (0..ix.fns.len()).filter(|index| has(*index, ["onBeforeGet", "onBeforeSet"])).collect();
+    let has = |index: usize, keys: [&str; 2]| {
+        keys.iter()
+            .all(|key| ix.own[index].written_keys.contains(*key))
+    };
+    let methods: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| has(*index, ["onBeforeInvoke", "onAfterInvoke"]))
+        .collect();
+    let accessors: Vec<usize> = (0..ix.fns.len())
+        .filter(|index| has(*index, ["onBeforeGet", "onBeforeSet"]))
+        .collect();
     if methods.is_empty() || accessors.is_empty() {
         return;
     }
@@ -570,21 +654,40 @@ fn hook_engine(ix: &Ix<'_, '_>, out: &mut Out) {
         if let [origin] = origins.as_slice() {
             if let Some(path) = ix.path(origin) {
                 if let Some((_, role)) = HOOK_HOST_MEMBERS.iter().find(|(host, _)| *host == path) {
-                    out.binding(ix, role, *symbol, "host member captured and read by an interceptor installer");
+                    out.binding(
+                        ix,
+                        role,
+                        *symbol,
+                        "host member captured and read by an interceptor installer",
+                    );
                 }
             }
             if let Expression::CallExpression(call) = strip(origin) {
                 let arguments = args(call);
                 if let ([only], true) = (arguments.as_slice(), ix.is_uncurrier(&call.callee)) {
                     match member(only).map(|(_, name)| name) {
-                        Some("apply") => out.binding(ix, "hook_uncurried_apply", *symbol, "uncurried Function apply read by an interceptor installer"),
-                        Some("call") => out.binding(ix, "hook_uncurried_call", *symbol, "uncurried Function call read by an interceptor installer"),
+                        Some("apply") => out.binding(
+                            ix,
+                            "hook_uncurried_apply",
+                            *symbol,
+                            "uncurried Function apply read by an interceptor installer",
+                        ),
+                        Some("call") => out.binding(
+                            ix,
+                            "hook_uncurried_call",
+                            *symbol,
+                            "uncurried Function call read by an interceptor installer",
+                        ),
                         _ => {}
                     }
                 }
             }
             if let Expression::ArrayExpression(array) = strip(origin) {
-                let names: Vec<_> = array.elements.iter().filter_map(|element| element.as_expression().and_then(string_value)).collect();
+                let names: Vec<_> = array
+                    .elements
+                    .iter()
+                    .filter_map(|element| element.as_expression().and_then(string_value))
+                    .collect();
                 if names == ["arguments", "caller"] {
                     out.binding(ix, "restricted_function_properties", *symbol, "the two restricted function property names, skipped by the installer's property copy");
                 }
@@ -605,21 +708,39 @@ fn reflect_construct<'a>(
     symbol: SymbolId,
     origins: &[&'a Expression<'a>],
 ) {
-    if !origins.iter().any(|origin| ix.path(origin).as_deref() == Some("Reflect.construct")) {
+    if !origins
+        .iter()
+        .any(|origin| ix.path(origin).as_deref() == Some("Reflect.construct"))
+    {
         return;
     }
-    out.binding(ix, "reflect_construct", symbol, "holds Reflect.construct and is read by an interceptor installer");
+    out.binding(
+        ix,
+        "reflect_construct",
+        symbol,
+        "holds Reflect.construct and is read by an interceptor installer",
+    );
     let Some(fallback) = origins.iter().find_map(|origin| ix.resolve_fn(origin)) else {
         return;
     };
     if ix.own[fallback].news.is_empty() {
         return;
     }
-    out.function(ix, "reflect_construct_fallback", fallback, "assigned where Reflect.construct is missing; constructs through a bound apply");
+    out.function(
+        ix,
+        "reflect_construct_fallback",
+        fallback,
+        "assigned where Reflect.construct is missing; constructs through a bound apply",
+    );
     for read in ix.outer_reads(&[fallback]) {
         let bind = ix.single_origin(read).and_then(|origin| ix.path(origin));
         if bind.as_deref() == Some("Function.prototype.bind") {
-            out.binding(ix, "native_function_bind", read, "captured Function.prototype.bind applied by the construct fallback");
+            out.binding(
+                ix,
+                "native_function_bind",
+                read,
+                "captured Function.prototype.bind applied by the construct fallback",
+            );
         }
     }
 }
@@ -635,18 +756,30 @@ fn exchange_functions(ix: &Ix<'_, '_>) -> BTreeSet<usize> {
 
 fn records<'a>(ix: &Ix<'_, 'a>, out: &mut Out, symbol: SymbolId, origins: &[&'a Expression<'a>]) {
     let created = origins.iter().any(|origin| ix.is_create_null(origin));
-    let others = origins.iter().all(|origin| ix.is_create_null(origin) || ix.is_incoming(origin));
+    let others = origins
+        .iter()
+        .all(|origin| ix.is_create_null(origin) || ix.is_incoming(origin));
     if !(created && others) {
         return;
     }
-    out.binding(ix, "instrumentation_records", symbol, "null-prototype map read by both interceptor installers");
+    out.binding(
+        ix,
+        "instrumentation_records",
+        symbol,
+        "null-prototype map read by both interceptor installers",
+    );
     let exchanges = exchange_functions(ix);
     for assignment in ix.assigns.get(&symbol).map(Vec::as_slice).unwrap_or(&[]) {
         let Some(owner) = ix.owner[assignment.node_id.get().index()] else {
             continue;
         };
         if ix.is_incoming(&assignment.right) && exchanges.contains(&owner) {
-            out.function(ix, "adopt_instrumentation_records", owner, "exchange callback that replaces the records map with its argument");
+            out.function(
+                ix,
+                "adopt_instrumentation_records",
+                owner,
+                "exchange callback that replaces the records map with its argument",
+            );
         }
     }
     let listeners: BTreeSet<usize> = ix
@@ -654,24 +787,40 @@ fn records<'a>(ix: &Ix<'_, 'a>, out: &mut Out, symbol: SymbolId, origins: &[&'a 
         .iter()
         .flat_map(|own| &own.calls)
         .filter(|call| {
-            ix.path(&call.callee).is_some_and(|path| path.ends_with("addEventListener"))
-                || ix.method(call).is_some_and(|(_, name)| name == "addEventListener")
+            ix.path(&call.callee)
+                .is_some_and(|path| path.ends_with("addEventListener"))
+                || ix
+                    .method(call)
+                    .is_some_and(|(_, name)| name == "addEventListener")
         })
         .flat_map(|call| ix.nested_arg_fns(call))
         .collect();
     for listener in listeners {
         let shares = ix.own[listener].calls.iter().any(|call| {
             ix.method(call).is_some_and(|(_, name)| name == "exchange")
-                && args(call).iter().any(|argument| ix.symbol(argument) == Some(symbol))
+                && args(call)
+                    .iter()
+                    .any(|argument| ix.symbol(argument) == Some(symbol))
         });
         if shares {
-            out.function(ix, "share_instrumentation_records", listener, "event listener that hands the records map to the event's exchange function");
+            out.function(
+                ix,
+                "share_instrumentation_records",
+                listener,
+                "event listener that hands the records map to the event's exchange function",
+            );
         }
     }
 }
 
-fn facade(ix: &Ix<'_, '_>, out: &mut Out, method_reads: &BTreeSet<SymbolId>, accessor_reads: &BTreeSet<SymbolId>) {
-    let hooked = |symbol: &SymbolId| method_reads.contains(symbol) || accessor_reads.contains(symbol);
+fn facade(
+    ix: &Ix<'_, '_>,
+    out: &mut Out,
+    method_reads: &BTreeSet<SymbolId>,
+    accessor_reads: &BTreeSet<SymbolId>,
+) {
+    let hooked =
+        |symbol: &SymbolId| method_reads.contains(symbol) || accessor_reads.contains(symbol);
     for index in 0..ix.fns.len() {
         if matches!(ix.fns[index].func, FnNode::Arrow(_)) {
             continue;
@@ -701,14 +850,29 @@ fn facade(ix: &Ix<'_, '_>, out: &mut Out, method_reads: &BTreeSet<SymbolId>, acc
             continue;
         }
         out.function(ix, "function_to_string_facade", index, "looks `this` up in the wrapped-function list and returns the recorded source, else the native text");
-        out.binding(ix, "to_string_targets", targets, "searched by the toString facade and appended by the installers");
-        out.binding(ix, "original_function_to_strings", sources, "indexed by the toString facade and appended by the installers");
+        out.binding(
+            ix,
+            "to_string_targets",
+            targets,
+            "searched by the toString facade and appended by the installers",
+        );
+        out.binding(
+            ix,
+            "original_function_to_strings",
+            sources,
+            "indexed by the toString facade and appended by the installers",
+        );
         let text = ix.single_origin(native).is_some_and(|origin| {
             matches!(strip(origin), Expression::CallExpression(call)
                 if args(call).last().is_some_and(|last| ix.path(last).as_deref() == Some("Function.prototype.toString")))
         });
         if text {
-            out.binding(ix, "native_function_to_string", native, "bound Function.prototype.toString called on `this` by the facade");
+            out.binding(
+                ix,
+                "native_function_to_string",
+                native,
+                "bound Function.prototype.toString called on `this` by the facade",
+            );
         }
         let Some(parent) = ix.fns[index].parent else {
             continue;
@@ -736,7 +900,8 @@ fn platform_exchange(ix: &Ix<'_, '_>, out: &mut Out, methods: &[usize], accessor
             target_member_name(&assignment.left) == Some("platformIntegratedHooksCalled")
         });
         let adopts = own.assignments.iter().any(|assignment| {
-            member(&assignment.right).is_some_and(|(object, name)| name == "instrumented" && ix.is_incoming(object))
+            member(&assignment.right)
+                .is_some_and(|(object, name)| name == "instrumented" && ix.is_incoming(object))
         });
         if flags && adopts {
             out.function(ix, "handle_platform_instrumentation_exchange", function, "exchange callback that flags platform hooks and adopts the provider's instrumented map");
@@ -750,12 +915,20 @@ fn platform_exchange(ix: &Ix<'_, '_>, out: &mut Out, methods: &[usize], accessor
         .flat_map(|call| ix.nested_arg_fns(call))
         .collect();
     for function in for_each_callbacks {
-        let called: Vec<usize> =
-            ix.own[function].calls.iter().filter_map(|call| ix.resolve_fn(&call.callee)).collect();
+        let called: Vec<usize> = ix.own[function]
+            .calls
+            .iter()
+            .filter_map(|call| ix.resolve_fn(&call.callee))
+            .collect();
         if called.iter().any(|callee| methods.contains(callee))
             && called.iter().any(|callee| accessors.contains(callee))
         {
-            out.function(ix, "install_interceptor_spec", function, "for each descriptor, calls the method or the accessor interceptor installer");
+            out.function(
+                ix,
+                "install_interceptor_spec",
+                function,
+                "for each descriptor, calls the method or the accessor interceptor installer",
+            );
         }
     }
 }
@@ -809,20 +982,27 @@ fn lazy_registry(ix: &Ix<'_, '_>, out: &mut Out) {
             if target_member_name(&assignment.left) != Some("register") {
                 continue;
             }
-            let Some((ctor, "prototype")) = target_member_object(&assignment.left).and_then(member) else {
+            let Some((ctor, "prototype")) = target_member_object(&assignment.left).and_then(member)
+            else {
                 continue;
             };
             let Some(register) = ix.resolve_fn(&assignment.right) else {
                 continue;
             };
             let returned = ix.symbol(ctor).is_some_and(|symbol| {
-                ix.own[factory].returns.iter().any(|value| ix.symbol(value) == Some(symbol))
+                ix.own[factory]
+                    .returns
+                    .iter()
+                    .any(|value| ix.symbol(value) == Some(symbol))
             });
             let forwards = ix.own[register].calls.iter().any(|call| {
                 let (callee, _) = ix.invocation(call);
-                member(callee).and_then(|(prototype, name)| (name == "register").then_some(prototype)).and_then(member).is_some_and(
-                    |(base, name)| name == "prototype" && returns_slot_zero(ix, base, factory),
-                )
+                member(callee)
+                    .and_then(|(prototype, name)| (name == "register").then_some(prototype))
+                    .and_then(member)
+                    .is_some_and(|(base, name)| {
+                        name == "prototype" && returns_slot_zero(ix, base, factory)
+                    })
             });
             if !(returned && forwards) {
                 continue;
@@ -868,7 +1048,12 @@ fn claim_lazy_registry(
     out.function(ix, "lazy_hook_registry_class_factory", factory, evidence);
     out.function(ix, "lazy_hook_registry_register", register, evidence);
     if let Some(constructor) = constructor {
-        out.function(ix, "lazy_hook_registry_constructor", constructor, "only forwards its arguments to the base constructor");
+        out.function(
+            ix,
+            "lazy_hook_registry_constructor",
+            constructor,
+            "only forwards its arguments to the base constructor",
+        );
     }
     if !ix.decl_fn.contains_key(&installer) {
         out.binding(ix, "hook_form_interceptor_installer", installer, "called by the lazy registry's register() and resolves to the function that registers interceptor hooks");
@@ -901,21 +1086,35 @@ fn dom_census(ix: &Ix<'_, '_>, out: &mut Out) {
         if !queries_all || !own.members.contains("next") {
             continue;
         }
-        let counter = own.calls.iter().flat_map(|call| ix.nested_arg_fns(call)).find(|callback| {
-            let members = &ix.own[*callback].members;
-            members.contains("tagName") && members.contains("children")
-        });
+        let counter = own
+            .calls
+            .iter()
+            .flat_map(|call| ix.nested_arg_fns(call))
+            .find(|callback| {
+                let members = &ix.own[*callback].members;
+                members.contains("tagName") && members.contains("children")
+            });
         let Some(counter) = counter else {
             continue;
         };
         let evidence = "queries every element, counts tags per element and emits the counts";
         out.function(ix, "dom_structure_census", census, evidence);
-        out.function(ix, "dom_structure_element_counter", counter, "forEach callback that counts one element by tagName and records its child count");
+        out.function(
+            ix,
+            "dom_structure_element_counter",
+            counter,
+            "forEach callback that counts one element by tagName and records its child count",
+        );
         for call in &own.calls {
             if ix.method(call).is_some_and(|(_, name)| name == "reduce") {
                 for reducer in ix.nested_arg_fns(call) {
                     if is_squared_sum(ix, reducer) {
-                        out.function(ix, "dom_structure_squared_sum", reducer, "reduce callback adding the square of each child count");
+                        out.function(
+                            ix,
+                            "dom_structure_squared_sum",
+                            reducer,
+                            "reduce callback adding the square of each child count",
+                        );
                     }
                 }
             }
@@ -923,11 +1122,17 @@ fn dom_census(ix: &Ix<'_, '_>, out: &mut Out) {
         let Some(parent) = ix.fns[census].parent else {
             continue;
         };
-        let scheduled = ix.own[parent].calls.iter().any(|call| {
-            ix.calls_slot(call, parent) && ix.nested_arg_fns(call).contains(&census)
-        });
+        let scheduled = ix.own[parent]
+            .calls
+            .iter()
+            .any(|call| ix.calls_slot(call, parent) && ix.nested_arg_fns(call).contains(&census));
         if scheduled {
-            out.function(ix, "dom_structure_census_registrar", parent, "hands the census routine to its scheduler argument");
+            out.function(
+                ix,
+                "dom_structure_census_registrar",
+                parent,
+                "hands the census routine to its scheduler argument",
+            );
         }
     }
 }
@@ -936,8 +1141,13 @@ fn probes(ix: &Ix<'_, '_>, out: &mut Out) {
     let inspectors = (0..ix.fns.len()).filter(|index| {
         let own = &ix.own[*index];
         own.deletes.iter().any(|target| {
-            member(target).is_some_and(|(object, name)| name == "prototype" && ix.slot_index(object, *index) == Some(0))
-        }) && own.calls.iter().any(|call| ix.method(call).is_some_and(|(_, name)| name == "test"))
+            member(target).is_some_and(|(object, name)| {
+                name == "prototype" && ix.slot_index(object, *index) == Some(0)
+            })
+        }) && own
+            .calls
+            .iter()
+            .any(|call| ix.method(call).is_some_and(|(_, name)| name == "test"))
     });
     let hook_installers: Vec<usize> = (0..ix.fns.len())
         .filter(|index| {
@@ -959,11 +1169,28 @@ fn probes(ix: &Ix<'_, '_>, out: &mut Out) {
         if routines.len() < 3 {
             continue;
         }
-        out.function(ix, "inspect_callable_metadata", inspector, "reports a callable's native-text match, prototype presence and prototype deletability");
-        out.function(ix, "browser_probe_registrar", registrar, "owns the callable inspector and hands several routines to its scheduler arguments");
-        let reads: BTreeSet<SymbolId> = ix.outer_reads(&[registrar]).difference(&hook_reads).copied().collect();
+        out.function(
+            ix,
+            "inspect_callable_metadata",
+            inspector,
+            "reports a callable's native-text match, prototype presence and prototype deletability",
+        );
+        out.function(
+            ix,
+            "browser_probe_registrar",
+            registrar,
+            "owns the callable inspector and hands several routines to its scheduler arguments",
+        );
+        let reads: BTreeSet<SymbolId> = ix
+            .outer_reads(&[registrar])
+            .difference(&hook_reads)
+            .copied()
+            .collect();
         let reader = reads.iter().copied().find(|symbol| {
-            ix.single_origin(*symbol).and_then(|origin| ix.path(origin)).as_deref() == Some("Object.getOwnPropertyDescriptor")
+            ix.single_origin(*symbol)
+                .and_then(|origin| ix.path(origin))
+                .as_deref()
+                == Some("Object.getOwnPropertyDescriptor")
         });
         for routine in &routines {
             classify_routine(ix, out, *routine, reader);
@@ -974,14 +1201,19 @@ fn probes(ix: &Ix<'_, '_>, out: &mut Out) {
 
 fn is_error_test(ix: &Ix<'_, '_>, call: &CallExpression<'_>) -> bool {
     ix.method(call).is_some_and(|(_, name)| name == "test")
-        && ix.invocation(call).1.iter().any(|argument| member(argument).is_some_and(|(_, name)| name == "error"))
+        && ix
+            .invocation(call)
+            .1
+            .iter()
+            .any(|argument| member(argument).is_some_and(|(_, name)| name == "error"))
 }
 
 fn classify_routine(ix: &Ix<'_, '_>, out: &mut Out, routine: usize, reader: Option<SymbolId>) {
     let own = &ix.own[routine];
-    let observer = own.news.iter().find(|new| {
-        member(&new.callee).is_some_and(|(_, name)| name == "MutationObserver")
-    });
+    let observer = own
+        .news
+        .iter()
+        .find(|new| member(&new.callee).is_some_and(|(_, name)| name == "MutationObserver"));
     let last_chance = own.calls.iter().any(|call| is_error_test(ix, call));
     let reads_descriptors = own
         .calls
@@ -989,27 +1221,64 @@ fn classify_routine(ix: &Ix<'_, '_>, out: &mut Out, routine: usize, reader: Opti
         .filter(|call| reader.is_some() && ix.symbol(&call.callee) == reader)
         .count();
     let builds_frame = own.calls.iter().any(|call| {
-        ix.invocation(call).1.iter().any(|argument| string_value(argument) == Some("iframe"))
+        ix.invocation(call)
+            .1
+            .iter()
+            .any(|argument| string_value(argument) == Some("iframe"))
     });
     if builds_frame {
-        out.function(ix, "frame_probe_routine", routine, "builds a temporary iframe and probes through it");
+        out.function(
+            ix,
+            "frame_probe_routine",
+            routine,
+            "builds a temporary iframe and probes through it",
+        );
         stack_getters(ix, out, routine, "frame_stack_access_getter");
     }
     if let Some(observer) = observer {
-        for callback in observer.arguments.iter().filter_map(Argument::as_expression).filter_map(|argument| ix.resolve_fn(argument)) {
-            out.function(ix, "body_attribute_mutation_handler", callback, "MutationObserver callback of a probe routine");
+        for callback in observer
+            .arguments
+            .iter()
+            .filter_map(Argument::as_expression)
+            .filter_map(|argument| ix.resolve_fn(argument))
+        {
+            out.function(
+                ix,
+                "body_attribute_mutation_handler",
+                callback,
+                "MutationObserver callback of a probe routine",
+            );
         }
     }
     if builds_frame {
         return;
     }
     if last_chance {
-        out.function(ix, "last_chance_probe_routine", routine, "tests the page's error text and queried scripts when the snapshot flushes");
+        out.function(
+            ix,
+            "last_chance_probe_routine",
+            routine,
+            "tests the page's error text and queried scripts when the snapshot flushes",
+        );
     } else if reads_descriptors >= 2 {
-        out.function(ix, "descriptor_census_routine", routine, "reads host property descriptors through the probe's captured reader");
+        out.function(
+            ix,
+            "descriptor_census_routine",
+            routine,
+            "reads host property descriptors through the probe's captured reader",
+        );
         stack_getters(ix, out, routine, "console_stack_access_getter");
-    } else if own.calls.len() == 1 && ix.method(own.calls[0]).is_some_and(|(_, name)| name == "disconnect") {
-        out.function(ix, "probe_cleanup_routine", routine, "only disconnects the attribute observer");
+    } else if own.calls.len() == 1
+        && ix
+            .method(own.calls[0])
+            .is_some_and(|(_, name)| name == "disconnect")
+    {
+        out.function(
+            ix,
+            "probe_cleanup_routine",
+            routine,
+            "only disconnects the attribute observer",
+        );
     }
 }
 
@@ -1029,7 +1298,12 @@ fn stack_getters(ix: &Ix<'_, '_>, out: &mut Out, routine: usize, role: &'static 
         for entry in object_members_of(object) {
             if entry.name == "get" {
                 if let Some(getter) = ix.resolve_fn(entry.value) {
-                    out.function(ix, role, getter, "getter defined on an error's `stack` property");
+                    out.function(
+                        ix,
+                        role,
+                        getter,
+                        "getter defined on an error's `stack` property",
+                    );
                 }
             }
         }
@@ -1079,24 +1353,51 @@ fn seeds_elapsed_times(ix: &Ix<'_, '_>, symbol: SymbolId) -> bool {
     reads > 0
 }
 
-fn probe_bindings(ix: &Ix<'_, '_>, out: &mut Out, inspector: usize, routines: &[usize], reads: &BTreeSet<SymbolId>) {
+fn probe_bindings(
+    ix: &Ix<'_, '_>,
+    out: &mut Out,
+    inspector: usize,
+    routines: &[usize],
+    reads: &BTreeSet<SymbolId>,
+) {
     for symbol in reads {
         let Some(origin) = ix.single_origin(*symbol) else {
             continue;
         };
         if let Some(path) = ix.path(origin) {
             if let Some((_, role)) = PROBE_HOST_MEMBERS.iter().find(|(host, _)| *host == path) {
-                out.binding(ix, role, *symbol, "host member captured and read by the probe registrar");
+                out.binding(
+                    ix,
+                    role,
+                    *symbol,
+                    "host member captured and read by the probe registrar",
+                );
             }
         }
         if let Expression::CallExpression(call) = strip(origin) {
-            let bound = args(call).last().is_some_and(|last| ix.path(last).as_deref() == Some("Object.prototype.hasOwnProperty"));
-            if bound && ix.path(&call.callee).is_some_and(|path| path.contains(".call.bind")) {
-                out.binding(ix, "probe_has_own_property", *symbol, "call-bound hasOwnProperty read by the probe registrar");
+            let bound = args(call).last().is_some_and(|last| {
+                ix.path(last).as_deref() == Some("Object.prototype.hasOwnProperty")
+            });
+            if bound
+                && ix
+                    .path(&call.callee)
+                    .is_some_and(|path| path.contains(".call.bind"))
+            {
+                out.binding(
+                    ix,
+                    "probe_has_own_property",
+                    *symbol,
+                    "call-bound hasOwnProperty read by the probe registrar",
+                );
             }
         }
         if is_number(origin) && seeds_elapsed_times(ix, *symbol) {
-            out.binding(ix, "probe_unavailable_elapsed_time", *symbol, "number used only to seed bindings that later hold a time delta");
+            out.binding(
+                ix,
+                "probe_unavailable_elapsed_time",
+                *symbol,
+                "number used only to seed bindings that later hold a time delta",
+            );
         }
     }
     let tested = |function: usize, filter: &dyn Fn(&CallExpression<'_>) -> bool| -> Vec<SymbolId> {
@@ -1104,18 +1405,32 @@ fn probe_bindings(ix: &Ix<'_, '_>, out: &mut Out, inspector: usize, routines: &[
             .calls
             .iter()
             .filter(|call| ix.method(call).is_some_and(|(_, name)| name == "test") && filter(call))
-            .filter_map(|call| ix.method(call).and_then(|(receiver, _)| ix.symbol(receiver)))
+            .filter_map(|call| {
+                ix.method(call)
+                    .and_then(|(receiver, _)| ix.symbol(receiver))
+            })
             .filter(|symbol| {
-                ix.origins(*symbol).is_some_and(|origins| origins.iter().any(|origin| ix.is_regexp_call(origin)))
+                ix.origins(*symbol)
+                    .is_some_and(|origins| origins.iter().any(|origin| ix.is_regexp_call(origin)))
             })
             .collect()
     };
     for symbol in tested(inspector, &|_| true) {
-        out.binding(ix, "native_function_source_pattern", symbol, "pattern the callable inspector tests against function text");
+        out.binding(
+            ix,
+            "native_function_source_pattern",
+            symbol,
+            "pattern the callable inspector tests against function text",
+        );
     }
     for routine in routines {
         for symbol in tested(*routine, &|call| is_error_test(ix, call)) {
-            out.binding(ix, "page_run_script_error_pattern", symbol, "pattern the last-chance routine tests against the page error text");
+            out.binding(
+                ix,
+                "page_run_script_error_pattern",
+                symbol,
+                "pattern the last-chance routine tests against the page error text",
+            );
         }
     }
 }

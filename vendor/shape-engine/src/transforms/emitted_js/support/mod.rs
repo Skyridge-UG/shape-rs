@@ -1,11 +1,11 @@
 //! Helpers the passes share: edit spans, who owns a node, statement lists.
 
-pub(crate) mod purity;
-pub(crate) mod primitives;
-pub(crate) mod index;
 mod edits;
+pub(crate) mod index;
 mod lists;
 mod owners;
+pub(crate) mod primitives;
+pub(crate) mod purity;
 mod syntax;
 
 pub(crate) use edits::{apply_checked, indent_at, indent_before, whole_line};

@@ -253,7 +253,10 @@ pub(super) fn block<'a>(statement: &'a Statement<'a>) -> Option<&'a [Statement<'
 }
 
 /// A plain `var`/`let`/`const` declarator bound to exactly this symbol.
-pub(super) fn plain_local(model: &Model<'_, '_>, variable: &VariableDeclarator<'_>) -> Option<Symbol> {
+pub(super) fn plain_local(
+    model: &Model<'_, '_>,
+    variable: &VariableDeclarator<'_>,
+) -> Option<Symbol> {
     let BindingPattern::BindingIdentifier(identifier) = &variable.id else {
         return None;
     };

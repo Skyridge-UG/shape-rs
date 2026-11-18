@@ -109,11 +109,8 @@ fn shape(model: &Model<'_, '_>, site: FunctionSite) -> Option<Cleanup> {
     {
         return None;
     }
-    let [
-        click,
-        Statement::IfStatement(enabled),
-        Statement::IfStatement(head),
-    ] = t.block.body.as_slice()
+    let [click, Statement::IfStatement(enabled), Statement::IfStatement(head)] =
+        t.block.body.as_slice()
     else {
         return None;
     };
@@ -552,10 +549,8 @@ fn local_value(
             }
         }
         Expression::ArrayExpression(a) => {
-            let [
-                ArrayExpressionElement::Identifier(id),
-                ArrayExpressionElement::StaticMemberExpression(m),
-            ] = a.elements.as_slice()
+            let [ArrayExpressionElement::Identifier(id), ArrayExpressionElement::StaticMemberExpression(m)] =
+                a.elements.as_slice()
             else {
                 return None;
             };
@@ -746,7 +741,11 @@ fn epoch_store<'a>(
             return None;
         }
     }
-    if sides.len() == 2 { selected } else { None }
+    if sides.len() == 2 {
+        selected
+    } else {
+        None
+    }
 }
 
 // The shared document's immediate host read needs the same producer-order
@@ -1415,10 +1414,8 @@ fn constructor(
         return None;
     }
     let p = binding(&f.params.items[0].pattern)?;
-    let [
-        Statement::ClassDeclaration(derived),
-        Statement::ReturnStatement(ret),
-    ] = f.body.as_ref()?.statements.as_slice()
+    let [Statement::ClassDeclaration(derived), Statement::ReturnStatement(ret)] =
+        f.body.as_ref()?.statements.as_slice()
     else {
         return None;
     };

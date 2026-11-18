@@ -61,9 +61,11 @@ use serde::{Deserialize, Serialize};
 use super::encoding::EncodingProperties;
 use super::inputs::{extract_program_inputs, ProgramInputError, ProgramInputReport};
 use super::reaching;
-use crate::signals::extract::layout::{span_serde, BufferAccounting, EmissionVariant, ObserverRoute};
 use super::wiring::{
     CallbackInvocationWiring, EmitterMethod, LifecycleRole, LifecycleWiring, WiringProperties,
+};
+use crate::signals::extract::layout::{
+    span_serde, BufferAccounting, EmissionVariant, ObserverRoute,
 };
 use crate::signals::schema::{SourceIdentity, SourceSpan};
 
@@ -295,7 +297,9 @@ impl GrammarNode {
     pub fn walk_mut(&mut self, visit: &mut impl FnMut(&mut GrammarNode)) {
         visit(self);
         match self {
-            GrammarNode::Sequence { items } => items.iter_mut().for_each(|item| item.walk_mut(visit)),
+            GrammarNode::Sequence { items } => {
+                items.iter_mut().for_each(|item| item.walk_mut(visit))
+            }
             GrammarNode::Choice { arms, .. } => {
                 arms.iter_mut().for_each(|arm| arm.body.walk_mut(visit))
             }
@@ -506,7 +510,8 @@ impl Provenance {
     }
 
     pub(crate) fn finish(mut self) -> Self {
-        let classes: BTreeSet<SourceClass> = self.sources.iter().map(|source| source.class).collect();
+        let classes: BTreeSet<SourceClass> =
+            self.sources.iter().map(|source| source.class).collect();
         self.classes = classes.into_iter().collect();
         self
     }
@@ -708,7 +713,9 @@ pub struct ProvenanceMismatch {
 
 impl SignalContractReport {
     pub fn signal(&self, descriptor: u32) -> Option<&SignalContract> {
-        self.signals.iter().find(|signal| signal.descriptor == descriptor)
+        self.signals
+            .iter()
+            .find(|signal| signal.descriptor == descriptor)
     }
 }
 
@@ -800,7 +807,13 @@ pub fn signal_contracts_from_inputs(
             helper_owner: None,
             helper_arguments: Vec::new(),
         };
-        signals.push(build_contract(source, inputs, descriptor, producer, &mut walker));
+        signals.push(build_contract(
+            source,
+            inputs,
+            descriptor,
+            producer,
+            &mut walker,
+        ));
     }
     let coverage = coverage_of(&signals);
     Ok(SignalContractReport {
@@ -947,7 +960,11 @@ fn argument_roles(invocation: Option<&CallbackInvocationWiring>) -> Vec<Lifecycl
 fn phase_at(registrations: &[Registration], span: SourceSpan) -> Option<LifecycleRole> {
     registrations
         .iter()
-        .filter_map(|registration| registration.callback.map(|callback| (registration.role, callback)))
+        .filter_map(|registration| {
+            registration
+                .callback
+                .map(|callback| (registration.role, callback))
+        })
         .filter(|(_, callback)| callback.start <= span.start && span.end <= callback.end)
         .min_by_key(|(_, callback)| callback.end - callback.start)
         .map(|(role, _)| role)
@@ -977,7 +994,12 @@ fn lifecycle_sites(
         .groups
         .iter()
         .flat_map(|group| group.local_emitters.iter())
-        .chain(wiring.direct_routes.iter().flat_map(|route| route.local_emitters.iter()))
+        .chain(
+            wiring
+                .direct_routes
+                .iter()
+                .flat_map(|route| route.local_emitters.iter()),
+        )
         .filter(|emitter| emitter.global_signal == Some(descriptor));
     let mut sites = Vec::new();
     let mut next_sites = Vec::new();
@@ -1018,12 +1040,16 @@ fn build_contract(
     let layout = inputs.signals.signal(descriptor);
     let mut emissions = Vec::new();
     let mut classes = BTreeSet::new();
-    for emission in layout.map(|layout| layout.emissions.as_slice()).unwrap_or_default() {
+    for emission in layout
+        .map(|layout| layout.emissions.as_slice())
+        .unwrap_or_default()
+    {
         let site = SourceSpan::new(emission.origin.start, emission.origin.end);
         let mut grammar = emission.grammar.clone();
         grammar.walk_mut(&mut |node| {
-            if let GrammarNode::Number(write) | GrammarNode::String(write) | GrammarNode::Byte(write) =
-                node
+            if let GrammarNode::Number(write)
+            | GrammarNode::String(write)
+            | GrammarNode::Byte(write) = node
             {
                 let provenance = walker.provenance_with(
                     write.value_span,
@@ -1139,11 +1165,15 @@ fn build_contract(
             }
         }
     }
-    let covered_next_sites: BTreeSet<(u32, u32)> = emissions.iter()
+    let covered_next_sites: BTreeSet<(u32, u32)> = emissions
+        .iter()
         .flat_map(|emission| std::iter::once(&emission.site).chain(&emission.forwarding_sites))
-        .map(|site| (site.start, site.end)).collect();
-    let missing_next_sites: Vec<_> = wiring_next_sites.iter()
-        .filter(|site| !covered_next_sites.contains(&(site.start, site.end))).collect();
+        .map(|site| (site.start, site.end))
+        .collect();
+    let missing_next_sites: Vec<_> = wiring_next_sites
+        .iter()
+        .filter(|site| !covered_next_sites.contains(&(site.start, site.end)))
+        .collect();
     if !missing_next_sites.is_empty() {
         reasons.push(ContractReason {
             code: "emitter_next_site_not_reconstructed".into(),
@@ -1183,7 +1213,9 @@ fn build_contract(
     } else {
         ContractStatus::Partial
     };
-    reasons.sort_by(|a, b| (a.code.as_str(), a.span.map(|s| s.start)).cmp(&(b.code.as_str(), b.span.map(|s| s.start))));
+    reasons.sort_by(|a, b| {
+        (a.code.as_str(), a.span.map(|s| s.start)).cmp(&(b.code.as_str(), b.span.map(|s| s.start)))
+    });
     reasons.dedup();
     SignalContract {
         descriptor,
@@ -1219,15 +1251,25 @@ fn coverage_of(signals: &[SignalContract]) -> ContractCoverage {
             emission.grammar.walk(&mut |node| match node {
                 GrammarNode::Opaque { .. } => coverage.opaque_boundaries += 1,
                 GrammarNode::Unresolved { .. } => coverage.unresolved_nodes += 1,
-                GrammarNode::Number(write) | GrammarNode::String(write) | GrammarNode::Byte(write) => {
-                    if write.provenance.as_ref().is_some_and(|provenance| provenance.truncated) {
+                GrammarNode::Number(write)
+                | GrammarNode::String(write)
+                | GrammarNode::Byte(write) => {
+                    if write
+                        .provenance
+                        .as_ref()
+                        .is_some_and(|provenance| provenance.truncated)
+                    {
                         coverage.provenance_truncated += 1;
                     }
                 }
                 _ => {}
             });
         }
-        let codes: BTreeSet<&str> = signal.reasons.iter().map(|reason| reason.code.as_str()).collect();
+        let codes: BTreeSet<&str> = signal
+            .reasons
+            .iter()
+            .map(|reason| reason.code.as_str())
+            .collect();
         for code in codes {
             *coverage.reasons.entry(code.to_string()).or_default() += 1;
         }
@@ -1272,11 +1314,15 @@ impl<'a> ExpressionIndex<'a> {
             }
             fn visit_assignment_expression(&mut self, assignment: &AssignmentExpression<'a>) {
                 let key = match &assignment.left {
-                    AssignmentTarget::StaticMemberExpression(member) => Some(member.property.name.to_string()),
-                    AssignmentTarget::ComputedMemberExpression(member) => match member.expression.without_parentheses() {
-                        Expression::StringLiteral(literal) => Some(literal.value.to_string()),
-                        _ => None,
-                    },
+                    AssignmentTarget::StaticMemberExpression(member) => {
+                        Some(member.property.name.to_string())
+                    }
+                    AssignmentTarget::ComputedMemberExpression(member) => {
+                        match member.expression.without_parentheses() {
+                            Expression::StringLiteral(literal) => Some(literal.value.to_string()),
+                            _ => None,
+                        }
+                    }
                     _ => None,
                 };
                 if let (Some(key), AssignmentOperator::Assign) = (key, assignment.operator) {
@@ -1296,7 +1342,9 @@ impl<'a> ExpressionIndex<'a> {
                 // SAFETY of lifetime: every expression visited is owned by the
                 // arena-allocated program borrowed for 'a.
                 let expression: &'a Expression<'a> = unsafe { &*(expression as *const _) };
-                self.by_span.entry((span.start, span.end)).or_insert(expression);
+                self.by_span
+                    .entry((span.start, span.end))
+                    .or_insert(expression);
                 walk::walk_expression(self, expression);
             }
         }
@@ -1369,35 +1417,114 @@ const PROVENANCE_MAX_DEFINITIONS: usize = 8;
 /// Standard host globals whose member paths are host observations. These are
 /// Web platform API names, not program-generated names.
 const HOST_ROOTS: &[&str] = &[
-    "navigator", "document", "window", "screen", "location", "history", "performance",
-    "crypto", "localStorage", "sessionStorage", "indexedDB", "chrome", "external",
-    "devicePixelRatio", "visualViewport", "Intl", "WebAssembly", "Notification",
-    "matchMedia", "speechSynthesis", "globalThis", "self", "top", "parent", "frames",
+    "navigator",
+    "document",
+    "window",
+    "screen",
+    "location",
+    "history",
+    "performance",
+    "crypto",
+    "localStorage",
+    "sessionStorage",
+    "indexedDB",
+    "chrome",
+    "external",
+    "devicePixelRatio",
+    "visualViewport",
+    "Intl",
+    "WebAssembly",
+    "Notification",
+    "matchMedia",
+    "speechSynthesis",
+    "globalThis",
+    "self",
+    "top",
+    "parent",
+    "frames",
 ];
 
 /// Other standard ECMAScript / Web globals. A bare read of one of these is a
 /// platform read, never evidence of a folded program-environment value.
 const PLATFORM_GLOBALS: &[&str] = &[
-    "global", "Date", "Symbol", "Promise", "Proxy", "Reflect", "Error", "TypeError", "Function",
-    "Uint8Array", "Int8Array", "Uint16Array", "Int16Array", "Uint32Array", "Int32Array",
-    "Float32Array", "Float64Array", "ArrayBuffer", "DataView", "Map", "Set", "WeakMap", "WeakSet",
-    "TextEncoder", "TextDecoder", "Blob", "URL", "Image", "Audio", "Worker", "XMLHttpRequest",
-    "fetch", "setTimeout", "clearTimeout", "setInterval", "clearInterval", "requestAnimationFrame",
-    "queueMicrotask", "MutationObserver", "Event", "CustomEvent", "eval", "BigInt", "undefined",
+    "global",
+    "Date",
+    "Symbol",
+    "Promise",
+    "Proxy",
+    "Reflect",
+    "Error",
+    "TypeError",
+    "Function",
+    "Uint8Array",
+    "Int8Array",
+    "Uint16Array",
+    "Int16Array",
+    "Uint32Array",
+    "Int32Array",
+    "Float32Array",
+    "Float64Array",
+    "ArrayBuffer",
+    "DataView",
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "TextEncoder",
+    "TextDecoder",
+    "Blob",
+    "URL",
+    "Image",
+    "Audio",
+    "Worker",
+    "XMLHttpRequest",
+    "fetch",
+    "setTimeout",
+    "clearTimeout",
+    "setInterval",
+    "clearInterval",
+    "requestAnimationFrame",
+    "queueMicrotask",
+    "MutationObserver",
+    "Event",
+    "CustomEvent",
+    "eval",
+    "BigInt",
+    "undefined",
 ];
 
 /// Pure built-ins: a call or member read of these transforms its operands.
 const PURE_BUILTINS: &[&str] = &[
-    "Math", "Number", "String", "Boolean", "parseInt", "parseFloat", "isNaN", "isFinite",
-    "Object", "Array", "JSON", "encodeURIComponent", "decodeURIComponent", "escape", "unescape",
-    "btoa", "atob", "RegExp",
+    "Math",
+    "Number",
+    "String",
+    "Boolean",
+    "parseInt",
+    "parseFloat",
+    "isNaN",
+    "isFinite",
+    "Object",
+    "Array",
+    "JSON",
+    "encodeURIComponent",
+    "decodeURIComponent",
+    "escape",
+    "unescape",
+    "btoa",
+    "atob",
+    "RegExp",
 ];
 
 /// Function and arrow nodes by their span start.
 fn function_nodes(nodes: &AstNodes<'_>) -> HashMap<u32, NodeId> {
     nodes
         .iter()
-        .filter(|node| matches!(node.kind(), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+        .filter(|node| {
+            matches!(
+                node.kind(),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            )
+        })
         .map(|node| (node.kind().span().start, node.id()))
         .collect()
 }
@@ -1435,8 +1562,8 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
     ) -> Provenance {
         let previous_owner = self.helper_owner;
         let previous_arguments = std::mem::take(&mut self.helper_arguments);
-        self.helper_owner = via_helper
-            .and_then(|call| self.helper_owner(Span::new(call.start, call.end)));
+        self.helper_owner =
+            via_helper.and_then(|call| self.helper_owner(Span::new(call.start, call.end)));
         self.helper_arguments = helper_arguments.to_vec();
         let provenance = self.provenance(value);
         self.helper_owner = previous_owner;
@@ -1451,9 +1578,15 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             return None;
         };
         let owner = self.helper_owner?;
-        let symbol = self.scoping.get_reference(identifier.reference_id.get()?).symbol_id()?;
+        let symbol = self
+            .scoping
+            .get_reference(identifier.reference_id.get()?)
+            .symbol_id()?;
         let declaration = self.scoping.symbol_declaration(symbol);
-        if !matches!(self.nodes.kind(declaration), AstKind::FormalParameter(_) | AstKind::FormalParameters(_)) {
+        if !matches!(
+            self.nodes.kind(declaration),
+            AstKind::FormalParameter(_) | AstKind::FormalParameters(_)
+        ) {
             return None;
         }
         let function = enclosing_function(self.nodes, declaration)?;
@@ -1461,12 +1594,24 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             return None;
         }
         let declaration_span = self.nodes.get_node(declaration).span();
-        let AstKind::FormalParameters(parameters) = self.nodes.kind(self.nodes.parent_id(declaration)) else {
+        let AstKind::FormalParameters(parameters) =
+            self.nodes.kind(self.nodes.parent_id(declaration))
+        else {
             return None;
         };
-        let position = parameters.items.iter().position(|parameter| parameter.span == declaration_span)?;
-        let argument = self.helper_arguments.get(position).filter(|argument| !argument.is_empty())?;
-        match self.expressions.get(Span::new(argument.start, argument.end))?.without_parentheses() {
+        let position = parameters
+            .items
+            .iter()
+            .position(|parameter| parameter.span == declaration_span)?;
+        let argument = self
+            .helper_arguments
+            .get(position)
+            .filter(|argument| !argument.is_empty())?;
+        match self
+            .expressions
+            .get(Span::new(argument.start, argument.end))?
+            .without_parentheses()
+        {
             Expression::StringLiteral(literal) => Some(literal.value.to_string()),
             _ => None,
         }
@@ -1569,7 +1714,8 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         // of literal/table sources: the class set never depends on the order
         // the walk reached them in.
         if state.provenance.sources.iter().any(|source| {
-            source.class == class && (source.span == span || (source.api.is_some() && source.api == api))
+            source.class == class
+                && (source.span == span || (source.api.is_some() && source.api == api))
         }) {
             return;
         }
@@ -1653,7 +1799,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         if depth > 4 {
             return false;
         }
-        let role_at = |position: usize| self.producer_arguments.get(position) == Some(&LifecycleRole::Context);
+        let role_at = |position: usize| {
+            self.producer_arguments.get(position) == Some(&LifecycleRole::Context)
+        };
         if let Some((owner, Some(index))) = self.arguments_read(expression) {
             return Some(owner) == self.producer && role_at(index);
         }
@@ -1670,7 +1818,8 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         let declaration = self.scoping.symbol_declaration(symbol);
         let declaration_span = self.nodes.get_node(declaration).span();
         if let AstKind::FormalParameter(_) = self.nodes.kind(declaration) {
-            let owner = enclosing_function(self.nodes, declaration).map(|owner| self.nodes.get_node(owner).span());
+            let owner = enclosing_function(self.nodes, declaration)
+                .map(|owner| self.nodes.get_node(owner).span());
             let position = match self.nodes.kind(self.nodes.parent_id(declaration)) {
                 AstKind::FormalParameters(parameters) => parameters
                     .items
@@ -1700,8 +1849,17 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         let iterated = matches!(
             member_name(&call.callee).as_deref(),
             Some(
-                "map" | "forEach" | "filter" | "reduce" | "reduceRight" | "some" | "every" | "find"
-                    | "findIndex" | "flatMap" | "sort"
+                "map"
+                    | "forEach"
+                    | "filter"
+                    | "reduce"
+                    | "reduceRight"
+                    | "some"
+                    | "every"
+                    | "find"
+                    | "findIndex"
+                    | "flatMap"
+                    | "sort"
             )
         );
         let hop = DefinitionHop {
@@ -1739,8 +1897,12 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             return true;
         }
         match expression.without_parentheses() {
-            Expression::StaticMemberExpression(member) => self.host_rooted(&member.object, depth + 1),
-            Expression::ComputedMemberExpression(member) => self.host_rooted(&member.object, depth + 1),
+            Expression::StaticMemberExpression(member) => {
+                self.host_rooted(&member.object, depth + 1)
+            }
+            Expression::ComputedMemberExpression(member) => {
+                self.host_rooted(&member.object, depth + 1)
+            }
             Expression::ConditionalExpression(conditional) => {
                 self.host_rooted_or_void(&conditional.consequent, depth + 1)
                     && self.host_rooted_or_void(&conditional.alternate, depth + 1)
@@ -1761,7 +1923,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         !definitions.is_empty()
                             && definitions.len() <= 4
                             && definitions.iter().all(|definition| {
-                                definition.value.is_some_and(|value| self.host_rooted(value, depth + 1))
+                                definition
+                                    .value
+                                    .is_some_and(|value| self.host_rooted(value, depth + 1))
                             })
                     }
                 }
@@ -1789,7 +1953,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     let reference_span = self.nodes.get_node(reference.node_id()).span();
                     let parent = self.nodes.parent_id(reference.node_id());
                     if let AstKind::CallExpression(call) = self.nodes.kind(parent) {
-                        if call.arguments.iter().any(|argument| argument.span() == reference_span) {
+                        if call
+                            .arguments
+                            .iter()
+                            .any(|argument| argument.span() == reference_span)
+                        {
                             calls.push(call);
                         }
                     }
@@ -1808,7 +1976,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             }
             current = parent;
             if let AstKind::CallExpression(call) = self.nodes.kind(current) {
-                return call.arguments.iter().any(|argument| argument.span() == span).then_some(call);
+                return call
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.span() == span)
+                    .then_some(call);
             }
         }
         None
@@ -1819,10 +1991,22 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             .is_some_and(|producer| producer.start <= span.start && span.end <= producer.end)
     }
 
-    fn walk(&mut self, expression: &'a Expression<'a>, depth: usize, via: &[DefinitionHop], state: &mut WalkState) {
+    fn walk(
+        &mut self,
+        expression: &'a Expression<'a>,
+        depth: usize,
+        via: &[DefinitionHop],
+        state: &mut WalkState,
+    ) {
         if depth > PROVENANCE_MAX_DEPTH {
             state.provenance.truncated = true;
-            self.push(state, SourceClass::Opaque, expression.span(), Some("depth limit".into()), via);
+            self.push(
+                state,
+                SourceClass::Opaque,
+                expression.span(),
+                Some("depth limit".into()),
+                via,
+            );
             return;
         }
         let next = depth + 1;
@@ -1853,7 +2037,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     .filter(|element| !is_static_literal(element))
                     .collect();
                 if dynamic.is_empty() {
-                    self.push(state, SourceClass::SourceTable, expression.span(), None, via);
+                    self.push(
+                        state,
+                        SourceClass::SourceTable,
+                        expression.span(),
+                        None,
+                        via,
+                    );
                 } else {
                     self.transform(state, "array");
                     for element in dynamic {
@@ -1861,21 +2051,33 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     }
                 }
             }
-            Expression::ObjectExpression(_) => {
-                self.push(state, SourceClass::SourceTable, expression.span(), None, via)
+            Expression::ObjectExpression(_) => self.push(
+                state,
+                SourceClass::SourceTable,
+                expression.span(),
+                None,
+                via,
+            ),
+            Expression::Identifier(identifier) => {
+                self.walk_identifier(identifier, expression, depth, via, state)
             }
-            Expression::Identifier(identifier) => self.walk_identifier(identifier, expression, depth, via, state),
             Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_) => {
                 self.walk_member(expression, depth, via, state)
             }
-            Expression::CallExpression(call) => self.walk_call(call, expression.span(), depth, via, state),
+            Expression::CallExpression(call) => {
+                self.walk_call(call, expression.span(), depth, via, state)
+            }
             Expression::NewExpression(new) => {
                 let callee = root_global_name(&new.callee, self.scoping);
                 let callee = callee.filter(|_| !self.is_context_value(&new.callee, 0));
                 match callee.as_deref() {
-                    Some("Date") if new.arguments.is_empty() => {
-                        self.push(state, SourceClass::HostClock, expression.span(), Some("new Date()".into()), via)
-                    }
+                    Some("Date") if new.arguments.is_empty() => self.push(
+                        state,
+                        SourceClass::HostClock,
+                        expression.span(),
+                        Some("new Date()".into()),
+                        via,
+                    ),
                     Some(name) => {
                         self.transform(state, format!("new {name}"));
                         if new.arguments.is_empty() || !PURE_BUILTINS.contains(&name) {
@@ -1894,13 +2096,20 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         }
                     }
                     None if self.host_rooted(&new.callee, 0) => {
-                        let path = member_path(&new.callee).unwrap_or_else(|| self.text(new.callee.span()));
+                        let path = member_path(&new.callee)
+                            .unwrap_or_else(|| self.text(new.callee.span()));
                         let class = if path == "Date" || path.ends_with(".Date") {
                             SourceClass::HostClock
                         } else {
                             SourceClass::HostObservation
                         };
-                        self.push(state, class, expression.span(), Some(format!("new {path}")), via);
+                        self.push(
+                            state,
+                            class,
+                            expression.span(),
+                            Some(format!("new {path}")),
+                            via,
+                        );
                         for argument in &new.arguments {
                             if let Some(argument) = argument.as_expression() {
                                 self.walk(argument, next, via, state);
@@ -1957,7 +2166,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             }
             Expression::UpdateExpression(_) => {
                 self.transform(state, "update");
-                self.push(state, SourceClass::LoopIteration, expression.span(), None, via);
+                self.push(
+                    state,
+                    SourceClass::LoopIteration,
+                    expression.span(),
+                    None,
+                    via,
+                );
             }
             _ => self.push(state, SourceClass::Opaque, expression.span(), None, via),
         }
@@ -1981,7 +2196,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 "undefined" | "NaN" | "Infinity" => {
                     self.push(state, SourceClass::Literal, span, None, via)
                 }
-                name => self.push(state, SourceClass::HostObservation, span, Some(name.to_string()), via),
+                name => self.push(
+                    state,
+                    SourceClass::HostObservation,
+                    span,
+                    Some(name.to_string()),
+                    via,
+                ),
             }
             return;
         };
@@ -2021,7 +2242,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                             flow: "helper_argument".into(),
                         };
                         let via = [via, std::slice::from_ref(&hop)].concat();
-                        match self.expressions.get(Span::new(argument.start, argument.end)) {
+                        match self
+                            .expressions
+                            .get(Span::new(argument.start, argument.end))
+                        {
                             Some(expression) => self.walk(expression, depth + 1, &via, state),
                             None => self.push(
                                 state,
@@ -2043,8 +2267,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         via,
                     ),
                     _ => {
-                        let call = enclosing_function(self.nodes, declaration)
-                            .and_then(|function| self.callback_call(function).map(|call| (function, call)));
+                        let call =
+                            enclosing_function(self.nodes, declaration).and_then(|function| {
+                                self.callback_call(function).map(|call| (function, call))
+                            });
                         match call {
                             Some((function, call)) => {
                                 let function_span = self.nodes.get_node(function).span();
@@ -2071,13 +2297,25 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 return;
             }
             AstKind::Function(_) | AstKind::Class(_) => {
-                self.push(state, SourceClass::ProgramCall, span, Some(format!("function {name}")), via);
+                self.push(
+                    state,
+                    SourceClass::ProgramCall,
+                    span,
+                    Some(format!("function {name}")),
+                    via,
+                );
                 return;
             }
             _ => {}
         }
         if self.is_loop_binding(declaration) {
-            self.push(state, SourceClass::LoopIteration, span, Some(name.clone()), via);
+            self.push(
+                state,
+                SourceClass::LoopIteration,
+                span,
+                Some(name.clone()),
+                via,
+            );
             if let Some(iterated) = self.iterated_value(declaration) {
                 self.transform(state, "iterate");
                 let hop = DefinitionHop {
@@ -2092,7 +2330,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         }
         let shared = !self.inside_producer(declaration_span);
         // A single proven reaching definition first.
-        if let Ok(definition) = reaching::expression_value_at_use(self.scoping, self.nodes, expression) {
+        if let Ok(definition) =
+            reaching::expression_value_at_use(self.scoping, self.nodes, expression)
+        {
             let hop = DefinitionHop {
                 binding: name,
                 definition: definition.value.span(),
@@ -2107,7 +2347,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         // the arms' writes that reach the read, not every value the binding
         // ever held. A local whose every definition reaches keeps the
         // all-definitions walk below (with its branch-join test).
-        if let Ok(reaching) = reaching::expression_definitions_at_use(self.scoping, self.nodes, expression) {
+        if let Ok(reaching) =
+            reaching::expression_definitions_at_use(self.scoping, self.nodes, expression)
+        {
             if reaching.len() < definitions.len() {
                 for definition in reaching {
                     let hop = DefinitionHop {
@@ -2122,21 +2364,35 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             }
         }
         if definitions.is_empty() {
-            self.push(state, SourceClass::Opaque, span, Some(format!("{name}: no definition")), via);
+            self.push(
+                state,
+                SourceClass::Opaque,
+                span,
+                Some(format!("{name}: no definition")),
+                via,
+            );
             return;
         }
         if shared && definitions.len() > 1 {
             // Mutable state owned outside the producer: the value at emission
             // time depends on whatever ran before.
-            self.push(state, SourceClass::SharedState, span, Some(name.clone()), via);
+            self.push(
+                state,
+                SourceClass::SharedState,
+                span,
+                Some(name.clone()),
+                via,
+            );
         }
         if definitions.len() > PROVENANCE_MAX_DEFINITIONS {
             state.provenance.truncated = true;
         }
         let owner = enclosing_function(self.nodes, declaration);
-        let containers = definitions
-            .iter()
-            .any(|definition| definition.value.is_some_and(|value| self.is_container_value(value, 0)));
+        let containers = definitions.iter().any(|definition| {
+            definition
+                .value
+                .is_some_and(|value| self.is_container_value(value, 0))
+        });
         if containers {
             self.walk_container_contents(symbol, &name, depth, via, state);
         }
@@ -2162,7 +2418,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 }
                 None => {
                     self.transform(state, "count");
-                    self.push(state, SourceClass::LoopIteration, definition.span, Some(name.clone()), &via);
+                    self.push(
+                        state,
+                        SourceClass::LoopIteration,
+                        definition.span,
+                        Some(name.clone()),
+                        &via,
+                    );
                 }
             }
             // An accumulating write takes its effect from the conditions that
@@ -2177,7 +2439,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
     /// binding declared without an initializer: each definition is a plain
     /// value write, the nearest enclosing `if` of each (below the
     /// declaration's scope) is the same statement, and both arms write.
-    fn branch_join_test(&self, declaration: NodeId, definitions: &[Definition<'a>]) -> Option<&'a Expression<'a>> {
+    fn branch_join_test(
+        &self,
+        declaration: NodeId,
+        definitions: &[Definition<'a>],
+    ) -> Option<&'a Expression<'a>> {
         let AstKind::VariableDeclarator(declarator) = self.nodes.kind(declaration) else {
             return None;
         };
@@ -2203,7 +2469,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         if contains(statement.consequent.span(), child_span) {
                             break Some((parent, statement, 0));
                         }
-                        if statement.alternate.as_ref().is_some_and(|alternate| contains(alternate.span(), child_span)) {
+                        if statement
+                            .alternate
+                            .as_ref()
+                            .is_some_and(|alternate| contains(alternate.span(), child_span))
+                        {
                             break Some((parent, statement, 1));
                         }
                         return None;
@@ -2280,7 +2550,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         break;
                     }
                     AstKind::CallExpression(call) if call.callee.span() == member_span => {
-                        if matches!(member_name(&call.callee).as_deref(), Some("push" | "unshift" | "splice" | "set" | "add")) {
+                        if matches!(
+                            member_name(&call.callee).as_deref(),
+                            Some("push" | "unshift" | "splice" | "set" | "add")
+                        ) {
                             self.transform(state, "store");
                             for argument in &call.arguments {
                                 if let Some(argument) = argument.as_expression() {
@@ -2335,7 +2608,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     self.walk(&conditional.test, depth + 1, via, state);
                     guards += 1;
                 }
-                AstKind::LogicalExpression(logical) if contains(logical.right.span(), child_span) => {
+                AstKind::LogicalExpression(logical)
+                    if contains(logical.right.span(), child_span) =>
+                {
                     self.transform(state, "guard");
                     self.walk(&logical.left, depth + 1, via, state);
                     guards += 1;
@@ -2399,9 +2674,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 };
                 let definitions = self.definitions(symbol);
                 !definitions.is_empty()
-                    && definitions
-                        .iter()
-                        .all(|definition| definition.value.is_some_and(|value| self.is_container_value(value, depth + 1)))
+                    && definitions.iter().all(|definition| {
+                        definition
+                            .value
+                            .is_some_and(|value| self.is_container_value(value, depth + 1))
+                    })
             }
             _ => false,
         }
@@ -2424,7 +2701,12 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                         position
                             .and_then(|position| array.elements.get(position))
                             .and_then(|element| element.as_expression())
-                            .filter(|_| array.elements.iter().all(|element| element.as_expression().is_some()))
+                            .filter(|_| {
+                                array
+                                    .elements
+                                    .iter()
+                                    .all(|element| element.as_expression().is_some())
+                            })
                     }
                     _ => Some(init),
                 };
@@ -2487,10 +2769,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 AstKind::ForInStatement(_) | AstKind::ForOfStatement(_) => return true,
                 AstKind::ForStatement(statement) => {
                     let declaration_span = self.nodes.get_node(declaration).span();
-                    return statement
-                        .init
-                        .as_ref()
-                        .is_some_and(|init| init.span().start <= declaration_span.start && declaration_span.end <= init.span().end);
+                    return statement.init.as_ref().is_some_and(|init| {
+                        init.span().start <= declaration_span.start
+                            && declaration_span.end <= init.span().end
+                    });
                 }
                 _ => {}
             }
@@ -2533,7 +2815,8 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             .reference_id
             .get()
             .and_then(|reference| self.scoping.get_reference(reference).symbol_id())?;
-        let pair = reaching::expression_value_at_use(self.scoping, self.nodes, &member.object).ok()?;
+        let pair =
+            reaching::expression_value_at_use(self.scoping, self.nodes, &member.object).ok()?;
         let Expression::ArrayExpression(array) = pair.value.without_parentheses() else {
             return None;
         };
@@ -2550,7 +2833,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
             let parent = self.nodes.parent_id(reference.node_id());
             let indexed = match self.nodes.kind(parent) {
                 AstKind::ComputedMemberExpression(use_) => {
-                    use_.object.span() == read && matches!(use_.expression.without_parentheses(), Expression::NumericLiteral(_))
+                    use_.object.span() == read
+                        && matches!(
+                            use_.expression.without_parentheses(),
+                            Expression::NumericLiteral(_)
+                        )
                 }
                 // A test (`t == null`, `!t`, `typeof t`) cannot change it.
                 AstKind::BinaryExpression(_) | AstKind::UnaryExpression(_) => continue,
@@ -2583,30 +2870,48 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         array.elements.get(index.value as usize)?.as_expression()
     }
 
-    fn walk_member(&mut self, expression: &'a Expression<'a>, depth: usize, via: &[DefinitionHop], state: &mut WalkState) {
+    fn walk_member(
+        &mut self,
+        expression: &'a Expression<'a>,
+        depth: usize,
+        via: &[DefinitionHop],
+        state: &mut WalkState,
+    ) {
         let (object, property, key) = match expression.without_parentheses() {
             Expression::StaticMemberExpression(member) => {
                 (&member.object, Some(member.property.name.to_string()), None)
             }
-            Expression::ComputedMemberExpression(member) => match member.expression.without_parentheses() {
-                Expression::StringLiteral(literal) => (&member.object, Some(literal.value.to_string()), None),
-                key => match self.helper_formal_string(key) {
-                    // `o[f]` in a helper whose caller passes a string for `f`.
-                    Some(name) => (&member.object, Some(name), None),
-                    None => (&member.object, None, Some(&member.expression)),
-                },
-            },
+            Expression::ComputedMemberExpression(member) => {
+                match member.expression.without_parentheses() {
+                    Expression::StringLiteral(literal) => {
+                        (&member.object, Some(literal.value.to_string()), None)
+                    }
+                    key => match self.helper_formal_string(key) {
+                        // `o[f]` in a helper whose caller passes a string for `f`.
+                        Some(name) => (&member.object, Some(name), None),
+                        None => (&member.object, None, Some(&member.expression)),
+                    },
+                }
+            }
             _ => return,
         };
         if let Some(element) = self.tuple_element(expression) {
             self.walk(element, depth + 1, via, state);
             return;
         }
-        if let Some(property) = property.as_ref().filter(|_| self.is_context_value(object, 0)) {
+        if let Some(property) = property
+            .as_ref()
+            .filter(|_| self.is_context_value(object, 0))
+        {
             // A field of the producer context object: follow the values the
             // program stores under that field name (object literals and
             // member stores), a flow-insensitive field approximation.
-            let candidates = self.expressions.fields.get(property).cloned().unwrap_or_default();
+            let candidates = self
+                .expressions
+                .fields
+                .get(property)
+                .cloned()
+                .unwrap_or_default();
             if candidates.is_empty() || candidates.len() > 4 {
                 self.push(
                     state,
@@ -2635,10 +2940,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     self.push_producer_argument(state, expression.span(), index, via)
                 }
                 _ => {
-                    let call = self
-                        .function_nodes
-                        .get(&owner.start)
-                        .and_then(|function| self.callback_call(*function).map(|call| (owner, call)));
+                    let call = self.function_nodes.get(&owner.start).and_then(|function| {
+                        self.callback_call(*function).map(|call| (owner, call))
+                    });
                     match call {
                         Some((function_span, call)) => self.walk_callback_source(
                             call,
@@ -2678,7 +2982,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         }
         if let Some(path) = member_path(expression) {
             if path.split('.').any(|segment| HOST_ROOTS.contains(&segment)) {
-                self.push(state, SourceClass::HostObservation, expression.span(), Some(path), via);
+                self.push(
+                    state,
+                    SourceClass::HostObservation,
+                    expression.span(),
+                    Some(path),
+                    via,
+                );
                 if let Some(key) = key {
                     self.walk(key, depth + 1, via, state);
                 }
@@ -2712,8 +3022,11 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         if invoke.property.name != "call" {
             return None;
         }
-        let pair_read = |expression: &'a Expression<'a>, index: f64| -> Option<&'a IdentifierReference<'a>> {
-            let Expression::ComputedMemberExpression(member) = expression.without_parentheses() else {
+        let pair_read = |expression: &'a Expression<'a>,
+                         index: f64|
+         -> Option<&'a IdentifierReference<'a>> {
+            let Expression::ComputedMemberExpression(member) = expression.without_parentheses()
+            else {
                 return None;
             };
             let Expression::NumericLiteral(literal) = &member.expression else {
@@ -2736,10 +3049,12 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         if symbol_of(receiver) != Some(symbol) {
             return None;
         }
-        let Expression::ComputedMemberExpression(method_read) = invoke.object.without_parentheses() else {
+        let Expression::ComputedMemberExpression(method_read) = invoke.object.without_parentheses()
+        else {
             return None;
         };
-        let pair = reaching::expression_value_at_use(self.scoping, self.nodes, &method_read.object).ok()?;
+        let pair = reaching::expression_value_at_use(self.scoping, self.nodes, &method_read.object)
+            .ok()?;
         let Expression::ArrayExpression(array) = pair.value.without_parentheses() else {
             return None;
         };
@@ -2794,7 +3109,13 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     return;
                 }
                 "Date.now" | "performance.now" => {
-                    self.push(state, SourceClass::HostClock, span, Some(format!("{path}()")), via);
+                    self.push(
+                        state,
+                        SourceClass::HostClock,
+                        span,
+                        Some(format!("{path}()")),
+                        via,
+                    );
                     return;
                 }
                 _ => {}
@@ -2804,17 +3125,30 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                 arguments(self, state);
                 return;
             }
-            self.push(state, SourceClass::HostObservation, span, Some(format!("{path}()")), via);
+            self.push(
+                state,
+                SourceClass::HostObservation,
+                span,
+                Some(format!("{path}()")),
+                via,
+            );
             arguments(self, state);
             return;
         }
-        if matches!(callee, Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_))
-            && !self.is_context_value(callee, 0)
-            && member_object_of(callee).is_some_and(|object| !matches!(object.without_parentheses(), Expression::Identifier(_)) || self.host_rooted(object, 0))
+        if matches!(
+            callee,
+            Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_)
+        ) && !self.is_context_value(callee, 0)
+            && member_object_of(callee).is_some_and(|object| {
+                !matches!(object.without_parentheses(), Expression::Identifier(_))
+                    || self.host_rooted(object, 0)
+            })
             && self.host_rooted(callee, 0)
         {
             let path = member_path(callee).unwrap_or_else(|| self.text(callee.span()));
-            let class = if path.ends_with(".now") && (path.contains("Date") || path.contains("performance")) {
+            let class = if path.ends_with(".now")
+                && (path.contains("Date") || path.contains("performance"))
+            {
                 SourceClass::HostClock
             } else {
                 SourceClass::HostObservation
@@ -2865,12 +3199,24 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                     }
                     arguments(self, state);
                 } else {
-                    self.push(state, SourceClass::HostObservation, span, Some(format!("{}()", identifier.name)), via);
+                    self.push(
+                        state,
+                        SourceClass::HostObservation,
+                        span,
+                        Some(format!("{}()", identifier.name)),
+                        via,
+                    );
                     arguments(self, state);
                 }
             }
             _ => {
-                self.push(state, SourceClass::Opaque, span, Some(self.text(callee.span())), via);
+                self.push(
+                    state,
+                    SourceClass::Opaque,
+                    span,
+                    Some(self.text(callee.span())),
+                    via,
+                );
                 arguments(self, state);
             }
         }
@@ -2892,7 +3238,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         }
         let declaration = self.scoping.symbol_declaration(symbol);
         let returned: Option<&'a Expression<'a>> = match self.nodes.kind(declaration) {
-            AstKind::Function(function) => function.body.as_ref().and_then(|body| single_return(&body.statements)),
+            AstKind::Function(function) => function
+                .body
+                .as_ref()
+                .and_then(|body| single_return(&body.statements)),
             AstKind::VariableDeclarator(_) => {
                 let definitions = self.definitions(symbol);
                 match definitions.as_slice() {
@@ -2901,7 +3250,9 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                             single_return(&arrow.body.statements).or_else(|| {
                                 if arrow.expression {
                                     match arrow.body.statements.first() {
-                                        Some(Statement::ExpressionStatement(statement)) => Some(&statement.expression),
+                                        Some(Statement::ExpressionStatement(statement)) => {
+                                            Some(&statement.expression)
+                                        }
                                         _ => None,
                                     }
                                 } else {
@@ -2909,10 +3260,14 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
                                 }
                             })
                         }
-                        Some(Expression::FunctionExpression(function)) => {
-                            function.body.as_ref().and_then(|body| single_return(&body.statements))
-                        }
-                        Some(value @ (Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_))) => {
+                        Some(Expression::FunctionExpression(function)) => function
+                            .body
+                            .as_ref()
+                            .and_then(|body| single_return(&body.statements)),
+                        Some(
+                            value @ (Expression::StaticMemberExpression(_)
+                            | Expression::ComputedMemberExpression(_)),
+                        ) => {
                             // A host function held in a local: the call reads it.
                             Some(value)
                         }
@@ -2930,7 +3285,10 @@ impl<'w, 'a> ProvenanceWalker<'w, 'a> {
         self.walk(returned, depth + 1, via, state);
         for source in &mut state.provenance.sources[before..] {
             let clock = source.api.as_deref().is_some_and(|api| {
-                api.ends_with(".now") || api.ends_with(".now()") || api == "Date" || api.ends_with(".Date")
+                api.ends_with(".now")
+                    || api.ends_with(".now()")
+                    || api == "Date"
+                    || api.ends_with(".Date")
             });
             if clock && source.class == SourceClass::HostObservation {
                 source.class = SourceClass::HostClock;
@@ -3035,15 +3393,21 @@ fn root_global_name(expression: &Expression<'_>, scoping: &Scoping) -> Option<St
 fn member_path(expression: &Expression<'_>) -> Option<String> {
     match expression.without_parentheses() {
         Expression::Identifier(identifier) => Some(identifier.name.to_string()),
-        Expression::StaticMemberExpression(member) => {
-            Some(format!("{}.{}", member_path(&member.object)?, member.property.name))
-        }
-        Expression::ComputedMemberExpression(member) => match member.expression.without_parentheses() {
-            Expression::StringLiteral(literal) => {
-                Some(format!("{}.{}", member_path(&member.object)?, literal.value))
+        Expression::StaticMemberExpression(member) => Some(format!(
+            "{}.{}",
+            member_path(&member.object)?,
+            member.property.name
+        )),
+        Expression::ComputedMemberExpression(member) => {
+            match member.expression.without_parentheses() {
+                Expression::StringLiteral(literal) => Some(format!(
+                    "{}.{}",
+                    member_path(&member.object)?,
+                    literal.value
+                )),
+                _ => Some(format!("{}[]", member_path(&member.object)?)),
             }
-            _ => Some(format!("{}[]", member_path(&member.object)?)),
-        },
+        }
         _ => None,
     }
 }
@@ -3051,10 +3415,12 @@ fn member_path(expression: &Expression<'_>) -> Option<String> {
 fn member_name(expression: &Expression<'_>) -> Option<String> {
     match expression.without_parentheses() {
         Expression::StaticMemberExpression(member) => Some(member.property.name.to_string()),
-        Expression::ComputedMemberExpression(member) => match member.expression.without_parentheses() {
-            Expression::StringLiteral(literal) => Some(literal.value.to_string()),
-            _ => None,
-        },
+        Expression::ComputedMemberExpression(member) => {
+            match member.expression.without_parentheses() {
+                Expression::StringLiteral(literal) => Some(literal.value.to_string()),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -3090,13 +3456,17 @@ pub fn pair_trace_folded_literals(report: &mut SignalContractReport, other: &Sig
         provenance_mismatches: Vec::new(),
     };
     if report.producers != other.producers {
-        summary.skipped.push((u32::MAX, "producer inventories differ".into()));
+        summary
+            .skipped
+            .push((u32::MAX, "producer inventories differ".into()));
         report.pairing = Some(summary);
         return;
     }
     for contract in &mut report.signals {
         let Some(paired) = other.signal(contract.descriptor) else {
-            summary.skipped.push((contract.descriptor, "missing in the paired trace".into()));
+            summary
+                .skipped
+                .push((contract.descriptor, "missing in the paired trace".into()));
             continue;
         };
         let kinds = |emissions: &[EmissionContract]| -> Vec<Vec<&'static str>> {
@@ -3120,8 +3490,9 @@ pub fn pair_trace_folded_literals(report: &mut SignalContractReport, other: &Sig
             let paired_writes = paired_emission.grammar.writes();
             let mut index = 0;
             emission.grammar.walk_mut(&mut |node| {
-                let (GrammarNode::Number(write) | GrammarNode::String(write) | GrammarNode::Byte(write)) =
-                    node
+                let (GrammarNode::Number(write)
+                | GrammarNode::String(write)
+                | GrammarNode::Byte(write)) = node
                 else {
                     return;
                 };
@@ -3134,8 +3505,9 @@ pub fn pair_trace_folded_literals(report: &mut SignalContractReport, other: &Sig
                 else {
                     return;
                 };
-                let is_host =
-                    |class: &SourceClass| matches!(class, SourceClass::HostObservation | SourceClass::HostClock);
+                let is_host = |class: &SourceClass| {
+                    matches!(class, SourceClass::HostObservation | SourceClass::HostClock)
+                };
                 // Bare global reads (an unbound identifier, e.g. a VM kernel
                 // global) the paired field makes and this field does not.
                 let bare_reads = |provenance: &Provenance| -> BTreeSet<String> {
@@ -3163,7 +3535,11 @@ pub fn pair_trace_folded_literals(report: &mut SignalContractReport, other: &Sig
                 let has_literal = provenance.has(SourceClass::Literal);
                 if missing.is_empty() || !has_literal {
                     if provenance.classes != other_provenance.classes {
-                        mismatches.push((write.value_span, write.value.clone(), other_write.value.clone()));
+                        mismatches.push((
+                            write.value_span,
+                            write.value.clone(),
+                            other_write.value.clone(),
+                        ));
                     }
                     return;
                 }
@@ -3201,7 +3577,11 @@ pub fn pair_trace_folded_literals(report: &mut SignalContractReport, other: &Sig
                 paired_value: there,
             });
         }
-        if folded_here && !contract.input_classes.contains(&SourceClass::HostObservation) {
+        if folded_here
+            && !contract
+                .input_classes
+                .contains(&SourceClass::HostObservation)
+        {
             contract.input_classes.push(SourceClass::HostObservation);
             contract.input_classes.sort();
         }
@@ -3296,9 +3676,7 @@ pub fn render_summary(report: &SignalContractReport) -> String {
         for emission in &contract.emissions {
             out.push_str(&format!(
                 "  @{} {:?}: {}\n",
-                emission.site.start,
-                emission.phase,
-                emission.rendered
+                emission.site.start, emission.phase, emission.rendered
             ));
         }
         for reason in &contract.reasons {

@@ -39,7 +39,9 @@ pub(super) fn collect(m: &Model<'_, '_>, constructor: Sym) -> Option<Epochs> {
     {
         return None;
     }
-    if m.nodes.iter().any(|n| matches!(n.kind(), AstKind::Program(p) if crate::naming::program::has_dynamic_scope(p))) {
+    if m.nodes.iter().any(
+        |n| matches!(n.kind(), AstKind::Program(p) if crate::naming::program::has_dynamic_scope(p)),
+    ) {
         return None;
     }
     // Keep constructor objects local and opaque. Arbitrary publication,
@@ -187,7 +189,10 @@ fn ready_use(
     // Only fully proved API function bodies qualify; eager class-definition
     // syntax and formal parameter metadata are outside every deferred span.
     // All maker calls and constructor object reads stay closed by collect/prove.
-    if deferred_bodies.iter().any(|span| span.contains_inclusive(m.nodes.kind(node).span())) {
+    if deferred_bodies
+        .iter()
+        .any(|span| span.contains_inclusive(m.nodes.kind(node).span()))
+    {
         return true;
     }
     // Reading a hoisted function to initialize a plain immutable alias need
@@ -211,7 +216,15 @@ fn ready_use(
                             deferred_bodies,
                             &mut BTreeSet::new(),
                             depth - 1,
-                        ) && ready_use(m, r.node_id(), owner, barriers, deferred_bodies, active, depth - 1)
+                        ) && ready_use(
+                            m,
+                            r.node_id(),
+                            owner,
+                            barriers,
+                            deferred_bodies,
+                            active,
+                            depth - 1,
+                        )
                     });
                     active.remove(&s);
                     return okay;
@@ -242,10 +255,17 @@ fn ready_use(
                 if !fixed(m, s) || !active.insert(s) {
                     return false;
                 }
-                let okay = m
-                    .scoping
-                    .get_resolved_references(s)
-                    .all(|r| ready_use(m, r.node_id(), owner, barriers, deferred_bodies, active, depth - 1));
+                let okay = m.scoping.get_resolved_references(s).all(|r| {
+                    ready_use(
+                        m,
+                        r.node_id(),
+                        owner,
+                        barriers,
+                        deferred_bodies,
+                        active,
+                        depth - 1,
+                    )
+                });
                 active.remove(&s);
                 return okay;
             }
@@ -300,7 +320,11 @@ pub(super) fn prove(m: &Model<'_, '_>, callee: &Expression<'_>, factory: Sym) ->
 /// operator in its deferred methods. Reuse the same epoch enumeration and
 /// readiness walk; only fully proved, single-call makers supply deferred spans.
 /// The legacy join entry keeps an empty deferred set and its exact semantics.
-pub(super) fn prove_operator(m: &Model<'_, '_>, callee: &Expression<'_>, factory: Sym) -> Option<()> {
+pub(super) fn prove_operator(
+    m: &Model<'_, '_>,
+    callee: &Expression<'_>,
+    factory: Sym,
+) -> Option<()> {
     let epochs = collect(m, id(m, callee)?)?;
     let mut deferred_bodies = Vec::new();
     for maker in &epochs.makers {
@@ -315,19 +339,35 @@ pub(super) fn prove_operator(m: &Model<'_, '_>, callee: &Expression<'_>, factory
     for r in m.scoping.get_resolved_references(factory) {
         let node = r.node_id();
         if let AstKind::VariableDeclarator(v) = m.nodes.parent_kind(node) {
-            if v.init.as_ref().is_some_and(|e| e.span() == m.nodes.kind(node).span()) {
+            if v.init
+                .as_ref()
+                .is_some_and(|e| e.span() == m.nodes.kind(node).span())
+            {
                 let alias = binding(&v.id)?;
                 let declaration = m.nodes.parent_id(m.nodes.parent_id(node));
                 if !fixed(m, alias) || m.nodes.parent_id(declaration) != epochs.owner {
                     return None;
                 }
                 if m.scoping.get_resolved_references(alias).any(|r| {
-                    matches!(m.nodes.parent_kind(r.node_id()), AstKind::VariableDeclarator(_) | AstKind::AssignmentExpression(_))
-                }) { return None; }
+                    matches!(
+                        m.nodes.parent_kind(r.node_id()),
+                        AstKind::VariableDeclarator(_) | AstKind::AssignmentExpression(_)
+                    )
+                }) {
+                    return None;
+                }
                 let barrier = BTreeSet::from([(v.span.start, v.span.end)]);
                 for maker in &epochs.makers {
                     for call in m.scoping.get_resolved_references(maker.binding_symbol?) {
-                        if !ready_use(m, call.node_id(), epochs.owner, &barrier, &[], &mut BTreeSet::new(), 32) {
+                        if !ready_use(
+                            m,
+                            call.node_id(),
+                            epochs.owner,
+                            &barrier,
+                            &[],
+                            &mut BTreeSet::new(),
+                            32,
+                        ) {
                             return None;
                         }
                     }
@@ -335,10 +375,19 @@ pub(super) fn prove_operator(m: &Model<'_, '_>, callee: &Expression<'_>, factory
             }
         }
     }
-    (fixed(m, factory) && m.scoping.get_resolved_references(factory).all(|r| {
-        ready_use(m, r.node_id(), epochs.owner, &epochs.stores, &deferred_bodies,
-            &mut BTreeSet::from([factory]), 32)
-    })).then_some(())
+    (fixed(m, factory)
+        && m.scoping.get_resolved_references(factory).all(|r| {
+            ready_use(
+                m,
+                r.node_id(),
+                epochs.owner,
+                &epochs.stores,
+                &deferred_bodies,
+                &mut BTreeSet::from([factory]),
+                32,
+            )
+        }))
+    .then_some(())
 }
 
 #[cfg(test)]

@@ -106,7 +106,9 @@ fn mentions(statement: &Statement<'_>, name: &str) -> bool {
 }
 
 /// `let x = <array or object literal>;` with a generated name.
-fn literal_declaration<'s, 'a>(statement: &'s Statement<'a>) -> Option<(&'s str, &'s Expression<'a>)> {
+fn literal_declaration<'s, 'a>(
+    statement: &'s Statement<'a>,
+) -> Option<(&'s str, &'s Expression<'a>)> {
     let Statement::VariableDeclaration(declaration) = statement else {
         return None;
     };
@@ -119,7 +121,10 @@ fn literal_declaration<'s, 'a>(statement: &'s Statement<'a>) -> Option<(&'s str,
     };
     let init = declarator.init.as_ref()?;
     (binding.name.starts_with('$')
-        && matches!(init, Expression::ArrayExpression(_) | Expression::ObjectExpression(_)))
+        && matches!(
+            init,
+            Expression::ArrayExpression(_) | Expression::ObjectExpression(_)
+        ))
     .then_some((binding.name.as_str(), init))
 }
 
@@ -152,7 +157,9 @@ fn fill<'s, 'a>(statement: &'s Statement<'a>, name: &str) -> Option<(Key, &'s Ex
             };
             (&member.object, key)
         }
-        AssignmentTarget::StaticMemberExpression(member) => (&member.object, Key::Name(member.property.name.to_string())),
+        AssignmentTarget::StaticMemberExpression(member) => {
+            (&member.object, Key::Name(member.property.name.to_string()))
+        }
         _ => return None,
     };
     if !matches!(object, Expression::Identifier(object) if object.name == name) {
@@ -166,7 +173,9 @@ fn fill<'s, 'a>(statement: &'s Statement<'a>, name: &str) -> Option<(Key, &'s Ex
 
 fn property_key(property: &ObjectProperty<'_>) -> Option<String> {
     match &property.key {
-        PropertyKey::StaticIdentifier(identifier) if !property.computed => Some(identifier.name.to_string()),
+        PropertyKey::StaticIdentifier(identifier) if !property.computed => {
+            Some(identifier.name.to_string())
+        }
         PropertyKey::StringLiteral(string) => Some(string.value.to_string()),
         _ => None,
     }
@@ -183,7 +192,11 @@ impl<'a> Nest<'a> {
     fn fold(&self, init: &mut Expression<'a>, key: Key, value: Expression<'a>) -> bool {
         match (init, key) {
             (Expression::ArrayExpression(array), Key::Index(index)) => {
-                if array.elements.iter().any(|element| matches!(element, ArrayExpressionElement::SpreadElement(_))) {
+                if array
+                    .elements
+                    .iter()
+                    .any(|element| matches!(element, ArrayExpressionElement::SpreadElement(_)))
+                {
                     return false;
                 }
                 let element = ArrayExpressionElement::from(value);
@@ -191,7 +204,10 @@ impl<'a> Nest<'a> {
                     array.elements.push(element);
                 } else if index < array.elements.len() {
                     // The old element still has to run.
-                    if array.elements[index].as_expression().is_some_and(|old| !expression_is_pure(old)) {
+                    if array.elements[index]
+                        .as_expression()
+                        .is_some_and(|old| !expression_is_pure(old))
+                    {
                         return false;
                     }
                     array.elements[index] = element;
@@ -217,7 +233,9 @@ impl<'a> Nest<'a> {
                 }
                 match found {
                     Some(at) => {
-                        let ObjectPropertyKind::ObjectProperty(property) = &mut object.properties[at] else {
+                        let ObjectPropertyKind::ObjectProperty(property) =
+                            &mut object.properties[at]
+                        else {
                             unreachable!();
                         };
                         if !expression_is_pure(&property.value) {
@@ -231,8 +249,15 @@ impl<'a> Nest<'a> {
                             self.builder.atom(&key),
                             None,
                         ));
-                        let property =
-                            self.builder.object_property_kind_object_property(SPAN, PropertyKind::Init, key, value, false, false, true);
+                        let property = self.builder.object_property_kind_object_property(
+                            SPAN,
+                            PropertyKind::Init,
+                            key,
+                            value,
+                            false,
+                            false,
+                            true,
+                        );
                         object.properties.push(property);
                     }
                 }
@@ -276,13 +301,20 @@ impl<'a> Nest<'a> {
                 at += 1;
             }
             // Nest: a pure literal read once moves to that read.
-            let pure = literal_declaration(&statements[index]).is_some_and(|(_, init)| expression_is_pure(init));
+            let pure = literal_declaration(&statements[index])
+                .is_some_and(|(_, init)| expression_is_pure(init));
             if pure && self.counts.get(&name) == Some(&1) {
-                if let Some(user) = (index + 1..statements.len()).find(|&at| mentions(&statements[at], &name)) {
+                if let Some(user) =
+                    (index + 1..statements.len()).find(|&at| mentions(&statements[at], &name))
+                {
                     let Statement::VariableDeclaration(declaration) = &statements[index] else {
                         unreachable!();
                     };
-                    let init = declaration.declarations[0].init.as_ref().unwrap().clone_in(self.builder.allocator);
+                    let init = declaration.declarations[0]
+                        .init
+                        .as_ref()
+                        .unwrap()
+                        .clone_in(self.builder.allocator);
                     let mut place = Place {
                         name: &name,
                         value: Some(init),
@@ -305,26 +337,47 @@ impl<'a> Nest<'a> {
     /// `let r = [a, Math, Math["sin"]];` only read as `r[1]`, `r[2]`: a read
     /// of a fixed element (a literal, a standard global, or a named property
     /// of one) is that element.
-    fn project(&mut self, statements: &mut oxc_allocator::Vec<'a, Statement<'a>>, index: usize, name: &str) {
-        let Some((_, Expression::ArrayExpression(array))) = literal_declaration(&statements[index]) else {
+    fn project(
+        &mut self,
+        statements: &mut oxc_allocator::Vec<'a, Statement<'a>>,
+        index: usize,
+        name: &str,
+    ) {
+        let Some((_, Expression::ArrayExpression(array))) = literal_declaration(&statements[index])
+        else {
             return;
         };
         let fixed: Vec<Option<Expression<'a>>> = array
             .elements
             .iter()
-            .map(|element| element.as_expression().filter(|e| fixed(e)).map(|e| e.clone_in(self.builder.allocator)))
+            .map(|element| {
+                element
+                    .as_expression()
+                    .filter(|e| fixed(e))
+                    .map(|e| e.clone_in(self.builder.allocator))
+            })
             .collect();
         if fixed.iter().all(Option::is_none) {
             return;
         }
-        let mut scan = Reads { name, length: fixed.len(), reads: 0, other: false };
+        let mut scan = Reads {
+            name,
+            length: fixed.len(),
+            reads: 0,
+            other: false,
+        };
         for statement in statements.iter().skip(index + 1) {
             scan.visit_statement(statement);
         }
         if scan.other || Some(&scan.reads) != self.counts.get(name) {
             return;
         }
-        let mut put = Project { allocator: self.builder.allocator, name, fixed: &fixed, replaced: 0 };
+        let mut put = Project {
+            allocator: self.builder.allocator,
+            name,
+            fixed: &fixed,
+            replaced: 0,
+        };
         for statement in statements.iter_mut().skip(index + 1) {
             put.visit_statement(statement);
         }
@@ -341,15 +394,34 @@ impl<'a> Nest<'a> {
 /// global, or a named property of one.
 fn fixed(expression: &Expression<'_>) -> bool {
     match expression {
-        Expression::NumericLiteral(_) | Expression::StringLiteral(_) | Expression::BooleanLiteral(_) | Expression::NullLiteral(_) => true,
+        Expression::NumericLiteral(_)
+        | Expression::StringLiteral(_)
+        | Expression::BooleanLiteral(_)
+        | Expression::NullLiteral(_) => true,
         Expression::Identifier(identifier) => {
-            super::super::primitives::is_stable_global(&identifier.name) && !matches!(identifier.name.as_str(), "RegExp" | "Error")
+            super::super::primitives::is_stable_global(&identifier.name)
+                && !matches!(identifier.name.as_str(), "RegExp" | "Error")
         }
-        Expression::StaticMemberExpression(member) => !member.optional && fixed(&member.object) && !matches!(member.object, Expression::NumericLiteral(_) | Expression::StringLiteral(_) | Expression::BooleanLiteral(_) | Expression::NullLiteral(_)),
+        Expression::StaticMemberExpression(member) => {
+            !member.optional
+                && fixed(&member.object)
+                && !matches!(
+                    member.object,
+                    Expression::NumericLiteral(_)
+                        | Expression::StringLiteral(_)
+                        | Expression::BooleanLiteral(_)
+                        | Expression::NullLiteral(_)
+                )
+        }
         Expression::ComputedMemberExpression(member) => {
             !member.optional
                 && matches!(member.expression, Expression::StringLiteral(_))
-                && matches!(member.object, Expression::Identifier(_) | Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_))
+                && matches!(
+                    member.object,
+                    Expression::Identifier(_)
+                        | Expression::StaticMemberExpression(_)
+                        | Expression::ComputedMemberExpression(_)
+                )
                 && fixed(&member.object)
         }
         _ => false,
@@ -364,12 +436,22 @@ struct Reads<'n> {
     other: bool,
 }
 
-fn constant_index(member: &ComputedMemberExpression<'_>, name: &str, length: usize) -> Option<usize> {
-    if member.optional || !matches!(&member.object, Expression::Identifier(object) if object.name == name) {
+fn constant_index(
+    member: &ComputedMemberExpression<'_>,
+    name: &str,
+    length: usize,
+) -> Option<usize> {
+    if member.optional
+        || !matches!(&member.object, Expression::Identifier(object) if object.name == name)
+    {
         return None;
     }
     match &member.expression {
-        Expression::NumericLiteral(number) if number.value.fract() == 0.0 && number.value >= 0.0 && (number.value as usize) < length => {
+        Expression::NumericLiteral(number)
+            if number.value.fract() == 0.0
+                && number.value >= 0.0
+                && (number.value as usize) < length =>
+        {
             Some(number.value as usize)
         }
         _ => None,
@@ -387,7 +469,8 @@ impl<'a> Visit<'a> for Reads<'_> {
     fn visit_simple_assignment_target(&mut self, target: &SimpleAssignmentTarget<'a>) {
         // A store through the tuple changes an element.
         if let SimpleAssignmentTarget::ComputedMemberExpression(member) = target {
-            if matches!(&member.object, Expression::Identifier(object) if object.name == self.name) {
+            if matches!(&member.object, Expression::Identifier(object) if object.name == self.name)
+            {
                 self.other = true;
             }
         }
@@ -432,7 +515,9 @@ struct Place<'n, 'a> {
 
 impl<'a> VisitMut<'a> for Place<'_, 'a> {
     fn visit_expression(&mut self, expression: &mut Expression<'a>) {
-        if self.depth == 0 && matches!(expression, Expression::Identifier(identifier) if identifier.name == self.name) {
+        if self.depth == 0
+            && matches!(expression, Expression::Identifier(identifier) if identifier.name == self.name)
+        {
             if let Some(value) = self.value.take() {
                 *expression = value;
             }
@@ -441,12 +526,14 @@ impl<'a> VisitMut<'a> for Place<'_, 'a> {
         walk_mut::walk_expression(self, expression);
     }
     fn visit_static_member_expression(&mut self, member: &mut StaticMemberExpression<'a>) {
-        if !matches!(&member.object, Expression::Identifier(identifier) if identifier.name == self.name) {
+        if !matches!(&member.object, Expression::Identifier(identifier) if identifier.name == self.name)
+        {
             walk_mut::walk_static_member_expression(self, member);
         }
     }
     fn visit_computed_member_expression(&mut self, member: &mut ComputedMemberExpression<'a>) {
-        if matches!(&member.object, Expression::Identifier(identifier) if identifier.name == self.name) {
+        if matches!(&member.object, Expression::Identifier(identifier) if identifier.name == self.name)
+        {
             self.visit_expression(&mut member.expression);
         } else {
             walk_mut::walk_computed_member_expression(self, member);
@@ -504,12 +591,22 @@ mod tests {
     fn nests_filled_literals_into_their_one_use() {
         let source = "function f(t, g) {\n\tlet $a = [0];\n\tlet $b = [[\"POST\"]];\n\t$a[1] = 5;\n\tg();\n\t$a[2] = 0;\n\t$b[1] = $a;\n\tt[3] = $b;\n\tlet $o = {};\n\t$o[\"k\"] = 1;\n\t$o.k = 2;\n\treturn $o;\n}\n";
         let code = nest_literals(source).unwrap().code;
-        assert!(code.contains("g();\n\tt[3] = [[\"POST\"], [\n\t\t0,\n\t\t5,\n\t\t0\n\t]];") || code.contains("t[3] = [[\"POST\"], [0, 5, 0]];"), "{code}");
+        assert!(
+            code.contains("g();\n\tt[3] = [[\"POST\"], [\n\t\t0,\n\t\t5,\n\t\t0\n\t]];")
+                || code.contains("t[3] = [[\"POST\"], [0, 5, 0]];"),
+            "{code}"
+        );
         assert!(code.contains("[\"k\"]: 2"), "{code}");
-        assert!(!code.contains("$a") && !code.contains("$b") && !code.contains("$o"), "{code}");
+        assert!(
+            !code.contains("$a") && !code.contains("$b") && !code.contains("$o"),
+            "{code}"
+        );
         let source = "function f(t, x) {\n\tlet $r = [x + 1, Math, Math[\"sin\"]];\n\tt($r[0], $r[2].call($r[1], 0));\n}\n";
         let code = nest_literals(source).unwrap().code;
-        assert!(code.contains("t($r[0], Math[\"sin\"].call(Math, 0));"), "{code}");
+        assert!(
+            code.contains("t($r[0], Math[\"sin\"].call(Math, 0));"),
+            "{code}"
+        );
     }
 
     #[test]
@@ -518,7 +615,10 @@ mod tests {
             "function f(g) {\n\tlet $a = [g()];\n\t$a[0] = 1;\n\treturn $a;\n}\n",
             "function f(g) {\n\tlet $a = { k: g() };\n\t$a.k = 1;\n\treturn $a;\n}\n",
         ] {
-            assert!(nest_literals(source).unwrap().code.contains("g()"), "{source}");
+            assert!(
+                nest_literals(source).unwrap().code.contains("g()"),
+                "{source}"
+            );
         }
     }
 
@@ -526,6 +626,11 @@ mod tests {
     fn keeps_literals_read_in_loops_or_twice() {
         let source = "function f(t, g) {\n\tlet $a = [0];\n\tfor (;;) {\n\t\tt.push($a);\n\t}\n\tlet $b = [1];\n\tt[0] = $b;\n\tt[1] = $b;\n\tlet $c = [g()];\n\tt[2] = $c;\n}\n";
         let code = nest_literals(source).unwrap().code;
-        assert!(code.contains("let $a = [0];") && code.contains("let $b = [1];") && code.contains("let $c = [g()];"), "{code}");
+        assert!(
+            code.contains("let $a = [0];")
+                && code.contains("let $b = [1];")
+                && code.contains("let $c = [g()];"),
+            "{code}"
+        );
     }
 }

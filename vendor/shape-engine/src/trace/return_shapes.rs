@@ -31,8 +31,8 @@ use super::corpus::{
 };
 use crate::{
     tracing::symbolic::{CellTypesHook, ReturnsHook},
-    CellContent, CellReads, DescriptorRecord, PrefixPreparation,
-    PrefixStopReason, PrefixTraceReport, TraceNodeKind, TraceStatementKind,
+    CellContent, CellReads, DescriptorRecord, PrefixPreparation, PrefixStopReason,
+    PrefixTraceReport, TraceNodeKind, TraceStatementKind,
 };
 
 /// The functions every return of which gives a VM function made.
@@ -514,10 +514,13 @@ pub fn standing_cell_answers(
         let fallen: Vec<Function> = walks
             .iter()
             .filter(|(_, walked)| {
-                walked.cell_answers.iter().any(|(&(closure, slot), &answer)| {
-                    kept_cell_types(&walks, descriptors, closure, slot, &mut BTreeSet::new())
-                        != Some(answer)
-                })
+                walked
+                    .cell_answers
+                    .iter()
+                    .any(|(&(closure, slot), &answer)| {
+                        kept_cell_types(&walks, descriptors, closure, slot, &mut BTreeSet::new())
+                            != Some(answer)
+                    })
             })
             .map(|(&function, _)| function)
             .collect();
@@ -628,7 +631,11 @@ pub fn makes_functions(result: &PrefixTraceReport) -> bool {
         if !subroutine.insert(id) {
             continue;
         }
-        match arena.statements.get(id as usize).map(|statement| &statement.kind) {
+        match arena
+            .statements
+            .get(id as usize)
+            .map(|statement| &statement.kind)
+        {
             Some(TraceStatementKind::If {
                 taken,
                 fall_through,
@@ -737,7 +744,10 @@ mod tests {
             (function(5), stopped(&[])),
         ]);
         let standing = standing_cell_answers(walks, &[]);
-        assert_eq!(standing.keys().copied().collect::<Vec<_>>(), vec![function(5)]);
+        assert_eq!(
+            standing.keys().copied().collect::<Vec<_>>(),
+            vec![function(5)]
+        );
     }
 
     #[test]

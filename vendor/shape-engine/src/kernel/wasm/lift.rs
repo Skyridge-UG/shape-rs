@@ -1472,7 +1472,8 @@ mod tests {
         let view =
             crate::transforms::deob::pipeline::wasm_proof_report(source).expect("proof view");
         let table = view.proven_operation_tables[0].clone();
-        let admitted = crate::dispatch::prefix::wasm::admit(&view, &table).expect("interpreter is admitted");
+        let admitted =
+            crate::dispatch::prefix::wasm::admit(&view, &table).expect("interpreter is admitted");
         (admitted.interpreter, admitted.roles)
     }
 

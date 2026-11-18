@@ -49,11 +49,8 @@ fn actual_first_refusal_and_capture_epoch_gaps() {
         };
         assert!(handler.body.body.is_empty());
         assert!(unchanged(model, error.symbol_id.get().unwrap()));
-        let [
-            click,
-            Statement::IfStatement(conditional),
-            Statement::IfStatement(head),
-        ] = t.block.body.as_slice()
+        let [click, Statement::IfStatement(conditional), Statement::IfStatement(head)] =
+            t.block.body.as_slice()
         else {
             panic!("expected the exact teardown statements");
         };
@@ -1490,7 +1487,11 @@ fn class_operational_contract_pair() {
                 .collect::<Vec<_>>(),
             ids
         );
-        both_lifecycles(source, accepted, "exact guarded cleanup paired class contract");
+        both_lifecycles(
+            source,
+            accepted,
+            "exact guarded cleanup paired class contract",
+        );
         println!("guarded cleanup paired accepted={accepted}: {candidates:?}");
     }
     assert_eq!(

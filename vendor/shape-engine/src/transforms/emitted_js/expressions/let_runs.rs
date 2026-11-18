@@ -14,8 +14,16 @@ use crate::analysis;
 pub(crate) fn join_let_runs(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
-    let comments: Vec<Span> = program.comments.iter().map(|comment| comment.span).collect();
-    let mut scan = Scan { source, comments, edits: Vec::new() };
+    let comments: Vec<Span> = program
+        .comments
+        .iter()
+        .map(|comment| comment.span)
+        .collect();
+    let mut scan = Scan {
+        source,
+        comments,
+        edits: Vec::new(),
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.edits.is_empty() {
         return Ok((source.into(), 0));
@@ -63,8 +71,13 @@ impl Scan<'_> {
             while let Some(next) = statements.get(last + 1) {
                 let Some(more) = bare(next) else { break };
                 let gap = Span::new(end, next.span().start);
-                if !self.source[gap.start as usize..gap.end as usize].trim().is_empty()
-                    || self.comments.iter().any(|comment| gap.start <= comment.start && comment.end <= gap.end)
+                if !self.source[gap.start as usize..gap.end as usize]
+                    .trim()
+                    .is_empty()
+                    || self
+                        .comments
+                        .iter()
+                        .any(|comment| gap.start <= comment.start && comment.end <= gap.end)
                 {
                     break;
                 }
@@ -73,13 +86,15 @@ impl Scan<'_> {
                 last += 1;
             }
             if last > index {
-                self.edits.push(analysis::Edit::replace(Span::new(start, end), format!("let {};", names.join(", "))));
+                self.edits.push(analysis::Edit::replace(
+                    Span::new(start, end),
+                    format!("let {};", names.join(", ")),
+                ));
             }
             index = last + 1;
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

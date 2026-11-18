@@ -25,8 +25,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleUseLiteralResult {
@@ -79,10 +79,7 @@ pub fn inline_single_use_literals(source: &str) -> Result<SingleUseLiteralResult
                 continue;
             }
             let value = &source[declaration.value.start as usize..declaration.value.end as usize];
-            edits.push(analysis::Edit::delete(whole_line(
-                source,
-                declaration.span,
-            )));
+            edits.push(analysis::Edit::delete(whole_line(source, declaration.span)));
             edits.push(analysis::Edit::replace(span, format!("({value})")));
             reads += 1;
             bindings += 1;

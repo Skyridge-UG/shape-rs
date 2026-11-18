@@ -1,8 +1,8 @@
 //! Guarded script-digest dispatch; proves both promise and immediate fallback
 //! paths, including exact replacement receiver and optional-result semantics.
-use crate::naming::support::media_entropy::*;
 use super::*;
 use crate::naming::shared::one_variable;
+use crate::naming::support::media_entropy::*;
 #[derive(Clone, PartialEq, Eq)]
 enum E {
     S(Symbol),
@@ -198,11 +198,24 @@ fn callback(
         [indices, emit] => {
             let v = one_variable(indices)?;
             let indices = plain_binding(model, v, Some(0))?;
-            if !eq(model, v.init.as_ref()?, b("||", opt(s(*result), "sidx"), E::Array)) { return None; }
+            if !eq(
+                model,
+                v.init.as_ref()?,
+                b("||", opt(s(*result), "sidx"), E::Array),
+            ) {
+                return None;
+            }
             invoke(model, emit, c(s(dispatch), vec![s(url), s(indices)]))?;
         }
         [emit] => {
-            invoke(model, emit, c(s(dispatch), vec![s(url), b("||", opt(s(*result), "sidx"), E::Array)]))?;
+            invoke(
+                model,
+                emit,
+                c(
+                    s(dispatch),
+                    vec![s(url), b("||", opt(s(*result), "sidx"), E::Array)],
+                ),
+            )?;
         }
         _ => return None,
     }

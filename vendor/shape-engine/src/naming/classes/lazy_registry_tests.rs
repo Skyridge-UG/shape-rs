@@ -1,6 +1,7 @@
 use super::*;
 
-const REVERSE: &str = include_str!("../../../tests/fixtures/program/lazy-registry/native-reverse.js");
+const REVERSE: &str =
+    include_str!("../../../tests/fixtures/program/lazy-registry/native-reverse.js");
 const FORWARD: &str =
     include_str!("../../../tests/fixtures/program/lazy-registry/native-forward.js");
 const ORDINARY_REVERSE: &str =
@@ -28,8 +29,20 @@ fn inspect<R>(source: &str, check: impl FnOnce(&Model<'_, '_>) -> R) -> R {
 fn prove(source: &str) -> Vec<FinderClaim> {
     // These legacy refusals test native purpose; a neutral own-protocol claim
     // may remain valid when only a native installer obligation is broken.
-    inspect(source, |model| claims(model).into_iter().filter(|claim| matches!(claim,
-        FinderClaim::ClassBinding { role: "owned_lazy_hook_registry_class", .. })).collect())
+    inspect(source, |model| {
+        claims(model)
+            .into_iter()
+            .filter(|claim| {
+                matches!(
+                    claim,
+                    FinderClaim::ClassBinding {
+                        role: "owned_lazy_hook_registry_class",
+                        ..
+                    }
+                )
+            })
+            .collect()
+    })
 }
 fn accepts(source: &str) {
     // Keep the dependency failure separate from the final family assertion.
@@ -197,11 +210,13 @@ fn refuses_ordinary_base(source: &str) {
             "malformed ordinary base must fail the shared dependency proof"
         );
         let claims = claims(model);
-        assert!(claims.iter().all(|claim| matches!(claim,
+        assert!(
+            claims.iter().all(|claim| matches!(claim,
             FinderClaim::ClassBinding {
                 role: "owned_pre_register_hook_forwarder_class", evidence, ..
             } if evidence.iter().any(|s| s.contains("explicitly unproved")))),
-            "malformed native base may only retain the neutral own protocol");
+            "malformed native base may only retain the neutral own protocol"
+        );
     });
 }
 
@@ -525,9 +540,7 @@ fn lazy_registry_cached_full_sources_keep_actual_base_and_installer_context() {
     // programs retain bootstrap, descriptor registry, aliases and consumers.
     for (source, factory_start, class_start) in [
         (
-            include_str!(
-                "../../../tests/fixtures/program/lazy-registry/branch-carrier-full.js"
-            ),
+            include_str!("../../../tests/fixtures/program/lazy-registry/branch-carrier-full.js"),
             487665,
             487700,
         ),
@@ -906,11 +919,15 @@ fn lazy_registry_post_loop_copy_guard_reproduction() {
         455890,
     );
     post_loop_copy_accepts(
-        include_str!("../../../tests/fixtures/program/lazy-registry/post-loop-copy-full-alternate.js"),
+        include_str!(
+            "../../../tests/fixtures/program/lazy-registry/post-loop-copy-full-alternate.js"
+        ),
         472337,
     );
     post_loop_copy_accepts(
-        include_str!("../../../tests/fixtures/program/lazy-registry/post-loop-copy-full-heldout.js"),
+        include_str!(
+            "../../../tests/fixtures/program/lazy-registry/post-loop-copy-full-heldout.js"
+        ),
         491011,
     );
 }
@@ -974,13 +991,9 @@ fn post_loop_copy_accepts(source: &str, start: u32) {
 
 #[test]
 fn lazy_registry_post_loop_copy_post_loop_copy_alpha_and_refusals() {
-    let source = include_str!("../../../tests/fixtures/program/lazy-registry/post-loop-copy-full.js");
-    post_loop_copy_accepts(
-        &source
-            .replace("$AX", "$ZX")
-            .replace("$AY", "$ZY"),
-        455890,
-    );
+    let source =
+        include_str!("../../../tests/fixtures/program/lazy-registry/post-loop-copy-full.js");
+    post_loop_copy_accepts(&source.replace("$AX", "$ZX").replace("$AY", "$ZY"), 455890);
     for (old, new) in [
         ("$AY = $AX;", "$AY = foreignRecord;"),
         ("$AY = $AX;", "function donor() { $AY = $AX; }"),

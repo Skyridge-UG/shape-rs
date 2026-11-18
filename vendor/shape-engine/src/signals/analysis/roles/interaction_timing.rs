@@ -43,14 +43,12 @@ use oxc_ast::ast::*;
 use oxc_ast::AstKind;
 use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
-use oxc_syntax::operator::{
-    AssignmentOperator, BinaryOperator, UnaryOperator, UpdateOperator,
-};
+use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator, UpdateOperator};
 
-use crate::signals::extract::bindings::{property_key_name, static_member_name, ParameterSlots};
-use crate::signals::schema::Confidence;
 use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 use crate::analysis;
+use crate::signals::extract::bindings::{property_key_name, static_member_name, ParameterSlots};
+use crate::signals::schema::Confidence;
 
 const THROTTLE_FACTORY: &str = "interaction_throttle_factory";
 const THROTTLED_WRAPPER: &str = "interaction_throttled_wrapper";
@@ -811,12 +809,7 @@ impl<'c, 'a> Ix<'c, 'a> {
     }
 
     /// The one origin of `symbol` ends before the call.
-    fn origin_precedes(
-        &self,
-        symbol: SymbolId,
-        origin: &Expression<'a>,
-        call_span: Span,
-    ) -> bool {
+    fn origin_precedes(&self, symbol: SymbolId, origin: &Expression<'a>, call_span: Span) -> bool {
         self.origin_node(symbol, origin)
             .is_some_and(|node| self.nodes.get_node(node).span().end <= call_span.start)
             && origin.span().end <= call_span.start
@@ -1208,13 +1201,10 @@ impl<'c, 'a> Ix<'c, 'a> {
                 return false;
             }
             if declaration.declarations.is_empty()
-                || declaration
-                    .declarations
-                    .iter()
-                    .any(|declarator| {
-                        declarator.init.is_some()
-                            || !matches!(declarator.id, BindingPattern::BindingIdentifier(_))
-                    })
+                || declaration.declarations.iter().any(|declarator| {
+                    declarator.init.is_some()
+                        || !matches!(declarator.id, BindingPattern::BindingIdentifier(_))
+                })
             {
                 return false;
             }
@@ -1248,14 +1238,16 @@ impl<'c, 'a> Ix<'c, 'a> {
         if update.operator != UpdateOperator::Increment {
             return false;
         }
-        let SimpleAssignmentTarget::AssignmentTargetIdentifier(update_identifier) = &update.argument
+        let SimpleAssignmentTarget::AssignmentTargetIdentifier(update_identifier) =
+            &update.argument
         else {
             return false;
         };
         let Some(counter) = analysis::identifier_symbol(update_identifier, self.scoping) else {
             return false;
         };
-        if !self.is_outside(counter, function) || !self.inside(try_statement.block.span, update.span)
+        if !self.is_outside(counter, function)
+            || !self.inside(try_statement.block.span, update.span)
         {
             return false;
         }
@@ -1349,9 +1341,7 @@ impl<'c, 'a> Ix<'c, 'a> {
             OrientationAngle::Gamma,
         ]
         .iter()
-        .all(|angle| {
-            angles.contains_key(&(*angle, false)) && angles.contains_key(&(*angle, true))
-        })
+        .all(|angle| angles.contains_key(&(*angle, false)) && angles.contains_key(&(*angle, true)))
     }
 
     /// The catch body is exactly `capturedSink.error(caughtBinding)`.
@@ -1416,7 +1406,9 @@ fn orientation_angle(name: &str) -> Option<OrientationAngle> {
 /// event angle, optionally squared.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OrientationTerm {
-    Delta { squared: bool },
+    Delta {
+        squared: bool,
+    },
     Angle {
         angle: OrientationAngle,
         squared: bool,
@@ -1443,11 +1435,7 @@ fn event_member<'c, 'a>(
 }
 
 /// A zero-argument call to a captured callback: the helper's clock.
-fn is_clock_call<'c, 'a>(
-    ix: &Ix<'c, 'a>,
-    expression: &Expression<'a>,
-    function: usize,
-) -> bool {
+fn is_clock_call<'c, 'a>(ix: &Ix<'c, 'a>, expression: &Expression<'a>, function: usize) -> bool {
     let Expression::CallExpression(call) = strip(expression) else {
         return false;
     };
@@ -1463,19 +1451,18 @@ fn is_clock_call<'c, 'a>(
 
 /// The clock value, directly or through one captured local that only ever
 /// holds that call (the emitted delta local).
-fn clock_operand<'c, 'a>(
-    ix: &Ix<'c, 'a>,
-    expression: &Expression<'a>,
-    function: usize,
-) -> bool {
+fn clock_operand<'c, 'a>(ix: &Ix<'c, 'a>, expression: &Expression<'a>, function: usize) -> bool {
     if is_clock_call(ix, expression, function) {
         return true;
     }
     let Some(symbol) = ix.symbol(expression) else {
         return false;
     };
-    ix.origins(symbol)
-        .is_some_and(|origins| origins.iter().any(|origin| is_clock_call(ix, origin, function)))
+    ix.origins(symbol).is_some_and(|origins| {
+        origins
+            .iter()
+            .any(|origin| is_clock_call(ix, origin, function))
+    })
 }
 
 /// `clock - lastClock` where one side is the captured clock and the other is a
@@ -1652,10 +1639,7 @@ fn state_and_ratio<'c, 'a>(
     if binary.operator != BinaryOperator::Multiplication {
         return None;
     }
-    for (state, ratio) in [
-        (&binary.left, &binary.right),
-        (&binary.right, &binary.left),
-    ] {
+    for (state, ratio) in [(&binary.left, &binary.right), (&binary.right, &binary.left)] {
         let (Some(symbol), Some(ratio_value)) =
             (ix.symbol(state), counter_ratio(ix, ratio, counter, 0))
         else {
@@ -1680,10 +1664,7 @@ fn factor_and_increment<'e, 'c, 'a>(
     if binary.operator != BinaryOperator::Multiplication {
         return None;
     }
-    for (term, increment) in [
-        (&binary.left, &binary.right),
-        (&binary.right, &binary.left),
-    ] {
+    for (term, increment) in [(&binary.left, &binary.right), (&binary.right, &binary.left)] {
         if let Some(offset) = inverse_counter(ix, increment, counter, 0) {
             return Some((term, offset));
         }
@@ -1705,10 +1686,7 @@ fn orientation_formula<'e, 'c, 'a>(
     if binary.operator != BinaryOperator::Addition {
         return None;
     }
-    for (state_side, term_side) in [
-        (&binary.left, &binary.right),
-        (&binary.right, &binary.left),
-    ] {
+    for (state_side, term_side) in [(&binary.left, &binary.right), (&binary.right, &binary.left)] {
         let Some((state, ratio)) = state_and_ratio(ix, state_side, counter, function) else {
             continue;
         };

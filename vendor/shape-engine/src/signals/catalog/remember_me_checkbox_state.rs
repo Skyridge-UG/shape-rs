@@ -1,13 +1,17 @@
 //! `RememberMeCheckboxState`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::shape_text::*;
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `RememberMeCheckboxState`. Card: [`CARD`].
-pub(crate) fn recognize_remember_me_checkbox_state(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_remember_me_checkbox_state(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     // One bare value: `getElementById(..).checked`, else
     // `getElementsByName(..)[0].className.indexOf("checked") > -1`, else "".
     // A keyless generic value (no named-object keys), one top-level field.
@@ -15,8 +19,12 @@ pub(crate) fn recognize_remember_me_checkbox_state(view: &SlotView, ctx: &Finder
         && view.leaves().next().is_some()
         && view.leaves().all(|leaf| leaf.generic_key.is_none())
         && top_count_is(&view.shapes(), 1);
-    let reads = view.uses_members(&["getElementById", "getElementsByName", "checked", "className"])
-        && view.calls_with("indexOf", "checked");
+    let reads = view.uses_members(&[
+        "getElementById",
+        "getElementsByName",
+        "checked",
+        "className",
+    ]) && view.calls_with("indexOf", "checked");
     (bare_single && reads).then(|| {
         Claim::new([
             "one keyless generic value",

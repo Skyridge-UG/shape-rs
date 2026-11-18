@@ -2,8 +2,8 @@
 //! Constructor, sentinel and scheduler implementations remain opaque inputs.
 //! Declaration grouping/order is neutral only for uninitialized locals; every
 //! executed allocation, call, assignment, branch and return is consumed below.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::SymbolId;
 use oxc_span::{GetSpan, Span};
 type Sym = SymbolId;

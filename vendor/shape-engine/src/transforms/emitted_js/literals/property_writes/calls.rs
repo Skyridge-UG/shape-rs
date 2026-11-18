@@ -125,7 +125,10 @@ pub(super) struct RawCall {
     pub(super) skip: Option<PropertyWriteSkip>,
 }
 
-pub(super) fn raw_call_from_call<'a>(call: &CallExpression<'a>, scoping: &Scoping) -> Option<RawCall> {
+pub(super) fn raw_call_from_call<'a>(
+    call: &CallExpression<'a>,
+    scoping: &Scoping,
+) -> Option<RawCall> {
     let callee = unwrap_parens(&call.callee);
     let (object, member_span, member_optional) = match callee {
         Expression::StaticMemberExpression(member) if member.property.name == "defineProperty" => {

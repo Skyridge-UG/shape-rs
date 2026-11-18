@@ -23,14 +23,20 @@ use oxc_ast::AstKind;
 use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn fold_bit_accumulators(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new(), folded: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+        folded: 0,
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.folded == 0 {
         return Ok((source.into(), 0));
@@ -47,7 +53,6 @@ struct Scan<'s, 'a> {
     folded: usize,
 }
 
-
 /// Names, literals and operators only; the names it reads.
 fn plain<'e>(expression: &'e Expression<'_>, names: &mut Vec<&'e IdentifierReference<'e>>) -> bool {
     match expression {
@@ -55,21 +60,38 @@ fn plain<'e>(expression: &'e Expression<'_>, names: &mut Vec<&'e IdentifierRefer
             names.push(name);
             true
         }
-        Expression::NumericLiteral(_) | Expression::BooleanLiteral(_) | Expression::NullLiteral(_) | Expression::StringLiteral(_) => true,
+        Expression::NumericLiteral(_)
+        | Expression::BooleanLiteral(_)
+        | Expression::NullLiteral(_)
+        | Expression::StringLiteral(_) => true,
         Expression::ParenthesizedExpression(inner) => plain(&inner.expression, names),
         Expression::UnaryExpression(unary) => {
-            !matches!(unary.operator, UnaryOperator::Delete | UnaryOperator::Typeof | UnaryOperator::Void) && plain(&unary.argument, names)
+            !matches!(
+                unary.operator,
+                UnaryOperator::Delete | UnaryOperator::Typeof | UnaryOperator::Void
+            ) && plain(&unary.argument, names)
         }
         Expression::BinaryExpression(binary) => {
-            !matches!(binary.operator, BinaryOperator::In | BinaryOperator::Instanceof) && plain(&binary.left, names) && plain(&binary.right, names)
+            !matches!(
+                binary.operator,
+                BinaryOperator::In | BinaryOperator::Instanceof
+            ) && plain(&binary.left, names)
+                && plain(&binary.right, names)
         }
-        Expression::LogicalExpression(logical) => plain(&logical.left, names) && plain(&logical.right, names),
+        Expression::LogicalExpression(logical) => {
+            plain(&logical.left, names) && plain(&logical.right, names)
+        }
         _ => false,
     }
 }
 
 /// `A | X | Y`: the text after `A`, when `A` is the chain's first operand.
-fn after_first<'s>(source: &'s str, expression: &Expression<'_>, symbol: SymbolId, scoping: &Scoping) -> Option<(&'s str, Span)> {
+fn after_first<'s>(
+    source: &'s str,
+    expression: &Expression<'_>,
+    symbol: SymbolId,
+    scoping: &Scoping,
+) -> Option<(&'s str, Span)> {
     let mut left = expression;
     while let Expression::BinaryExpression(binary) = left {
         if binary.operator != BinaryOperator::BitwiseOR {
@@ -80,7 +102,9 @@ fn after_first<'s>(source: &'s str, expression: &Expression<'_>, symbol: SymbolI
     let Expression::Identifier(first) = left else {
         return None;
     };
-    if scoping.get_reference(first.reference_id()).symbol_id() != Some(symbol) || first.span == expression.span() {
+    if scoping.get_reference(first.reference_id()).symbol_id() != Some(symbol)
+        || first.span == expression.span()
+    {
         return None;
     }
     let tail = Span::new(first.span.end, expression.span().end);
@@ -110,14 +134,21 @@ impl Scan<'_, '_> {
 
     /// Folds the accumulator `let`ed at `index`; returns the index of the
     /// statement that reads it.
-    fn fold(&mut self, statements: &[Statement<'_>], index: usize, statement: &Statement<'_>) -> Option<usize> {
+    fn fold(
+        &mut self,
+        statements: &[Statement<'_>],
+        index: usize,
+        statement: &Statement<'_>,
+    ) -> Option<usize> {
         let Statement::VariableDeclaration(declaration) = statement else {
             return None;
         };
         let [declarator] = declaration.declarations.as_slice() else {
             return None;
         };
-        let (BindingPattern::BindingIdentifier(id), Some(start)) = (&declarator.id, &declarator.init) else {
+        let (BindingPattern::BindingIdentifier(id), Some(start)) =
+            (&declarator.id, &declarator.init)
+        else {
             return None;
         };
         if declaration.kind != VariableDeclarationKind::Let {
@@ -126,7 +157,10 @@ impl Scan<'_, '_> {
         let symbol = id.symbol_id();
         let home = self.function_of(self.scoping.symbol_declaration(symbol));
         let references: Vec<_> = self.scoping.get_resolved_references(symbol).collect();
-        if references.iter().any(|reference| self.function_of(reference.node_id()) != home) {
+        if references
+            .iter()
+            .any(|reference| self.function_of(reference.node_id()) != home)
+        {
             return None;
         }
         let mut names = Vec::new();
@@ -135,10 +169,13 @@ impl Scan<'_, '_> {
         }
         // Terms with where they were: the start, then each step's tail.
         let start_text = match start.without_parentheses() {
-            Expression::LogicalExpression(_) | Expression::ConditionalExpression(_) => format!("({})", self.text(start.span())),
+            Expression::LogicalExpression(_) | Expression::ConditionalExpression(_) => {
+                format!("({})", self.text(start.span()))
+            }
             _ => self.text(start.span()).to_string(),
         };
-        let mut terms: Vec<(String, u32, Vec<SymbolId>)> = vec![(start_text, statement.span().end, self.symbols(&names)?)];
+        let mut terms: Vec<(String, u32, Vec<SymbolId>)> =
+            vec![(start_text, statement.span().end, self.symbols(&names)?)];
         let mut steps = Vec::new();
         let mut reads = 0;
         let mut last = None;
@@ -158,12 +195,15 @@ impl Scan<'_, '_> {
                         && matches!(&assignment.left, AssignmentTarget::AssignmentTargetIdentifier(target)
                             if self.scoping.get_reference(target.reference_id()).symbol_id() == Some(symbol))
                     {
-                        let (tail, _) = after_first(self.source, &assignment.right, symbol, self.scoping)?;
+                        let (tail, _) =
+                            after_first(self.source, &assignment.right, symbol, self.scoping)?;
                         if count != 2 {
                             return None;
                         }
                         let mut names = Vec::new();
-                        let Expression::BinaryExpression(_) = &assignment.right else { return None };
+                        let Expression::BinaryExpression(_) = &assignment.right else {
+                            return None;
+                        };
                         if !self.tail_plain(&assignment.right, &mut names) {
                             return None;
                         }
@@ -187,8 +227,15 @@ impl Scan<'_, '_> {
         }
         let read = references
             .iter()
-            .map(|reference| (self.nodes.kind(reference.node_id()).span(), reference.node_id()))
-            .find(|(span, _)| last_statement.span().start <= span.start && span.end <= last_statement.span().end)?;
+            .map(|reference| {
+                (
+                    self.nodes.kind(reference.node_id()).span(),
+                    reference.node_id(),
+                )
+            })
+            .find(|(span, _)| {
+                last_statement.span().start <= span.start && span.end <= last_statement.span().end
+            })?;
         // The read must run in this function, not in one the statement makes.
         if self.function_of(read.1) != home {
             return None;
@@ -204,8 +251,15 @@ impl Scan<'_, '_> {
         let combined: String = terms.iter().map(|(text, _, _)| text.as_str()).collect();
         let first_of_or = matches!(self.nodes.parent_kind(read.1), AstKind::BinaryExpression(binary)
             if binary.operator == BinaryOperator::BitwiseOR && binary.left.span() == read.0);
-        let replacement = if first_of_or { combined } else { format!("({combined})") };
-        let mut edits = vec![analysis::Edit::delete(whole_line(self.source, statement.span()))];
+        let replacement = if first_of_or {
+            combined
+        } else {
+            format!("({combined})")
+        };
+        let mut edits = vec![analysis::Edit::delete(whole_line(
+            self.source,
+            statement.span(),
+        ))];
         for step in steps {
             edits.push(analysis::Edit::delete(whole_line(self.source, step)));
         }
@@ -213,9 +267,13 @@ impl Scan<'_, '_> {
         // A fold whose edits touch another's text (a read inside a line
         // another fold deletes, say) is declined alone: the rest still fold.
         let overlaps = |a: &analysis::Edit, b: &analysis::Edit| {
-            a.start < b.end && b.start < a.end || (a.start == b.start && (a.start == a.end || b.start == b.end))
+            a.start < b.end && b.start < a.end
+                || (a.start == b.start && (a.start == a.end || b.start == b.end))
         };
-        if edits.iter().any(|edit| self.edits.iter().any(|done| overlaps(edit, done))) {
+        if edits
+            .iter()
+            .any(|edit| self.edits.iter().any(|done| overlaps(edit, done)))
+        {
             return None;
         }
         self.edits.extend(edits);
@@ -224,9 +282,15 @@ impl Scan<'_, '_> {
     }
 
     /// The operands after the accumulator in `A | X | Y` are plain.
-    fn tail_plain<'e>(&self, expression: &'e Expression<'_>, names: &mut Vec<&'e IdentifierReference<'e>>) -> bool {
+    fn tail_plain<'e>(
+        &self,
+        expression: &'e Expression<'_>,
+        names: &mut Vec<&'e IdentifierReference<'e>>,
+    ) -> bool {
         match expression {
-            Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::BitwiseOR => {
+            Expression::BinaryExpression(binary)
+                if binary.operator == BinaryOperator::BitwiseOR =>
+            {
                 let left_ok = match &binary.left {
                     Expression::Identifier(_) => true,
                     left @ Expression::BinaryExpression(_) => self.tail_plain(left, names),
@@ -252,11 +316,21 @@ impl Scan<'_, '_> {
 
     /// No write of `symbol` between `from` and `to`, and none in a function
     /// other than `home`.
-    fn unchanged(&self, symbol: SymbolId, from: u32, to: u32, home: Option<oxc_semantic::NodeId>) -> bool {
-        self.scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).all(|reference| {
-            let span = self.nodes.kind(reference.node_id()).span();
-            self.function_of(reference.node_id()) == home && !(from <= span.start && span.start < to)
-        })
+    fn unchanged(
+        &self,
+        symbol: SymbolId,
+        from: u32,
+        to: u32,
+        home: Option<oxc_semantic::NodeId>,
+    ) -> bool {
+        self.scoping
+            .get_resolved_references(symbol)
+            .filter(|reference| reference.is_write())
+            .all(|reference| {
+                let span = self.nodes.kind(reference.node_id()).span();
+                self.function_of(reference.node_id()) == home
+                    && !(from <= span.start && span.start < to)
+            })
     }
 }
 

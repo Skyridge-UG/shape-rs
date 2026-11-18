@@ -71,7 +71,9 @@ fn flat_block<'b, 'a>(body: &'b Statement<'a>) -> Option<&'b BlockStatement<'a>>
         return None;
     };
     let lexical = block.body.iter().any(|statement| match statement {
-        Statement::VariableDeclaration(declaration) => declaration.kind != VariableDeclarationKind::Var,
+        Statement::VariableDeclaration(declaration) => {
+            declaration.kind != VariableDeclarationKind::Var
+        }
         Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_) => true,
         _ => false,
     });
@@ -81,7 +83,10 @@ fn flat_block<'b, 'a>(body: &'b Statement<'a>) -> Option<&'b BlockStatement<'a>>
 /// Text that stands as a statement of its own.
 fn as_statement(text: &str) -> String {
     let start = text.trim_start();
-    if ["{", "function", "class", "let", "async"].iter().any(|word| start.starts_with(word)) {
+    if ["{", "function", "class", "let", "async"]
+        .iter()
+        .any(|word| start.starts_with(word))
+    {
         format!("({text});")
     } else {
         format!("{text};")
@@ -114,7 +119,11 @@ impl Hoists<'_, '_> {
     fn fresh_label(&mut self) -> String {
         let mut index = 1;
         loop {
-            let name = if index == 1 { "iteration".to_string() } else { format!("iteration_{index}") };
+            let name = if index == 1 {
+                "iteration".to_string()
+            } else {
+                format!("iteration_{index}")
+            };
             index += 1;
             if !self.source.contains(&name) && !self.labels.contains(&name) {
                 self.labels.push(name.clone());
@@ -127,8 +136,15 @@ impl Hoists<'_, '_> {
     fn continues_to(&mut self, continues: &[Span], label: &str) {
         for span in continues {
             let text = &self.source[span.start as usize..span.end as usize];
-            let semicolon = if text.trim_end().ends_with(';') { ";" } else { "" };
-            self.edits.push(analysis::Edit::replace(*span, format!("break {label}{semicolon}")));
+            let semicolon = if text.trim_end().ends_with(';') {
+                ";"
+            } else {
+                ""
+            };
+            self.edits.push(analysis::Edit::replace(
+                *span,
+                format!("break {label}{semicolon}"),
+            ));
         }
     }
 
@@ -160,7 +176,9 @@ impl Hoists<'_, '_> {
         // Text placed before the closing brace of a block body.
         let before_close = |block: &BlockStatement<'_>, lines: &str| {
             let close = block.span.end - 1;
-            let at_line_start = source[..close as usize].trim_end_matches([' ', '\t']).ends_with('\n');
+            let at_line_start = source[..close as usize]
+                .trim_end_matches([' ', '\t'])
+                .ends_with('\n');
             if at_line_start {
                 format!("\t{lines}\n{indent}}}")
             } else {
@@ -187,7 +205,10 @@ impl Hoists<'_, '_> {
                             Span::new(lp.span.start, body.start),
                             format!("for (;;) {{\n{inner}{test}\n{inner}"),
                         ));
-                        self.edits.push(analysis::Edit::replace(Span::new(body.end, lp.span.end), format!("\n{indent}}}")));
+                        self.edits.push(analysis::Edit::replace(
+                            Span::new(body.end, lp.span.end),
+                            format!("\n{indent}}}"),
+                        ));
                     }
                 }
             }
@@ -201,8 +222,14 @@ impl Hoists<'_, '_> {
                 let body = lp.body.span();
                 match flat_block(&lp.body).filter(|_| continues.is_empty()) {
                     Some(block) => {
-                        self.edits.push(analysis::Edit::replace(Span::new(lp.span.start, block.span.start + 1), "for (;;) {".to_string()));
-                        self.edits.push(analysis::Edit::replace(Span::new(block.span.end - 1, lp.span.end), before_close(block, &test)));
+                        self.edits.push(analysis::Edit::replace(
+                            Span::new(lp.span.start, block.span.start + 1),
+                            "for (;;) {".to_string(),
+                        ));
+                        self.edits.push(analysis::Edit::replace(
+                            Span::new(block.span.end - 1, lp.span.end),
+                            before_close(block, &test),
+                        ));
                     }
                     None => {
                         let label = if continues.is_empty() {
@@ -232,7 +259,9 @@ impl Hoists<'_, '_> {
                 let init_functions = lp.init.as_ref().is_some_and(|init| {
                     let mut nested = NestedCalls::new(self.scoping, self.helpers, self.declined);
                     match init {
-                        ForStatementInit::VariableDeclaration(declaration) => nested.visit_variable_declaration(declaration),
+                        ForStatementInit::VariableDeclaration(declaration) => {
+                            nested.visit_variable_declaration(declaration)
+                        }
                         init => {
                             if let Some(expression) = init.as_expression() {
                                 nested.visit_expression(expression);
@@ -259,7 +288,9 @@ impl Hoists<'_, '_> {
                     (Some(update), false) => text(update.span()),
                     _ => "",
                 };
-                let header = format!("for ({init}; {test}; {update}) {{").replace(";  ", "; ").replace("; )", ";)");
+                let header = format!("for ({init}; {test}; {update}) {{")
+                    .replace(";  ", "; ")
+                    .replace("; )", ";)");
                 let lead = match (&lp.test, test_calls) {
                     (Some(test), true) => format!("\n{inner}if (!({})) break;", text(test.span())),
                     _ => String::new(),
@@ -277,7 +308,10 @@ impl Hoists<'_, '_> {
                             format!("{header}{lead}"),
                         ));
                         if let Some(tail) = &tail {
-                            self.edits.push(analysis::Edit::replace(Span::new(block.span.end - 1, block.span.end), before_close(block, tail)));
+                            self.edits.push(analysis::Edit::replace(
+                                Span::new(block.span.end - 1, block.span.end),
+                                before_close(block, tail),
+                            ));
                         }
                     }
                     None => {
@@ -293,7 +327,10 @@ impl Hoists<'_, '_> {
                             format!("{header}{lead}\n{inner}{label}"),
                         ));
                         let tail = tail.map_or(String::new(), |tail| format!("\n{inner}{tail}"));
-                        self.edits.push(analysis::Edit::replace(Span::new(body.end, lp.span.end), format!("{tail}\n{indent}}}")));
+                        self.edits.push(analysis::Edit::replace(
+                            Span::new(body.end, lp.span.end),
+                            format!("{tail}\n{indent}}}"),
+                        ));
                     }
                 }
             }

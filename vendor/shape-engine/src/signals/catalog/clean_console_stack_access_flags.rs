@@ -1,15 +1,21 @@
 //! `CleanConsoleStackAccessFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, native_checks::*, flag_bytes::*};
+use crate::signals::analysis::{flag_bytes::*, leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `CleanConsoleStackAccessFlags`. Card: [`CARD`].
-pub(crate) fn recognize_clean_console_stack_access_flags(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_clean_console_stack_access_flags(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     (console_probe(view, ctx) == Some(ConsoleRealm::CleanRealm))
-        .then(|| claim(&["stack getter probes logged via console.log and a realm callback's console"]))
+        .then(|| {
+            claim(&["stack getter probes logged via console.log and a realm callback's console"])
+        })
         .flatten()
 }
 

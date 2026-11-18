@@ -1,14 +1,18 @@
 //! `NonNativeBuiltinCount`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use buffer_writes::slot_info;
 use crate::signals::analysis::{buffer_writes, leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use buffer_writes::slot_info;
 
 /// `NonNativeBuiltinCount`. Card: [`CARD`].
-pub(crate) fn recognize_non_native_builtin_count(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_non_native_builtin_count(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if native_count(view) == Some(NativeCount::NonNativeBuiltins) {
         return claim(&["length of a native-code filter over a captured built-in list"]);
     }
@@ -18,14 +22,22 @@ pub(crate) fn recognize_non_native_builtin_count(view: &SlotView, ctx: &FinderCt
     let leaf = single_number(view)?;
     let filtered_length = has_transform(leaf, ".length")
         && !has_transform(leaf, "count")
-        && (has_transform(leaf, ".filter()") || leaf.apis.iter().any(|api| crate::signals::analysis::api_matches(api, "filter()")));
+        && (has_transform(leaf, ".filter()")
+            || leaf
+                .apis
+                .iter()
+                .any(|api| crate::signals::analysis::api_matches(api, "filter()")));
     if !filtered_length || native_count(view).is_some() {
         return None;
     }
     let info = slot_info(view, ctx);
     let native_test = info.facts.call("filter")
         && info.facts.callback_calls.contains("test")
-        && info.facts.callback_regex.iter().any(|pattern| pattern.contains("native"));
+        && info
+            .facts
+            .callback_regex
+            .iter()
+            .any(|pattern| pattern.contains("native"));
     native_test
         .then(|| claim(&["length of list.filter(!native-code regex test)"]))
         .flatten()

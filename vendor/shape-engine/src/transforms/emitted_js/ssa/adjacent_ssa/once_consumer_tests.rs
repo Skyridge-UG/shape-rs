@@ -24,8 +24,7 @@ fn loop_binding_shadowing_and_repeated_inputs_retain_the_snapshot() {
         "do work();while($SSA_0);",
         "let other=effect(),value=$SSA_0;return value;",
     ] {
-        let source =
-            format!("function f(){{let source=produce();let $SSA_0=source;{consumer}}}");
+        let source = format!("function f(){{let source=produce();let $SSA_0=source;{consumer}}}");
         let result = super::inline_thread_adjacent_ssa(&source, &Default::default()).unwrap();
         // Another independent producer may be removed; this snapshot is
         // specifically protected from the new shadow/repeat environment.

@@ -7,8 +7,8 @@ use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn drop_trailing_returns(source: &str) -> Result<(String, usize), String> {
     if !source.contains("return") {
@@ -22,7 +22,11 @@ pub(crate) fn drop_trailing_returns(source: &str) -> Result<(String, usize), Str
         return Ok((source.into(), 0));
     }
     let count = scan.found.len();
-    let edits = scan.found.into_iter().map(|span| analysis::Edit::delete(whole_line(source, span))).collect();
+    let edits = scan
+        .found
+        .into_iter()
+        .map(|span| analysis::Edit::delete(whole_line(source, span)))
+        .collect();
     let output = super::super::support::apply_checked(source, edits, "trailing return")?;
     Ok((output, count))
 }

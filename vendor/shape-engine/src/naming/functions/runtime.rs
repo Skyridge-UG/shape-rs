@@ -22,6 +22,6 @@ pub(in crate::naming) mod worker_environment;
 pub(in crate::naming) mod worker_init;
 pub(in crate::naming) mod worker_message_dispatch;
 
-pub(in crate::naming) mod function_shape_traits;
 pub(in crate::naming) mod adapter_protocols;
+pub(in crate::naming) mod function_shape_traits;
 pub(in crate::naming) mod whole_body_rules;

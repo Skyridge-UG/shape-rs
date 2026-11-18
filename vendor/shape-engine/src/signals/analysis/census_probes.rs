@@ -19,7 +19,10 @@ use super::{bind_in_order, BindRefusal, FieldBinding, FinderCtx, SignalLayout, S
 pub(crate) fn probes(view: &SlotView, census: &Census, name: &str) -> bool {
     census.names(name)
         || value_members(view).contains(name)
-        || view.value_apis().iter().any(|api| api.rsplit('.').next() == Some(name))
+        || view
+            .value_apis()
+            .iter()
+            .any(|api| api.rsplit('.').next() == Some(name))
 }
 
 /// The census or value provenance names every one of `names`.
@@ -29,10 +32,19 @@ pub(crate) fn probes_all(view: &SlotView, census: &Census, names: &[&str]) -> bo
 
 /// The probe names of the single-flag-byte presence signals.
 pub(crate) const FLAG_PROBES: &[(&str, &[&str])] = &[
-    ("StorageAccessApiPresence", &["hasStorageAccess", "requestStorageAccess"]),
-    ("WebAuthnInterfacePresence", &["PublicKeyCredential", "AuthenticatorAttestationResponse"]),
+    (
+        "StorageAccessApiPresence",
+        &["hasStorageAccess", "requestStorageAccess"],
+    ),
+    (
+        "WebAuthnInterfacePresence",
+        &["PublicKeyCredential", "AuthenticatorAttestationResponse"],
+    ),
     ("BraveDuckDuckGoNavigatorFlags", &["brave", "duckduckgo"]),
-    ("CrossOriginIsolationFlags", &["crossOriginIsolated", "SharedArrayBuffer"]),
+    (
+        "CrossOriginIsolationFlags",
+        &["crossOriginIsolated", "SharedArrayBuffer"],
+    ),
 ];
 
 /// Nearest evidence wins between flag-byte probes: when the statements that
@@ -41,8 +53,15 @@ pub(crate) const FLAG_PROBES: &[(&str, &[&str])] = &[
 /// a neighbouring slot, so `signal` declines.
 pub(crate) fn outranked(census: &Census, signal: &str) -> bool {
     let named = |names: &[&str]| names.iter().any(|name| census.direct.contains(*name));
-    let own = FLAG_PROBES.iter().find(|(name, _)| *name == signal).map(|(_, names)| *names).unwrap_or_default();
-    !named(own) && FLAG_PROBES.iter().any(|(name, names)| *name != signal && named(names))
+    let own = FLAG_PROBES
+        .iter()
+        .find(|(name, _)| *name == signal)
+        .map(|(_, names)| *names)
+        .unwrap_or_default();
+    !named(own)
+        && FLAG_PROBES
+            .iter()
+            .any(|(name, names)| *name != signal && named(names))
 }
 
 /// An anchor element (`createElement("a")`) whose keys a `for…in` walks.
@@ -60,8 +79,12 @@ pub(crate) const PATHS_SAFARI: &str = "safari";
 pub(crate) fn namespace_table(census: &Census) -> Option<&Vec<Vec<String>>> {
     census.path_tables.iter().find(|table| {
         table.len() == 5
-            && table.iter().any(|path| path.first().map(String::as_str) == Some(PATHS_NAVIGATOR))
-            && table.iter().any(|path| path.first().map(String::as_str) == Some(PATHS_SAFARI))
+            && table
+                .iter()
+                .any(|path| path.first().map(String::as_str) == Some(PATHS_NAVIGATOR))
+            && table
+                .iter()
+                .any(|path| path.first().map(String::as_str) == Some(PATHS_SAFARI))
     })
 }
 
@@ -85,7 +108,11 @@ pub(crate) fn agreed_names(
         match &agreed {
             None => agreed = Some(names),
             Some(first) if *first == names => {}
-            Some(_) => return Err(BindRefusal::new("emissions write the values in different orders")),
+            Some(_) => {
+                return Err(BindRefusal::new(
+                    "emissions write the values in different orders",
+                ))
+            }
         }
     }
     agreed.ok_or_else(|| BindRefusal::new("no value writes found for this slot"))
@@ -99,7 +126,8 @@ pub(crate) fn bind_by_path(
     names: &[(&[&str], &'static str)],
 ) -> Result<FieldBinding, BindRefusal> {
     let census = census(view, ctx);
-    let table = namespace_table(&census).ok_or_else(|| BindRefusal::new("no namespace path table"))?;
+    let table =
+        namespace_table(&census).ok_or_else(|| BindRefusal::new("no namespace path table"))?;
     let out = agreed_names(&census, |args| {
         let [index] = args.indices.as_slice() else {
             return Ok(None);

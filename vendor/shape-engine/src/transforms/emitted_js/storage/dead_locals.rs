@@ -23,7 +23,11 @@ pub(crate) fn remove_dead_locals(
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
     let mut facts = Facts::default();
-    facts.comments = program.comments.iter().map(|comment| comment.span).collect();
+    facts.comments = program
+        .comments
+        .iter()
+        .map(|comment| comment.span)
+        .collect();
     facts.visit_program(&program);
     if facts.dynamic {
         return Ok((source.into(), 0));
@@ -83,8 +87,12 @@ struct Facts {
 impl Facts {
     /// Whether a real comment lies in `span`; a `//` in a string is not one.
     fn commented(&self, span: Span) -> bool {
-        let at = self.comments.partition_point(|comment| comment.end <= span.start);
-        self.comments.get(at).is_some_and(|comment| comment.start < span.end)
+        let at = self
+            .comments
+            .partition_point(|comment| comment.end <= span.start);
+        self.comments
+            .get(at)
+            .is_some_and(|comment| comment.start < span.end)
     }
     fn declarations(&mut self, body: &[Statement<'_>], end: u32) {
         for s in body {
@@ -388,8 +396,7 @@ impl Scan<'_, '_> {
                     "{} {};",
                     d.kind.as_str(),
                     keep.iter()
-                        .map(|item| &self.source
-                            [item.span.start as usize..item.span.end as usize])
+                        .map(|item| &self.source[item.span.start as usize..item.span.end as usize])
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -702,9 +709,8 @@ mod tests {
 
     #[test]
     fn a_url_in_a_store_is_not_a_comment() {
-        let cleaned = clean(
-            "function t(c, d) { let x; if (c) { x = \"https://a.test\"; } else { x = d; } }",
-        );
+        let cleaned =
+            clean("function t(c, d) { let x; if (c) { x = \"https://a.test\"; } else { x = d; } }");
         assert!(!cleaned.contains('x'), "{cleaned}");
     }
 

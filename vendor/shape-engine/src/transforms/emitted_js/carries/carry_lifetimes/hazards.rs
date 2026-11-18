@@ -78,7 +78,9 @@ pub(super) struct NamedFunction<'n> {
 }
 impl<'a> Visit<'a> for NamedFunction<'_> {
     fn visit_function(&mut self, f: &Function<'a>, flags: ScopeFlags) {
-        self.found |= f.id.as_ref().is_some_and(|id| id.name.as_str() == self.name);
+        self.found |=
+            f.id.as_ref()
+                .is_some_and(|id| id.name.as_str() == self.name);
         walk::walk_function(self, f, flags);
     }
 }

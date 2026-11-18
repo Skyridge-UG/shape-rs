@@ -22,9 +22,9 @@ pub(in crate::naming) mod observable_map_operator;
 
 pub(in crate::naming) mod captured_range_predicate;
 
-pub(in crate::naming) mod observer_batch_lifecycle;
+pub(in crate::naming) mod captured_handle_termination;
 pub(in crate::naming) mod captured_observer_forwarding;
 pub(in crate::naming) mod captured_source_teardown;
 pub(in crate::naming) mod joined_observables;
+pub(in crate::naming) mod observer_batch_lifecycle;
 pub(in crate::naming) mod subscription_operators;
-pub(in crate::naming) mod captured_handle_termination;

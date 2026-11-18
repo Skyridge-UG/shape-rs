@@ -88,7 +88,10 @@ use crate::analysis;
 
 use crate::signals::extract::bindings::{object_members, property_key_name, ParameterSlots};
 use crate::signals::extract::scanner::extract_program_properties;
-use crate::signals::schema::{BindingKind, BindingRef, Confidence, ProgramProperties, ProgramPropertiesError, SourceIdentity, SourceSpan};
+use crate::signals::schema::{
+    BindingKind, BindingRef, Confidence, ProgramProperties, ProgramPropertiesError, SourceIdentity,
+    SourceSpan,
+};
 
 /// What every proposed name asserts, and what it does not.
 pub const NAMING_CONTRACT: &str = "a proposed name asserts one structurally proven role \
@@ -370,15 +373,17 @@ pub fn vocabulary_name(role: &str) -> Option<&'static str> {
         .filter(|name| !name.starts_with('<'))
         .or_else(|| crate::signals::analysis::roles::finder_role(role).map(|entry| entry.name))
         .or_else(|| {
-            crate::signals::analysis::roles::purposes::purpose_vocabulary().find_map(|(listed, action, alias)| {
-                if listed == role {
-                    Some(action)
-                } else if role.strip_suffix(ALIAS_ROLE_SUFFIX) == Some(listed) {
-                    alias
-                } else {
-                    None
-                }
-            })
+            crate::signals::analysis::roles::purposes::purpose_vocabulary().find_map(
+                |(listed, action, alias)| {
+                    if listed == role {
+                        Some(action)
+                    } else if role.strip_suffix(ALIAS_ROLE_SUFFIX) == Some(listed) {
+                        alias
+                    } else {
+                        None
+                    }
+                },
+            )
         })
 }
 
@@ -669,7 +674,11 @@ impl SemanticNamingPlan {
             .iter()
             .map(|candidate| candidate.role.clone())
             .chain(self.metadata_only().map(|skip| skip.role.clone()))
-            .chain(self.anonymous_functions.iter().map(|entry| entry.role.clone()))
+            .chain(
+                self.anonymous_functions
+                    .iter()
+                    .map(|entry| entry.role.clone()),
+            )
             .collect()
     }
 }
@@ -736,7 +745,10 @@ fn plan_without_properties(
 
 /// A properties shell carrying only what the function index proves without
 /// the report: the source identity, MAIN and MAIN's direct bindings.
-fn degraded_properties(source: &str, index: &crate::naming::function_index::FunctionIndex) -> ProgramProperties {
+fn degraded_properties(
+    source: &str,
+    index: &crate::naming::function_index::FunctionIndex,
+) -> ProgramProperties {
     let main = index.main.as_ref();
     let binding = main.and_then(|main| {
         Some(BindingRef {
@@ -858,12 +870,13 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             .map(|(role, _, _)| (role, RoleSource::Structural))
             .collect::<Vec<_>>();
         let finder_roles = crate::signals::analysis::roles::vocabulary()
-            .filter(|(_, entry)| entry.kind != crate::signals::analysis::roles::FinderRoleKind::FunctionAlias)
+            .filter(|(_, entry)| {
+                entry.kind != crate::signals::analysis::roles::FinderRoleKind::FunctionAlias
+            })
             .map(|(_, entry)| (entry.role, RoleSource::Structural))
             .collect::<Vec<_>>();
-        let accounted = |role: &str| {
-            accounted(role) || self.anonymous.iter().any(|named| named.role == role)
-        };
+        let accounted =
+            |role: &str| accounted(role) || self.anonymous.iter().any(|named| named.role == role);
         let unproven = NAMING_VOCABULARY
             .iter()
             .map(|(role, _, source)| (*role, *source))
@@ -1819,7 +1832,11 @@ impl<'p, 'a> Recognizer<'p, 'a> {
         let mut main_claims = Vec::new();
         let mut class_claims = Vec::new();
         for claim in &claims {
-            if let crate::signals::analysis::roles::FinderClaim::MainBinding { identifier_span, .. } = claim {
+            if let crate::signals::analysis::roles::FinderClaim::MainBinding {
+                identifier_span,
+                ..
+            } = claim
+            {
                 if let Some(symbol) = self.symbol_at_identifier(*identifier_span) {
                     self.explicit_main.insert(symbol);
                 }
@@ -1854,7 +1871,8 @@ impl<'p, 'a> Recognizer<'p, 'a> {
                         }
                     }
                     let alias = alias_role.and_then(|alias_role| {
-                        crate::signals::analysis::roles::finder_role(alias_role).map(|alias| (alias.name, alias_role))
+                        crate::signals::analysis::roles::finder_role(alias_role)
+                            .map(|alias| (alias.name, alias_role))
                     });
                     let skipped_before = self.skipped.len();
                     let span = SourceSpan::from(function_span);
@@ -1944,7 +1962,13 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             }
         }
         for (role, identifier_span, name, confidence, evidence) in main_claims {
-            self.claim_main_binding(role, identifier_span, name, confidence, &evidence.join("; "));
+            self.claim_main_binding(
+                role,
+                identifier_span,
+                name,
+                confidence,
+                &evidence.join("; "),
+            );
         }
         for (role, class_span, name, confidence, evidence) in class_claims {
             self.claim_class_span(role, class_span, name, confidence, &evidence.join("; "));
@@ -1972,13 +1996,20 @@ impl<'p, 'a> Recognizer<'p, 'a> {
                 continue;
             }
             let binding = match claim {
-                crate::signals::analysis::roles::FinderClaim::Function { function_span, .. } => self
+                crate::signals::analysis::roles::FinderClaim::Function {
+                    function_span, ..
+                } => self
                     .function_binding_symbol(*function_span)
                     .and_then(|symbol| self.binding_scope(symbol).map(|scope| (symbol, scope))),
-                crate::signals::analysis::roles::FinderClaim::MainBinding { identifier_span, .. } => self
+                crate::signals::analysis::roles::FinderClaim::MainBinding {
+                    identifier_span,
+                    ..
+                } => self
                     .symbol_at_identifier(*identifier_span)
                     .and_then(|symbol| self.binding_scope(symbol).map(|scope| (symbol, scope))),
-                crate::signals::analysis::roles::FinderClaim::ClassBinding { class_span, .. } => self
+                crate::signals::analysis::roles::FinderClaim::ClassBinding {
+                    class_span, ..
+                } => self
                     .class_binding_symbol(*class_span)
                     .and_then(|symbol| self.binding_scope(symbol).map(|scope| (symbol, scope))),
             };
@@ -1988,17 +2019,24 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             };
             let key = (claim.role(), scope);
             match claim {
-                crate::signals::analysis::roles::FinderClaim::Function { function_span, .. } => {
+                crate::signals::analysis::roles::FinderClaim::Function {
+                    function_span, ..
+                } => {
                     let entry = function_entities.entry(key).or_default();
                     entry.0.insert(symbol);
                     entry.1.insert((function_span.start, function_span.end));
                 }
-                crate::signals::analysis::roles::FinderClaim::MainBinding { identifier_span, .. } => {
+                crate::signals::analysis::roles::FinderClaim::MainBinding {
+                    identifier_span,
+                    ..
+                } => {
                     let entry = main_entities.entry(key).or_default();
                     entry.0.insert(symbol);
                     entry.1.insert((identifier_span.start, identifier_span.end));
                 }
-                crate::signals::analysis::roles::FinderClaim::ClassBinding { class_span, .. } => {
+                crate::signals::analysis::roles::FinderClaim::ClassBinding {
+                    class_span, ..
+                } => {
                     let entry = main_entities.entry(key).or_default();
                     entry.0.insert(symbol);
                     entry.1.insert((class_span.start, class_span.end));
@@ -2058,7 +2096,11 @@ impl<'p, 'a> Recognizer<'p, 'a> {
 
     /// The single symbol declared at exactly this identifier span.
     fn symbol_at_identifier(&self, span: Span) -> Option<u32> {
-        match self.identifier_symbols.get(&(span.start, span.end))?.as_slice() {
+        match self
+            .identifier_symbols
+            .get(&(span.start, span.end))?
+            .as_slice()
+        {
             [symbol] => Some(symbol.index() as u32),
             _ => None,
         }
@@ -2186,7 +2228,8 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             self.skipped.push(NamingSkip {
                 role: role.to_string(),
                 kind: SkipKind::Refused,
-                reason: "no single symbol is declared at this identifier span in the current parse".to_string(),
+                reason: "no single symbol is declared at this identifier span in the current parse"
+                    .to_string(),
                 involved: vec![InvolvedSpan {
                     name: None,
                     span: SourceSpan::from(identifier_span),
@@ -2203,11 +2246,7 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             // was written again is no longer that alias, so it must not fall
             // back to mutable-state naming.
             if role.ends_with("_alias") {
-                self.skip_binding(
-                    role,
-                    "alias role requires a single-origin binding",
-                    symbol,
-                );
+                self.skip_binding(role, "alias role requires a single-origin binding", symbol);
                 return false;
             }
             return self.claim_main_state(role, symbol, name, confidence, evidence);
@@ -2290,9 +2329,12 @@ impl<'p, 'a> Recognizer<'p, 'a> {
     }
 
     fn claim_purposes(&mut self, program: &Program<'a>) {
-        for outcome in
-            crate::signals::analysis::roles::purposes::find_purposes(self.source, program, self.scoping, self.nodes)
-        {
+        for outcome in crate::signals::analysis::roles::purposes::find_purposes(
+            self.source,
+            program,
+            self.scoping,
+            self.nodes,
+        ) {
             match outcome {
                 crate::signals::analysis::roles::purposes::PurposeOutcome::Found(finding) => {
                     let alias_role = format!("{}{ALIAS_ROLE_SUFFIX}", finding.role);
@@ -2308,8 +2350,10 @@ impl<'p, 'a> Recognizer<'p, 'a> {
                         finding.evidence,
                     );
                 }
-                crate::signals::analysis::roles::purposes::PurposeOutcome::Ambiguous { role, .. }
-                    if RETIRED_PURPOSE_ROLES.contains(&role) => {}
+                crate::signals::analysis::roles::purposes::PurposeOutcome::Ambiguous {
+                    role,
+                    ..
+                } if RETIRED_PURPOSE_ROLES.contains(&role) => {}
                 crate::signals::analysis::roles::purposes::PurposeOutcome::Ambiguous {
                     role,
                     candidates,
@@ -3719,7 +3763,9 @@ impl<'p, 'a> Recognizer<'p, 'a> {
             .properties
             .helpers
             .iter()
-            .filter(|helper| helper.role == crate::signals::schema::BindingRole::HashTransactionToken)
+            .filter(|helper| {
+                helper.role == crate::signals::schema::BindingRole::HashTransactionToken
+            })
             .filter_map(|helper| helper.function.binding.as_ref())
             .filter_map(|binding| self.ref_symbol_quiet(binding))
             .collect();

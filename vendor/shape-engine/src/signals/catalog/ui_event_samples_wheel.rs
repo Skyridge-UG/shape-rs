@@ -1,11 +1,12 @@
 //! `UiEventSamplesWheel`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::{slot_facts, Guard};
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::{slot_facts, Guard};
 
 /// `UiEventSamplesWheel`. Card: [`CARD`].
 pub(crate) fn recognize_ui_event_samples_wheel(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -14,8 +15,13 @@ pub(crate) fn recognize_ui_event_samples_wheel(view: &SlotView, ctx: &FinderCtx)
     }
     let facts = slot_facts(view, ctx);
     // One throttled counter per message.
-    let throttled = facts.emissions.iter().flatten().all(|descs| descs.iter().filter(|desc| desc.guards.contains(&Guard::Throttle)).count() == 1)
-        && facts.emissions.iter().flatten().count() > 0;
+    let throttled = facts.emissions.iter().flatten().all(|descs| {
+        descs
+            .iter()
+            .filter(|desc| desc.guards.contains(&Guard::Throttle))
+            .count()
+            == 1
+    }) && facts.emissions.iter().flatten().count() > 0;
     let counters = facts.descs().all(|desc| desc.counter);
     (facts.has_event(&["wheel"]) && !facts.has_event(&["mousemove"]) && throttled && counters)
         .then(|| Claim::new(["wheel listener counters", "one throttled counter"]))

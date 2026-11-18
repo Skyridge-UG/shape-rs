@@ -30,8 +30,8 @@ fn main() {
     // Golden fixture: replay the captured sealed container (a) verbatim and
     // the captured body; generator covers b/c/d/f/z.
     let golden_a = if golden {
-        let path = std::env::var("SHAPEPROBE_GOLDEN")
-            .unwrap_or_else(|_| "tools/golden-login.json".into());
+        let path =
+            std::env::var("SHAPEPROBE_GOLDEN").unwrap_or_else(|_| "tools/golden-login.json".into());
         match std::fs::read_to_string(&path) {
             Ok(raw) => serde_json::from_str::<serde_json::Value>(&raw)
                 .ok()
@@ -55,9 +55,7 @@ fn main() {
             .and_then(|raw| {
                 serde_json::from_str::<serde_json::Value>(&raw)
                     .ok()
-                    .and_then(|v| {
-                        v["request"]["body"].as_str().map(str::to_owned)
-                    })
+                    .and_then(|v| v["request"]["body"].as_str().map(str::to_owned))
             })
     } else {
         None
@@ -97,7 +95,10 @@ fn main() {
         // identity without any HTML scraping.
         // 1b-0. Warm the jar at the storefront root (recon 'lens result'):
         // the seed script is injected on the warm/redirect state only.
-        let warm = client.get("https://p-bandai.com/us").header("accept", "text/html").send();
+        let warm = client
+            .get("https://p-bandai.com/us")
+            .header("accept", "text/html")
+            .send();
         match warm {
             Ok(r) => println!("GET  /us (warm) -> {}", r.status().as_u16()),
             Err(e) => eprintln!("warm: {e}"),
@@ -128,9 +129,15 @@ fn main() {
         // 'seed-tag absence').
         let page = match client
             .get(LOGIN_PAGE)
-            .header("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .header(
+                "accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            )
             .header("accept-language", "en-US,en;q=0.9")
-            .header("sec-ch-ua", "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"")
+            .header(
+                "sec-ch-ua",
+                "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+            )
             .header("sec-ch-ua-mobile", "?0")
             .header("sec-ch-ua-platform", "\"Windows\"")
             .header("sec-fetch-dest", "document")
@@ -161,10 +168,12 @@ fn main() {
         // when the header is absent (SSR contract), and the golden capture
         // proves the token arrives with the session established at GET /us.
         let html = page.text().unwrap_or_default();
-        eprintln!("debug-html: seed={} p8k={} len={}",
+        eprintln!(
+            "debug-html: seed={} p8k={} len={}",
             html.matches("seed=").count(),
             html.matches("p8kOmysnbc").count(),
-            html.len());
+            html.len()
+        );
         if csrf.is_empty() {
             if let Some(start) = html.find("\"csrfToken\":\"") {
                 let rest = &html[start + 13..];
@@ -242,7 +251,10 @@ fn main() {
             .header("content-type", "application/x-www-form-urlencoded")
             .header("x-requested-with", "XMLHttpRequest")
             .header("x-g1-area-code", "us")
-            .header("sec-ch-ua", "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"")
+            .header(
+                "sec-ch-ua",
+                "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+            )
             .header("sec-ch-ua-mobile", "?0")
             .header("sec-ch-ua-platform", "\"Windows\"")
             .header("sec-fetch-dest", "empty")
@@ -286,9 +298,8 @@ fn main() {
             } else {
                 match std::fs::read(&artifact_path)
                     .map_err(|e| e.to_string())
-                    .and_then(|bytes| {
-                        shape::pin::load_layout(&bytes).map_err(|e| e.to_string())
-                    }) {
+                    .and_then(|bytes| shape::pin::load_layout(&bytes).map_err(|e| e.to_string()))
+                {
                     Ok(_layout) => {
                         // Engine encode of the session signals; the layout
                         // grammar seals it. Signal values mirror the live
@@ -303,13 +314,11 @@ fn main() {
                                 // the framed state when the artifact is the
                                 // mirror form.
                                 let _ = signals;
-                                shape::bandai::b64url(&shape::bandai::generate_f(
-                                    &state_f, &mac,
-                                ))
+                                shape::bandai::b64url(&shape::bandai::generate_f(&state_f, &mac))
                             }
-                            Err(_) => shape::bandai::b64url(&shape::bandai::generate_c(
-                                &state_c, &mac,
-                            )),
+                            Err(_) => {
+                                shape::bandai::b64url(&shape::bandai::generate_c(&state_c, &mac))
+                            }
                         }
                     }
                     Err(e) => {
@@ -370,7 +379,11 @@ fn main() {
         final_status = sent.status().as_u16();
         println!("POST /login attempt {attempt} -> {final_status}");
 
-        if let Some(token) = sent.headers().get("x-csrf-token").and_then(|v| v.to_str().ok()) {
+        if let Some(token) = sent
+            .headers()
+            .get("x-csrf-token")
+            .and_then(|v| v.to_str().ok())
+        {
             csrf = token.to_owned();
         }
 
@@ -381,17 +394,19 @@ fn main() {
                     session_cookie = cookie.value().to_owned();
                 }
             }
-            println!("RESULT: PASS (200; session cookie {})", if session_cookie.is_empty() { "unchanged" } else { "refreshed" });
+            println!(
+                "RESULT: PASS (200; session cookie {})",
+                if session_cookie.is_empty() {
+                    "unchanged"
+                } else {
+                    "refreshed"
+                }
+            );
             return;
         }
 
         if final_status != 503 {
-            let head: String = sent
-                .text()
-                .unwrap_or_default()
-                .chars()
-                .take(1200)
-                .collect();
+            let head: String = sent.text().unwrap_or_default().chars().take(1200).collect();
             println!("non-retryable response head: {head}");
             break;
         }

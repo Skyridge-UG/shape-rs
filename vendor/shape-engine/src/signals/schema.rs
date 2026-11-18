@@ -897,9 +897,17 @@ impl EmissionLayout {
     /// Every leaf of an emission with `leaves` value leaves belongs to some
     /// part, and each part's fields hold exactly its leaves.
     pub fn covers(&self, leaves: usize) -> bool {
-        let sized = self.parts.iter().zip(&self.part_leaves).all(|((_, part), indices)| {
-            part.fields.iter().map(|field| layout_leaves(&field.node)).sum::<usize>() == indices.len()
-        });
+        let sized = self
+            .parts
+            .iter()
+            .zip(&self.part_leaves)
+            .all(|((_, part), indices)| {
+                part.fields
+                    .iter()
+                    .map(|field| layout_leaves(&field.node))
+                    .sum::<usize>()
+                    == indices.len()
+            });
         if !sized || self.parts.len() != self.part_leaves.len() {
             return false;
         }
@@ -919,7 +927,9 @@ pub fn layout_leaves(node: &LayoutNode) -> usize {
     match node {
         LayoutNode::Leaf(_) | LayoutNode::ByteSelect { .. } => 1,
         LayoutNode::Array { item } => layout_leaves(item),
-        LayoutNode::Record { fields } => fields.iter().map(|field| layout_leaves(&field.node)).sum(),
+        LayoutNode::Record { fields } => {
+            fields.iter().map(|field| layout_leaves(&field.node)).sum()
+        }
         LayoutNode::Choice { arms } => arms.iter().map(|arm| layout_leaves(&arm.node)).sum(),
         LayoutNode::Empty | LayoutNode::Unknown { .. } => 0,
     }
@@ -929,7 +939,10 @@ pub fn layout_leaves(node: &LayoutNode) -> usize {
 fn grammar_leaves(node: &GrammarNode) -> usize {
     let mut count = 0;
     node.walk(&mut |child| {
-        if matches!(child, GrammarNode::Number(_) | GrammarNode::String(_) | GrammarNode::Byte(_)) {
+        if matches!(
+            child,
+            GrammarNode::Number(_) | GrammarNode::String(_) | GrammarNode::Byte(_)
+        ) {
             count += 1;
         }
     });
@@ -958,7 +971,13 @@ impl SignalLayout {
     pub fn top_keys(&self, message: usize) -> Vec<FieldKey> {
         self.messages
             .get(message)
-            .map(|layout| layout.fields.iter().map(|field| field.key.clone()).collect())
+            .map(|layout| {
+                layout
+                    .fields
+                    .iter()
+                    .map(|field| field.key.clone())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 }
@@ -974,7 +993,9 @@ fn collect_node_keys(node: &LayoutNode, out: &mut Vec<FieldKey>) {
     match node {
         LayoutNode::Record { fields } => collect_keys(fields, out),
         LayoutNode::Array { item } => collect_node_keys(item, out),
-        LayoutNode::Choice { arms } => arms.iter().for_each(|arm| collect_node_keys(&arm.node, out)),
+        LayoutNode::Choice { arms } => arms
+            .iter()
+            .for_each(|arm| collect_node_keys(&arm.node, out)),
         _ => {}
     }
 }
@@ -986,9 +1007,12 @@ pub(crate) fn parse_salt(text: &str) -> Option<i64> {
     if let Some(hex) = tail.strip_prefix("0x").or_else(|| tail.strip_prefix("0X")) {
         return i64::from_str_radix(hex, 16).ok();
     }
-    tail.parse::<i64>()
-        .ok()
-        .or_else(|| tail.parse::<f64>().ok().filter(|v| v.fract() == 0.0).map(|v| v as i64))
+    tail.parse::<i64>().ok().or_else(|| {
+        tail.parse::<f64>()
+            .ok()
+            .filter(|v| v.fract() == 0.0)
+            .map(|v| v as i64)
+    })
 }
 
 /// The literal shape of a byte value: `130` or `c ? A : B`.
@@ -1057,7 +1081,11 @@ impl Projector {
             mask,
             byte: None,
             xor: write.xor_literal,
-            key: if self.generic { write.position.clone() } else { None },
+            key: if self.generic {
+                write.position.clone()
+            } else {
+                None
+            },
             apis,
             salt,
         }
@@ -1237,7 +1265,8 @@ pub fn project_contract(contract: &SignalContract) -> SignalLayout {
         };
         let (parts, part_leaves) = match split {
             Some((arms, rest)) => {
-                let arm_counts: Vec<usize> = arms.iter().map(|arm| grammar_leaves(&arm.body)).collect();
+                let arm_counts: Vec<usize> =
+                    arms.iter().map(|arm| grammar_leaves(&arm.body)).collect();
                 let arms_total: usize = arm_counts.iter().sum();
                 let rest_count: usize = rest.iter().map(grammar_leaves).sum();
                 let mut offset = 0;
@@ -1256,7 +1285,11 @@ pub fn project_contract(contract: &SignalContract) -> SignalLayout {
                             fields,
                         },
                     ));
-                    part_leaves.push((offset..offset + count).chain(arms_total..arms_total + rest_count).collect());
+                    part_leaves.push(
+                        (offset..offset + count)
+                            .chain(arms_total..arms_total + rest_count)
+                            .collect(),
+                    );
                     offset += count;
                 }
                 (parts, part_leaves)
@@ -1314,7 +1347,8 @@ fn same_layout(left: &MessageLayout, right: &MessageLayout) -> bool {
         name: &|key| Some(key.to_string()),
         flags: &no_flags,
     };
-    left.mask == right.mask && render_fields(&left.fields, &names) == render_fields(&right.fields, &names)
+    left.mask == right.mask
+        && render_fields(&left.fields, &names) == render_fields(&right.fields, &names)
 }
 
 impl SignalLayout {
@@ -1322,7 +1356,9 @@ impl SignalLayout {
     /// into.
     pub fn part_message(&self, emission: usize, part: usize) -> Option<usize> {
         let (_, layout) = self.emissions.get(emission)?.parts.get(part)?;
-        self.messages.iter().position(|message| same_layout(message, layout))
+        self.messages
+            .iter()
+            .position(|message| same_layout(message, layout))
     }
 
     /// The node of `key` in message `message`.
@@ -1371,7 +1407,9 @@ fn find_node_key<'l>(node: &'l LayoutNode, key: &str) -> Option<(&'l LayoutNode,
 pub fn flag_leaf_offsets(node: &LayoutNode) -> Vec<usize> {
     fn walk(node: &LayoutNode, offset: usize, out: &mut Vec<usize>) {
         match node {
-            LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte && leaf.byte.is_none() => out.push(offset),
+            LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte && leaf.byte.is_none() => {
+                out.push(offset)
+            }
             LayoutNode::Array { item } => walk(item, offset, out),
             LayoutNode::Choice { arms } => {
                 let mut offset = offset;
@@ -1408,7 +1446,12 @@ impl FieldBinding {
     }
 
     /// Name `key` of message `message`.
-    pub fn name(mut self, message: usize, key: impl Into<FieldKey>, name: impl Into<String>) -> Self {
+    pub fn name(
+        mut self,
+        message: usize,
+        key: impl Into<FieldKey>,
+        name: impl Into<String>,
+    ) -> Self {
         self.names.insert((message, key.into()), name.into());
         self
     }
@@ -1436,7 +1479,12 @@ impl FieldBinding {
     }
 
     /// Render the byte leaves of `key` of message `message` as packed flags.
-    pub fn set_flags(&mut self, message: usize, key: impl Into<FieldKey>, bits: BTreeMap<String, u32>) {
+    pub fn set_flags(
+        &mut self,
+        message: usize,
+        key: impl Into<FieldKey>,
+        bits: BTreeMap<String, u32>,
+    ) {
         self.flags.insert((message, key.into()), bits);
     }
 
@@ -1481,10 +1529,17 @@ fn no_flags(_: &str) -> Option<BTreeMap<String, u32>> {
 /// Render one field node. `bits` are the packed flags of the enclosing
 /// field: they apply to its non-literal byte leaves (through arrays and
 /// choice arms, not into records, whose fields have their own keys).
-fn render_node(node: &LayoutNode, names: &Names, key: &str, bits: Option<&BTreeMap<String, u32>>) -> Result<Value, String> {
+fn render_node(
+    node: &LayoutNode,
+    names: &Names,
+    key: &str,
+    bits: Option<&BTreeMap<String, u32>>,
+) -> Result<Value, String> {
     Ok(match node {
         LayoutNode::Leaf(leaf) => match bits {
-            Some(bits) if leaf.kind == LeafKind::Byte && leaf.byte.is_none() => flags_value(leaf, bits),
+            Some(bits) if leaf.kind == LeafKind::Byte && leaf.byte.is_none() => {
+                flags_value(leaf, bits)
+            }
             _ => leaf_value(leaf),
         },
         LayoutNode::ByteSelect {
@@ -1510,7 +1565,9 @@ fn render_node(node: &LayoutNode, names: &Names, key: &str, bits: Option<&BTreeM
         }
         LayoutNode::Array { item } => {
             let mut item_value = render_node(item, names, &format!("{key}.item"), bits)?;
-            if let (Value::Object(map), false) = (&mut item_value, matches!(**item, LayoutNode::Record { .. })) {
+            if let (Value::Object(map), false) =
+                (&mut item_value, matches!(**item, LayoutNode::Record { .. }))
+            {
                 if let Some(field_name) = (names.name)(key) {
                     map.insert("name".into(), json!(format!("{field_name}_item")));
                 }
@@ -1566,7 +1623,11 @@ fn flags_value(leaf: &LayoutLeaf, bits: &BTreeMap<String, u32>) -> Value {
     value.insert("maskMode".into(), mask_mode(leaf.mask));
     value.insert(
         "bits".into(),
-        Value::Object(bits.iter().map(|(name, bit)| (name.clone(), json!(bit))).collect()),
+        Value::Object(
+            bits.iter()
+                .map(|(name, bit)| (name.clone(), json!(bit)))
+                .collect(),
+        ),
     );
     if let Some(xor) = leaf.xor {
         value.insert("xor".into(), json!(xor));
@@ -1591,7 +1652,10 @@ fn leaf_value(leaf: &LayoutLeaf) -> Value {
     Value::Object(value)
 }
 
-fn render_fields(fields: &[LayoutField], names: &Names) -> Result<(Vec<String>, Map<String, Value>), String> {
+fn render_fields(
+    fields: &[LayoutField],
+    names: &Names,
+) -> Result<(Vec<String>, Map<String, Value>), String> {
     let mut order = Vec::new();
     let mut rendered = Map::new();
     for field in fields {
@@ -1636,9 +1700,18 @@ pub fn render_signal(
         }
     }
     let masks: Vec<Option<i64>> = layout.messages.iter().map(|message| message.mask).collect();
-    let common = masks.first().copied().flatten().filter(|first| masks.iter().all(|m| *m == Some(*first)));
-    out.insert("mask".into(), common.map(|salt| json!(salt)).unwrap_or(Value::Null));
-    let render_message = |index: usize, message: &MessageLayout| -> Result<(Vec<String>, Map<String, Value>), String> {
+    let common = masks
+        .first()
+        .copied()
+        .flatten()
+        .filter(|first| masks.iter().all(|m| *m == Some(*first)));
+    out.insert(
+        "mask".into(),
+        common.map(|salt| json!(salt)).unwrap_or(Value::Null),
+    );
+    let render_message = |index: usize,
+                          message: &MessageLayout|
+     -> Result<(Vec<String>, Map<String, Value>), String> {
         let name = |key: &str| -> Option<String> {
             match binding {
                 None => Some(local_key(key)),
@@ -1646,8 +1719,14 @@ pub fn render_signal(
             }
         };
         let flags = |key: &str| binding.and_then(|binding| binding.flags(index, key).cloned());
-        render_fields(&message.fields, &Names { name: &name, flags: &flags })
-            .map_err(|key| format!("message {index}: unbound field {key}"))
+        render_fields(
+            &message.fields,
+            &Names {
+                name: &name,
+                flags: &flags,
+            },
+        )
+        .map_err(|key| format!("message {index}: unbound field {key}"))
     };
     match layout.messages.as_slice() {
         [] => {
@@ -1722,9 +1801,10 @@ impl SignalLayout {
                 for field in &part.fields {
                     let count = layout_leaves(&field.node);
                     let shared = count > 0
-                        && indices
-                            .get(cursor..cursor + count)
-                            .is_some_and(|run| run.iter().all(|index| uses.get(index).copied().unwrap_or(0) > 1));
+                        && indices.get(cursor..cursor + count).is_some_and(|run| {
+                            run.iter()
+                                .all(|index| uses.get(index).copied().unwrap_or(0) > 1)
+                        });
                     cursor += count;
                     let mut chain = Vec::new();
                     if shared {
@@ -1734,7 +1814,13 @@ impl SignalLayout {
                     } else if let Some(arm) = arm {
                         chain.push(format!("arm:{arm}"));
                     }
-                    flatten(&field.node, emission.emission, part.mask, &mut chain, &mut out);
+                    flatten(
+                        &field.node,
+                        emission.emission,
+                        part.mask,
+                        &mut chain,
+                        &mut out,
+                    );
                 }
                 shared_done |= emission.parts.len() > 1;
             }
@@ -1743,7 +1829,13 @@ impl SignalLayout {
     }
 }
 
-fn flat_leaf(leaf: &LayoutLeaf, emission: usize, message: Option<i64>, chain: &[String], bytes: Option<Vec<i64>>) -> FlatLeaf {
+fn flat_leaf(
+    leaf: &LayoutLeaf,
+    emission: usize,
+    message: Option<i64>,
+    chain: &[String],
+    bytes: Option<Vec<i64>>,
+) -> FlatLeaf {
     FlatLeaf {
         emission,
         op: match leaf.kind {
@@ -1764,14 +1856,32 @@ fn flat_leaf(leaf: &LayoutLeaf, emission: usize, message: Option<i64>, chain: &[
     }
 }
 
-fn flatten(node: &LayoutNode, emission: usize, message: Option<i64>, chain: &mut Vec<String>, out: &mut Vec<FlatLeaf>) {
+fn flatten(
+    node: &LayoutNode,
+    emission: usize,
+    message: Option<i64>,
+    chain: &mut Vec<String>,
+    out: &mut Vec<FlatLeaf>,
+) {
     match node {
-        LayoutNode::Leaf(leaf) => out.push(flat_leaf(leaf, emission, message, chain, leaf.byte.map(|b| vec![b]))),
+        LayoutNode::Leaf(leaf) => out.push(flat_leaf(
+            leaf,
+            emission,
+            message,
+            chain,
+            leaf.byte.map(|b| vec![b]),
+        )),
         LayoutNode::ByteSelect {
             leaf,
             then_byte,
             else_byte,
-        } => out.push(flat_leaf(leaf, emission, message, chain, Some(vec![*then_byte, *else_byte]))),
+        } => out.push(flat_leaf(
+            leaf,
+            emission,
+            message,
+            chain,
+            Some(vec![*then_byte, *else_byte]),
+        )),
         LayoutNode::Array { item } => {
             chain.push("repeat".into());
             flatten(item, emission, message, chain, out);

@@ -1,26 +1,39 @@
 //! `IncognitoStorageProbe`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, SignalLayout,
+    SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `IncognitoStorageProbe`. Card: [`CARD`].
 pub(crate) fn recognize_incognito_storage_probe(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let shape = view.emissions().iter().all(|emission| {
-        emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::String).count() == 1
+        emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.op == LeafOp::String)
+            .count()
+            == 1
             && emission.leaves.iter().any(|leaf| leaf.op == LeafOp::Byte)
             && emission.leaves.iter().all(|leaf| leaf.op != LeafOp::Number)
     });
     if top_count_is(&view.shapes(), 2) && shape && ctx.has_role(view, "platform_result_emitter") {
-        return claim(&["STRING + BYTE", "written by the proven platform_result_emitter"]);
+        return claim(&[
+            "STRING + BYTE",
+            "written by the proven platform_result_emitter",
+        ]);
     }
     // The emitter role is unique per program; a lowered try/catch copies the
     // fulfilment handler, so match the handler itself: a `.then` callback
     // of a call to the proven platform_detection_prober.
     if top_count_is(&view.shapes(), 2) && shape && platform::in_result_callback(view, ctx) {
-        return claim(&["STRING + BYTE", "written in a .then callback of the proven platform_detection_prober"]);
+        return claim(&[
+            "STRING + BYTE",
+            "written in a .then callback of the proven platform_detection_prober",
+        ]);
     }
     None
 }
@@ -37,8 +50,13 @@ pub(crate) fn bind_incognito_storage_probe(
         matches!(f.node, LayoutNode::Choice { arms } if arms.len() == 2
             && arms.iter().all(|arm| matches!(&arm.node, LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte)))
     };
-    let private = |f: &Field| !f.writes(LeafKind::String) && (f.writes(LeafKind::Byte) || tag_pair(f));
-    solve_all_messages(view, layout, &[("browserCode", &code), ("isPrivateMode", &private)])
+    let private =
+        |f: &Field| !f.writes(LeafKind::String) && (f.writes(LeafKind::Byte) || tag_pair(f));
+    solve_all_messages(
+        view,
+        layout,
+        &[("browserCode", &code), ("isPrivateMode", &private)],
+    )
 }
 
 mod platform {
@@ -68,8 +86,10 @@ mod platform {
                     if scoping.symbol_declarations(symbol).count() != 1 {
                         return None;
                     }
-                    let writes: Vec<_> =
-                        scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).collect();
+                    let writes: Vec<_> = scoping
+                        .get_resolved_references(symbol)
+                        .filter(|reference| reference.is_write())
+                        .collect();
                     let declaration = scoping.symbol_declaration(symbol);
                     match (nodes.kind(declaration), writes.as_slice()) {
                         (AstKind::Function(function), []) => return Some(function.span),
@@ -77,15 +97,20 @@ mod platform {
                             current = declarator.init.as_ref()?.without_parentheses();
                         }
                         // `let f; ... f = g;`: one plain assignment, no initialiser.
-                        (AstKind::VariableDeclarator(declarator), [write]) if declarator.init.is_none() => {
-                            let assignment = nodes
-                                .ancestor_ids(write.node_id())
-                                .take(4)
-                                .find_map(|id| match nodes.kind(id) {
-                                    AstKind::AssignmentExpression(assignment) => Some(assignment),
-                                    _ => None,
+                        (AstKind::VariableDeclarator(declarator), [write])
+                            if declarator.init.is_none() =>
+                        {
+                            let assignment =
+                                nodes.ancestor_ids(write.node_id()).take(4).find_map(|id| {
+                                    match nodes.kind(id) {
+                                        AstKind::AssignmentExpression(assignment) => {
+                                            Some(assignment)
+                                        }
+                                        _ => None,
+                                    }
                                 })?;
-                            if assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign
+                            if assignment.operator
+                                != oxc_syntax::operator::AssignmentOperator::Assign
                                 || !matches!(&assignment.left, oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(target) if target.span == nodes.kind(write.node_id()).span())
                             {
                                 return None;
@@ -115,21 +140,29 @@ mod platform {
                 return out;
             }
             for node in ctx.parse.nodes.iter() {
-                let AstKind::CallExpression(call) = node.kind() else { continue };
-                let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else {
+                let AstKind::CallExpression(call) = node.kind() else {
+                    continue;
+                };
+                let Expression::StaticMemberExpression(member) = call.callee.without_parentheses()
+                else {
                     continue;
                 };
                 if member.property.name != "then" {
                     continue;
                 }
-                let Expression::CallExpression(receiver) = member.object.without_parentheses() else {
+                let Expression::CallExpression(receiver) = member.object.without_parentheses()
+                else {
                     continue;
                 };
                 if callee_function(ctx, &receiver.callee) != Some(probers[0]) {
                     continue;
                 }
                 // Inline, or a named handler (`.then(handler)`).
-                let Some(callback) = call.arguments.first().and_then(Argument::as_expression).and_then(|argument| callee_function(ctx, argument))
+                let Some(callback) = call
+                    .arguments
+                    .first()
+                    .and_then(Argument::as_expression)
+                    .and_then(|argument| callee_function(ctx, argument))
                 else {
                     continue;
                 };
@@ -179,4 +212,3 @@ pub(crate) const CARD: Card = Card {
         ),
     ]),
 };
-

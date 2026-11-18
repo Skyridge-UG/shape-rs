@@ -20,8 +20,8 @@ use oxc_semantic::{AstNodes, ReferenceId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::AssignmentOperator;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EquivalentCarryResult {
@@ -133,9 +133,11 @@ pub(crate) fn merge_equivalent_carries(source: &str) -> Result<EquivalentCarryRe
                     )
                 };
                 let mut proposal = vec![analysis::Edit::delete(removal)];
-                proposal.extend(paired.iter().map(|pair| {
-                    analysis::Edit::delete(whole_line(source, pair.second.statement))
-                }));
+                proposal.extend(
+                    paired.iter().map(|pair| {
+                        analysis::Edit::delete(whole_line(source, pair.second.statement))
+                    }),
+                );
                 proposal.extend(read_edits);
                 if proposal.iter().any(|edit| {
                     edits.iter().any(|other: &analysis::Edit| {

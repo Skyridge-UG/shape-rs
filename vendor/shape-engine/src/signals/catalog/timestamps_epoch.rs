@@ -1,11 +1,12 @@
 //! `TimestampsEpoch`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `TimestampsEpoch`. Card: [`CARD`].
 pub(crate) fn recognize_timestamps_epoch(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -13,7 +14,10 @@ pub(crate) fn recognize_timestamps_epoch(view: &SlotView, ctx: &FinderCtx) -> Op
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let epoch = facts.all_matched() && facts.descs().all(|desc| desc.reads_date() && !desc.has_op("-") && !desc.program_call);
+    let epoch = facts.all_matched()
+        && facts
+            .descs()
+            .all(|desc| desc.reads_date() && !desc.has_op("-") && !desc.program_call);
     epoch.then(|| Claim::new(["one Date epoch read", "RAW4 NUMBER"]))
 }
 

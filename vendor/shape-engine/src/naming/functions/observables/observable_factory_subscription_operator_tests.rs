@@ -82,7 +82,11 @@ fn factory_guard_and_sentinel_protocol_negatives() {
         (CAPTURED_CLEANUP, "$AV = 9658;", "$AV = void 0;"),
         (CAPTURED_CLEANUP, "$AU = 2;", "$AV = 2;"),
         (CAPTURED_CLEANUP, "$AU = 2;", "$AU = 2; extraEffect();"),
-        (CAPTURED_CLEANUP, "if ($AV === void 0)", "if ($AU === void 0)"),
+        (
+            CAPTURED_CLEANUP,
+            "if ($AV === void 0)",
+            "if ($AU === void 0)",
+        ),
         (
             CAPTURED_CLEANUP,
             "Cannot read properties of undefined (reading '0')",
@@ -93,7 +97,11 @@ fn factory_guard_and_sentinel_protocol_negatives() {
             "$PARAMB.call($PARAMA, $PARAMC[$PARAMD]);",
             "$PARAMB.call($PARAMC, $PARAMA[$PARAMD]);",
         ),
-        (CAPTURED_CLEANUP, "i = Number(i) + 1, true", "i = Number(i) + 2, true"),
+        (
+            CAPTURED_CLEANUP,
+            "i = Number(i) + 1, true",
+            "i = Number(i) + 2, true",
+        ),
         (
             CAPTURED_CLEANUP,
             "})(j, (j.next), $KEY_4, i)",

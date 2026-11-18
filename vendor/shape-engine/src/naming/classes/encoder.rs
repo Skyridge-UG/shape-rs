@@ -3,8 +3,10 @@
 //! The proof links the returned class to its own serializer state, wire
 //! operations and callbacks. Only the array-comparison helper is borrowed
 //! from p06, at an exact stable callable span.
-use crate::signals::extract::bindings::{call_arguments, property_key_name, static_member_name, FunctionSite, Model};
 use crate::signals::analysis::roles::{FinderClaim, FinderCtx};
+use crate::signals::extract::bindings::{
+    call_arguments, property_key_name, static_member_name, FunctionSite, Model,
+};
 use crate::signals::schema::{ProgramPropertiesLimits, SourceSpan};
 use oxc_ast::{ast::*, AstKind};
 use oxc_semantic::SymbolId;

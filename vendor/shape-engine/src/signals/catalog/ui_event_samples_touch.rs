@@ -1,10 +1,13 @@
 //! `UiEventSamplesTouch`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout,
+    SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
+use value_facts::slot_facts;
 
 const TOUCH_EVENTS: &[&str] = &["touchstart", "touchmove", "touchend"];
 
@@ -15,12 +18,19 @@ pub(crate) fn recognize_ui_event_samples_touch(view: &SlotView, ctx: &FinderCtx)
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let touch_roles = ctx.slot_roles(view).iter().any(|role| role.starts_with("interaction_touch"));
+    let touch_roles = ctx
+        .slot_roles(view)
+        .iter()
+        .any(|role| role.starts_with("interaction_touch"));
     let touched = facts.has_event(TOUCH_EVENTS) || touch_roles;
     // The last-chance callback is shared with the mouse rings in some
     // builds; the point list itself reads touch points.
-    let points = facts.literals.iter().any(|literal| literal.fields.values().any(|desc| desc.has_member("force")));
-    (touched || points).then(|| Claim::new(["touch listeners fill the record ring", "nested point list"]))
+    let points = facts
+        .literals
+        .iter()
+        .any(|literal| literal.fields.values().any(|desc| desc.has_member("force")));
+    (touched || points)
+        .then(|| Claim::new(["touch listeners fill the record ring", "nested point list"]))
 }
 
 pub(crate) fn bind_ui_event_samples_touch(
@@ -35,22 +45,31 @@ pub(crate) fn bind_ui_event_samples_touch(
         _ => None,
     })?;
     binder.records(|records, facts| {
-        let outer = records.name_by_labels(facts, |field, meaning| match (field.shape, field.kind()) {
-            (Shape::Array, _) => Some("points"),
-            (_, Some(LeafKind::Byte)) => Some("flags"),
-            (_, Some(LeafKind::Number)) if is_clock_value(meaning) => Some("time"),
-            // The count of the record's point list (`rec.c.length`, `c` a
-            // list in the record literal).
-            (_, Some(LeafKind::Number)) if meaning.has_op("array") && field.merged().has_member("length") => Some("pointCount"),
-            _ => None,
-        });
+        let outer =
+            records.name_by_labels(facts, |field, meaning| match (field.shape, field.kind()) {
+                (Shape::Array, _) => Some("points"),
+                (_, Some(LeafKind::Byte)) => Some("flags"),
+                (_, Some(LeafKind::Number)) if is_clock_value(meaning) => Some("time"),
+                // The count of the record's point list (`rec.c.length`, `c` a
+                // list in the record literal).
+                (_, Some(LeafKind::Number))
+                    if meaning.has_op("array") && field.merged().has_member("length") =>
+                {
+                    Some("pointCount")
+                }
+                _ => None,
+            });
         outer?;
         records.nested(facts, |field, meaning| {
             if meaning.has_member("force") {
                 Some("force")
-            } else if meaning.has_member("clientX") || (meaning.has_member("left") && meaning.has_member("pageX")) {
+            } else if meaning.has_member("clientX")
+                || (meaning.has_member("left") && meaning.has_member("pageX"))
+            {
                 Some("targetRelX")
-            } else if meaning.has_member("clientY") || (meaning.has_member("top") && meaning.has_member("pageY")) {
+            } else if meaning.has_member("clientY")
+                || (meaning.has_member("top") && meaning.has_member("pageY"))
+            {
                 Some("targetRelY")
             } else if meaning.has_member("pageX") {
                 Some("pageX")

@@ -1,10 +1,12 @@
 //! `DeviceMemory`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout,
+    SlotView,
+};
+use crate::signals::analysis::{leaf_checks::*, shape_text::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 // ===========================================================================
 // Recognizers and binders
@@ -14,7 +16,10 @@ use crate::signals::catalog::card::{Card, CardBody, CardField};
 pub(crate) fn recognize_device_memory(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     // The memory value is a number; a string leaf's deviceMemory api is
     // register-reuse pollution (the location census reuses the same local).
-    let numbers: Vec<&LeafView> = leaves_of(view).into_iter().filter(|leaf| leaf.op == LeafOp::Number).collect();
+    let numbers: Vec<&LeafView> = leaves_of(view)
+        .into_iter()
+        .filter(|leaf| leaf.op == LeafOp::Number)
+        .collect();
     if top_count_is(&view.shapes(), 1) && any_api(&numbers, "navigator.deviceMemory") {
         return claim(&["one field", "value reads navigator.deviceMemory"]);
     }

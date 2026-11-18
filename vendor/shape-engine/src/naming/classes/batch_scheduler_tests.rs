@@ -1,7 +1,8 @@
-use crate::signals::schema::ProgramPropertiesLimits;
 use super::*;
-const DIRECT_STORE_ALIAS: &str =
-    include_str!("../../../tests/fixtures/program/thread-batch-scheduler-direct-store-alternate.js");
+use crate::signals::schema::ProgramPropertiesLimits;
+const DIRECT_STORE_ALIAS: &str = include_str!(
+    "../../../tests/fixtures/program/thread-batch-scheduler-direct-store-alternate.js"
+);
 const DIRECT_STORE: &str =
     include_str!("../../../tests/fixtures/program/thread-batch-scheduler-direct-store.js");
 const CARRIED_MEAN: &str =
@@ -198,7 +199,12 @@ fn synthetic(process: &str) -> String {
     let start = DIRECT_STORE_ALIAS.find("class ").unwrap();
     let end = DIRECT_STORE_ALIAS[start..].find("\n$KEY_63 =").unwrap() + start;
     let class = format!("class $THREAD_4_63087 {{ constructor(budget) {{ this.targetBatchTimeMs = budget; this._internalNow = $KEY_250({HOST}); }} {NOW} {SCHEDULE} {process} }}");
-    format!("{}{}{}", &DIRECT_STORE_ALIAS[..start], class, &DIRECT_STORE_ALIAS[end..])
+    format!(
+        "{}{}{}",
+        &DIRECT_STORE_ALIAS[..start],
+        class,
+        &DIRECT_STORE_ALIAS[end..]
+    )
 }
 #[test]
 fn direct_conjunction_while_and_duration_temporary() {
@@ -461,33 +467,81 @@ const UPDATE_ADD: &str =
 #[test]
 fn update_add_actual_update_add_whole_model_and_alpha() {
     accepts(UPDATE_ADD);
-    accepts(&UPDATE_ADD.replace("$BM", "task").replace("$BP", "average")
-        .replace("$BR", "savedNumericCount").replace("$THREAD_1_143030", "Scheduler"));
+    accepts(
+        &UPDATE_ADD
+            .replace("$BM", "task")
+            .replace("$BP", "average")
+            .replace("$BR", "savedNumericCount")
+            .replace("$THREAD_1_143030", "Scheduler"),
+    );
     let allocator = oxc_allocator::Allocator::default();
     let program = crate::analysis::parse_program(&allocator, UPDATE_ADD).unwrap();
     let (scoping, nodes) = crate::analysis::analyze(&program);
-    let model = Model::new(UPDATE_ADD, &program, &scoping, &nodes,
-        ProgramPropertiesLimits::default()).unwrap();
-    let class = model.nodes.iter().find_map(|n| match n.kind() {
-        AstKind::Class(c) => Some(c), _ => None,
-    }).unwrap();
-    let process = class.body.body.iter().find_map(|e| match e {
-        ClassElement::MethodDefinition(m) if property_key_name(&m.key).as_deref() == Some("_process") =>
-            method(model.scoping, &m.value),
-        _ => None,
-    }).unwrap();
-    assert!(class_uses(&model, class.id.as_ref().unwrap().symbol_id.get().unwrap(),
-        class.span, false, &mut BTreeSet::new()), "actual publication passes unchanged gate");
-    assert!(grammar().process.iter().filter(|(_, e)| !e.is_some_and(|e| e.contains("saved numeric count plus one")))
-        .all(|(p, _)| p != &process), "first failed old guard is the complete process grammar");
-    assert_eq!(process, reference(&format!("class Pattern {{ {UPDATE_ADD_PROCESS} }}")));
+    let model = Model::new(
+        UPDATE_ADD,
+        &program,
+        &scoping,
+        &nodes,
+        ProgramPropertiesLimits::default(),
+    )
+    .unwrap();
+    let class = model
+        .nodes
+        .iter()
+        .find_map(|n| match n.kind() {
+            AstKind::Class(c) => Some(c),
+            _ => None,
+        })
+        .unwrap();
+    let process = class
+        .body
+        .body
+        .iter()
+        .find_map(|e| match e {
+            ClassElement::MethodDefinition(m)
+                if property_key_name(&m.key).as_deref() == Some("_process") =>
+            {
+                method(model.scoping, &m.value)
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        class_uses(
+            &model,
+            class.id.as_ref().unwrap().symbol_id.get().unwrap(),
+            class.span,
+            false,
+            &mut BTreeSet::new()
+        ),
+        "actual publication passes unchanged gate"
+    );
+    assert!(
+        grammar()
+            .process
+            .iter()
+            .filter(|(_, e)| !e.is_some_and(|e| e.contains("saved numeric count plus one")))
+            .all(|(p, _)| p != &process),
+        "first failed old guard is the complete process grammar"
+    );
+    assert_eq!(
+        process,
+        reference(&format!("class Pattern {{ {UPDATE_ADD_PROCESS} }}"))
+    );
     // This remains a separate protocol even when the arithmetic happens to
 
     // agree for immutable numeric inputs. No old grammar entry proves it.
     let actual = reference(&format!("class Pattern {{ {UPDATE_ADD_PROCESS} }}"));
-    let matching: Vec<_> = grammar().process.iter().filter(|(p, _)| p == &actual).collect();
+    let matching: Vec<_> = grammar()
+        .process
+        .iter()
+        .filter(|(p, _)| p == &actual)
+        .collect();
     assert_eq!(matching.len(), 1);
-    assert!(matching[0].1.unwrap().contains("saved numeric count plus one"));
+    assert!(matching[0]
+        .1
+        .unwrap()
+        .contains("saved numeric count plus one"));
     println!("whole Model accepts only the complete ordered process; legacy process patterns do not match");
 }
 
@@ -508,13 +562,31 @@ fn update_add_order_arithmetic_shortcircuit_and_ports_refuse() {
         ("for (;; i = $BR + 1)", "while ($BQ)"),
         ("if ($BQ)", "if (!$BQ)"),
         ("if ($BQ)", "if (true)"),
-        ("this._process.bind(this, $BM)", "this._process.bind(null, $BM)"),
-        ("this._process.bind(this, $BM)", "this._process.bind(this, $BM, 1)"),
-        ("this._process.bind(this, $BM), 0", "this._process.bind(this, $BM), 1"),
-        ("this._process.bind(this, $BM), 0", "this._process.bind(this, $BM), 0, 1"),
+        (
+            "this._process.bind(this, $BM)",
+            "this._process.bind(null, $BM)",
+        ),
+        (
+            "this._process.bind(this, $BM)",
+            "this._process.bind(this, $BM, 1)",
+        ),
+        (
+            "this._process.bind(this, $BM), 0",
+            "this._process.bind(this, $BM), 1",
+        ),
+        (
+            "this._process.bind(this, $BM), 0",
+            "this._process.bind(this, $BM), 0, 1",
+        ),
         ("$BQ = $BM();", "$BQ = $BM(this);"),
-        ("this.targetBatchTimeMs = $BM;", "this.targetBatchTimeMs = 8;"),
-        ("return this._internalNow();", "return this._internalNow(1);"),
+        (
+            "this.targetBatchTimeMs = $BM;",
+            "this.targetBatchTimeMs = 8;",
+        ),
+        (
+            "return this._internalNow();",
+            "return this._internalNow(1);",
+        ),
         ("$BR = Number(i);", "$BR = Number($BP);"),
         ("$BR = Number(i);", "$BR = otherNumber(i);"),
         ("_process($BM) {", "_process($BM, Number) {"),
@@ -527,31 +599,58 @@ fn update_add_order_arithmetic_shortcircuit_and_ports_refuse() {
     let without = UPDATE_ADD.replace(coercion, "");
     refuses(&changed(&without, mean, &format!("{coercion} {mean}")));
     let after = "let $BT = this.now();";
-    refuses(&changed(UPDATE_ADD, "$BQ = $BM();", "")
-        .replace(after, &format!("{after} $BQ = $BM();")));
+    refuses(
+        &changed(UPDATE_ADD, "$BQ = $BM();", "").replace(after, &format!("{after} $BQ = $BM();")),
+    );
     let before = "let $BS = this.now();";
-    refuses(&changed(UPDATE_ADD, "$BQ = $BM();", "")
-        .replace(before, &format!("$BQ = $BM(); {before}")));
+    refuses(
+        &changed(UPDATE_ADD, "$BQ = $BM();", "").replace(before, &format!("$BQ = $BM(); {before}")),
+    );
 }
 
 #[test]
 fn update_add_scopes_captures_publication_lifetimes_refuse() {
     for (from, to) in [
-        ("$KEY_434 = $THREAD_6_20734;", "$KEY_434 = $THREAD_6_20734; $KEY_434 = otherClock;"),
+        (
+            "$KEY_434 = $THREAD_6_20734;",
+            "$KEY_434 = $THREAD_6_20734; $KEY_434 = otherClock;",
+        ),
         ("$KEY_434 = $THREAD_6_20734;", ""),
         ("typeof global", "typeof hiddenGlobal"),
         ("function bootstrap() {", "function bootstrap(global) {"),
         ("constructor($BM) {", "constructor($BM, global) {"),
-        ("this._internalNow = $KEY_434(", "this._internalNow = unknownClock("),
+        (
+            "this._internalNow = $KEY_434(",
+            "this._internalNow = unknownClock(",
+        ),
         ("let $KEY_83;", "let $KEY_83 = other;"),
-        ("$KEY_83 = $THREAD_1_143030;", "$KEY_83 = $THREAD_1_143030; $KEY_83 = other;"),
-        ("$KEY_83 = $THREAD_1_143030;", "$KEY_83 = other; $KEY_83 = $THREAD_1_143030; $KEY_83 = other;"),
-        ("class $THREAD_1_143030 {", "let early = $THREAD_1_143030; class $THREAD_1_143030 {"),
-        ("$KEY_83 = $THREAD_1_143030;", "let early = $KEY_83; $KEY_83 = $THREAD_1_143030;"),
-        ("class $THREAD_1_143030 {", "class $THREAD_1_143030 extends UnknownBase {"),
+        (
+            "$KEY_83 = $THREAD_1_143030;",
+            "$KEY_83 = $THREAD_1_143030; $KEY_83 = other;",
+        ),
+        (
+            "$KEY_83 = $THREAD_1_143030;",
+            "$KEY_83 = other; $KEY_83 = $THREAD_1_143030; $KEY_83 = other;",
+        ),
+        (
+            "class $THREAD_1_143030 {",
+            "let early = $THREAD_1_143030; class $THREAD_1_143030 {",
+        ),
+        (
+            "$KEY_83 = $THREAD_1_143030;",
+            "let early = $KEY_83; $KEY_83 = $THREAD_1_143030;",
+        ),
+        (
+            "class $THREAD_1_143030 {",
+            "class $THREAD_1_143030 extends UnknownBase {",
+        ),
     ] {
         refuses(&changed(UPDATE_ADD, from, to));
     }
     let assignment = "$KEY_434 = $THREAD_6_20734;";
-    refuses(&UPDATE_ADD.replace(assignment, "").replace("let scheduler =", &format!("{assignment} let scheduler =")));
+    refuses(
+        &UPDATE_ADD
+            .replace(assignment, "")
+            .replace("let scheduler =", &format!("{assignment} let scheduler =")),
+    );
 }

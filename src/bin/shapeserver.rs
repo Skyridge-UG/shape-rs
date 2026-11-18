@@ -12,7 +12,7 @@
 
 use std::time::Instant;
 
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpResponse, HttpServer, Responder, post, web};
 use serde::Deserialize;
 use shape::encode::encode_smoke;
 use shape::synth::Synthesizer;
@@ -80,9 +80,9 @@ async fn solve(body: web::Json<SolveRequest>) -> impl Responder {
     // Seeds: caller-provided or time-derived (unique per request, stable
     // within it so retries with the same body reproduce).
     let now = Instant::now();
-    let seed0 = request.seed0.unwrap_or_else(|| {
-        (now.elapsed().as_nanos() & 0xffff_ffff) as u32
-    });
+    let seed0 = request
+        .seed0
+        .unwrap_or_else(|| (now.elapsed().as_nanos() & 0xffff_ffff) as u32);
     let seed1 = request.seed1.unwrap_or(0x0061_0062); // reference token `ab`
 
     let synthesizer = Synthesizer::new(profile);

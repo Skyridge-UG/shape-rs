@@ -14,8 +14,8 @@ use oxc_semantic::{Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub struct InlinedVmSubs {
     pub code: String,
@@ -132,7 +132,6 @@ pub(crate) fn inline_vm_sub_wrappers(source: &str) -> Result<InlinedVmSubs, Stri
     })
 }
 
-
 /// Final pass: remove `vm_sub_*` helpers that survived the cleanup stages.
 ///
 /// These are the shapes the substitution inliner declines (multi-statement body,
@@ -158,7 +157,10 @@ pub fn inline_remaining_vm_subs(source: &str, force: bool) -> Result<InlinedVmSu
     };
     scan.visit_program(&program);
     if scan.dynamic {
-        return Ok(InlinedVmSubs { code: source.into(), removed: 0 });
+        return Ok(InlinedVmSubs {
+            code: source.into(),
+            removed: 0,
+        });
     }
 
     let mut edits = Vec::new();
@@ -240,7 +242,10 @@ pub fn inline_remaining_vm_subs(source: &str, force: bool) -> Result<InlinedVmSu
     }
 
     if edits.is_empty() {
-        return Ok(InlinedVmSubs { code: source.into(), removed: 0 });
+        return Ok(InlinedVmSubs {
+            code: source.into(),
+            removed: 0,
+        });
     }
     let applied = analysis::apply_edits(source, edits);
     if !applied.rejected.is_empty() {
@@ -249,7 +254,10 @@ pub fn inline_remaining_vm_subs(source: &str, force: bool) -> Result<InlinedVmSu
     let check = Allocator::default();
     analysis::check_program(&check, &applied.output)
         .map_err(|e| format!("inline remaining VM helpers: {e}"))?;
-    Ok(InlinedVmSubs { code: applied.output, removed })
+    Ok(InlinedVmSubs {
+        code: applied.output,
+        removed,
+    })
 }
 
 /// The call passes what the helper's body can take in place of its
@@ -813,15 +821,27 @@ mod tests {
         assert_eq!(output.removed, 1, "{}", output.code);
         assert!(!output.code.contains("vm_sub_"), "{}", output.code);
         // the callee name must not be assigned at the call site
-        assert!(!output.code.contains("Float64Array = new"), "{}", output.code);
+        assert!(
+            !output.code.contains("Float64Array = new"),
+            "{}",
+            output.code
+        );
     }
 
     #[test]
     fn keeps_wrapper_that_uses_this_or_arguments() {
         let with_this = "function outer($SSA_1) { function vm_sub_1_2($PARAMA) { this.x = $PARAMA; return this; } return vm_sub_1_2($SSA_1); }";
-        assert_eq!(inline_remaining_vm_subs(with_this, true).unwrap().removed, 0);
+        assert_eq!(
+            inline_remaining_vm_subs(with_this, true).unwrap().removed,
+            0
+        );
         let with_arguments = "function outer($SSA_1) { function vm_sub_1_2($PARAMA) { let a = arguments.length; return $PARAMA + a; } return vm_sub_1_2($SSA_1); }";
-        assert_eq!(inline_remaining_vm_subs(with_arguments, true).unwrap().removed, 0);
+        assert_eq!(
+            inline_remaining_vm_subs(with_arguments, true)
+                .unwrap()
+                .removed,
+            0
+        );
     }
 
     #[test]

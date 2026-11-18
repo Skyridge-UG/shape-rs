@@ -11,16 +11,16 @@ use oxc_span::{GetSpan, Ident, Span};
 use oxc_syntax::{operator::AssignmentOperator, scope::ScopeFlags};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[cfg(test)]
+mod exceptional_flow_tests;
 mod facts;
 mod flow;
 #[cfg(test)]
 mod tests;
-#[cfg(test)]
-mod exceptional_flow_tests;
 
+use crate::transforms::emitted_js::support::unwrap;
 use facts::*;
 use flow::*;
-use crate::transforms::emitted_js::support::unwrap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Input {
@@ -135,7 +135,17 @@ pub(crate) fn eliminate_stable_channels(
     );
     let mut edits = Vec::<analysis::Edit>::new();
     let (mut arguments, mut aliases) = (0, 0);
-    let channels = Channels { source, scoping: &scoping, nodes: &nodes, facts: &facts, locals: &locals, ordinary, cells: &cells, protected, checked };
+    let channels = Channels {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        facts: &facts,
+        locals: &locals,
+        ordinary,
+        cells: &cells,
+        protected,
+        checked,
+    };
     for (&symbol, stores) in &facts.stores {
         let Some((proposal, value)) = channels.channel(symbol, stores, &edits) else {
             continue;
@@ -233,7 +243,13 @@ impl<'s, 'a> Channels<'s, 'a> {
         Span,
         &'a FunctionBody<'a>,
     )> {
-        let Channels { scoping, facts, protected, checked, .. } = *self;
+        let Channels {
+            scoping,
+            facts,
+            protected,
+            checked,
+            ..
+        } = *self;
         let name = scoping.symbol_name(symbol);
         if !(name.starts_with("$SSA_") || name.starts_with("$CARRY_"))
             || protected.contains(name)
@@ -325,7 +341,15 @@ impl<'s, 'a> Channels<'s, 'a> {
         item: &VariableDeclarator<'a>,
         owner: Span,
     ) -> Option<CopyOut<'a>> {
-        let Channels { scoping, nodes, facts, locals, ordinary, protected, .. } = *self;
+        let Channels {
+            scoping,
+            nodes,
+            facts,
+            locals,
+            ordinary,
+            protected,
+            ..
+        } = *self;
         let copy_out = (decl.declarations.len() == 1 && stores.is_empty())
             .then_some(())
             .and(item.init.as_ref())
@@ -395,12 +419,22 @@ impl<'s, 'a> Channels<'s, 'a> {
 
     /// The channel's references, and the reads to replace: every reference
     /// is in the owner, initialized, a value, and a write only as a store.
-    fn references(
-        &self,
-        channel: &Channel<'_, 'a>,
-    ) -> Option<(Vec<&'s Reference>, Vec<Span>)> {
-        let Channels { scoping, nodes, facts, locals, .. } = *self;
-        let Channel { symbol, stores, owner, ref branch_copy, copy_out, .. } = *channel;
+    fn references(&self, channel: &Channel<'_, 'a>) -> Option<(Vec<&'s Reference>, Vec<Span>)> {
+        let Channels {
+            scoping,
+            nodes,
+            facts,
+            locals,
+            ..
+        } = *self;
+        let Channel {
+            symbol,
+            stores,
+            owner,
+            ref branch_copy,
+            copy_out,
+            ..
+        } = *channel;
         let refs: Vec<_> = scoping.get_resolved_references(symbol).collect();
         if (copy_out.is_some() && branch_copy.is_none()
             || scoping.symbol_flags(symbol).is_const_variable())
@@ -442,9 +476,27 @@ impl<'s, 'a> Channels<'s, 'a> {
     /// `$KEY_` slot not shadowed there, an `arguments` the owner keeps
     /// ordinary, or a plain local initialized wherever it is read.
     fn carried_input(&self, channel: &Channel<'_, 'a>, refs: &[&Reference]) -> Option<()> {
-        let Channels { scoping, nodes, facts, locals, ordinary, cells, protected, .. } = *self;
-        let Channel { symbol, stores, decl, item, owner, ref branch_copy, copy_out, value, .. } =
-            *channel;
+        let Channels {
+            scoping,
+            nodes,
+            facts,
+            locals,
+            ordinary,
+            cells,
+            protected,
+            ..
+        } = *self;
+        let Channel {
+            symbol,
+            stores,
+            decl,
+            item,
+            owner,
+            ref branch_copy,
+            copy_out,
+            value,
+            ..
+        } = *channel;
         match value {
             Input::Incoming(index) => {
                 let key = format!("$KEY_{index}");
@@ -524,9 +576,28 @@ impl<'s, 'a> Channels<'s, 'a> {
     /// Walk the channel's activation with `Flow`: every read must see the
     /// input still equal to what the channel last copied.
     fn flow(&self, channel: &Channel<'_, 'a>, reads: &[Span]) -> Option<()> {
-        let Channels { scoping, nodes, facts, locals, ordinary, cells, protected, .. } = *self;
-        let Channel { symbol, stores, decl, item, owner, body, ref branch_copy, copy_out, value, .. } =
-            *channel;
+        let Channels {
+            scoping,
+            nodes,
+            facts,
+            locals,
+            ordinary,
+            cells,
+            protected,
+            ..
+        } = *self;
+        let Channel {
+            symbol,
+            stores,
+            decl,
+            item,
+            owner,
+            body,
+            ref branch_copy,
+            copy_out,
+            value,
+            ..
+        } = *channel;
         let value_spans: Vec<_> = if let Some(branch) = &branch_copy {
             branch.leaves.iter().map(|l| l.rhs).collect()
         } else {
@@ -610,8 +681,16 @@ impl<'s, 'a> Channels<'s, 'a> {
     /// or copy-out, its stores, and each read replaced by the input.
     fn proposal(&self, channel: &Channel<'_, 'a>, reads: &[Span]) -> Vec<analysis::Edit> {
         let Channels { source, facts, .. } = *self;
-        let Channel { stores, decl, item, ref branch_copy, copy_out, adjacent_copy, value, .. } =
-            *channel;
+        let Channel {
+            stores,
+            decl,
+            item,
+            ref branch_copy,
+            copy_out,
+            adjacent_copy,
+            value,
+            ..
+        } = *channel;
         let input_span = copy_out.as_ref().map(|c| c.dest).unwrap_or_else(|| {
             item.init
                 .as_ref()
@@ -720,4 +799,3 @@ impl<'s, 'a> Channels<'s, 'a> {
         })
     }
 }
-

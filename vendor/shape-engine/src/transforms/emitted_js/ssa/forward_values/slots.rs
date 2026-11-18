@@ -4,23 +4,34 @@ use super::*;
 
 impl Plan<'_, '_> {
     /// Rule 7: a later sibling stores the value into a `var` slot.
-    pub(super) fn early_slot(&self, candidate: &Candidate, reads: &[NodeId], owner: u32) -> Option<(SymbolId, Span, bool)> {
+    pub(super) fn early_slot(
+        &self,
+        candidate: &Candidate,
+        reads: &[NodeId],
+        owner: u32,
+    ) -> Option<(SymbolId, Span, bool)> {
         let list = &self.scan.lists[candidate.list];
         for read in reads {
             let read_span = self.span_of(*read);
             let (slot, statement, declared) = match self.nodes.parent_kind(*read) {
                 AstKind::VariableDeclarator(declarator)
-                    if declarator.init.as_ref().is_some_and(|init| init.span() == read_span) =>
+                    if declarator
+                        .init
+                        .as_ref()
+                        .is_some_and(|init| init.span() == read_span) =>
                 {
                     let BindingPattern::BindingIdentifier(binding) = &declarator.id else {
                         continue;
                     };
-                    let AstKind::VariableDeclaration(statement) =
-                        self.nodes.kind(self.nodes.parent_id(self.nodes.parent_id(*read)))
+                    let AstKind::VariableDeclaration(statement) = self
+                        .nodes
+                        .kind(self.nodes.parent_id(self.nodes.parent_id(*read)))
                     else {
                         continue;
                     };
-                    if statement.kind != VariableDeclarationKind::Var || statement.declarations.len() != 1 {
+                    if statement.kind != VariableDeclarationKind::Var
+                        || statement.declarations.len() != 1
+                    {
                         continue;
                     }
                     (binding.symbol_id.get()?, statement.span, true)
@@ -29,11 +40,13 @@ impl Plan<'_, '_> {
                     if assignment.operator == oxc_syntax::operator::AssignmentOperator::Assign
                         && assignment.right.span() == read_span =>
                 {
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
                         continue;
                     };
-                    let AstKind::ExpressionStatement(statement) =
-                        self.nodes.kind(self.nodes.parent_id(self.nodes.parent_id(*read)))
+                    let AstKind::ExpressionStatement(statement) = self
+                        .nodes
+                        .kind(self.nodes.parent_id(self.nodes.parent_id(*read)))
                     else {
                         continue;
                     };
@@ -45,7 +58,10 @@ impl Plan<'_, '_> {
                 _ => continue,
             };
             // The store is a later statement of the definition's own list.
-            if !list[candidate.position + 1..].iter().any(|s| s.span == statement) {
+            if !list[candidate.position + 1..]
+                .iter()
+                .any(|s| s.span == statement)
+            {
                 continue;
             }
             let name = self.scoping.symbol_name(slot);
@@ -75,7 +91,12 @@ impl Plan<'_, '_> {
         reads: &[NodeId],
         owner: u32,
     ) -> bool {
-        let last_read = reads.iter().map(|read| self.span_of(*read).start).max().unwrap_or(0).max(store.end);
+        let last_read = reads
+            .iter()
+            .map(|read| self.span_of(*read).start)
+            .max()
+            .unwrap_or(0)
+            .max(store.end);
         let start = candidate.statement.end;
         let mut shared = self.owner_of(self.scoping.symbol_declaration(slot)) != owner;
         for reference in self.scoping.get_resolved_references(slot) {
@@ -99,7 +120,11 @@ impl Plan<'_, '_> {
         for declaration in self.scoping.symbol_declarations(slot) {
             if let AstKind::VariableDeclarator(declarator) = self.nodes.kind(declaration) {
                 let at = declarator.span.start;
-                if declarator.init.is_some() && !(store.start <= at && at < store.end) && start <= at && at < last_read {
+                if declarator.init.is_some()
+                    && !(store.start <= at && at < store.end)
+                    && start <= at
+                    && at < last_read
+                {
                     return false;
                 }
             }
@@ -121,12 +146,17 @@ impl Plan<'_, '_> {
             .nodes
             .ancestor_ids(statement_node)
             .take_while(|id| {
-                !matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_))
+                !matches!(
+                    self.nodes.kind(*id),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
             })
             .any(|id| match self.nodes.kind(id) {
                 AstKind::TryStatement(statement) => {
                     let block = statement.block.span;
-                    !(block_scoped && block.start <= slot_declared.start && slot_declared.end <= block.end)
+                    !(block_scoped
+                        && block.start <= slot_declared.start
+                        && slot_declared.end <= block.end)
                 }
                 _ => false,
             });
@@ -172,7 +202,13 @@ impl Plan<'_, '_> {
     /// invocation gets a fresh binding. A rejected sibling or nested store,
     /// or one into a slot of an outer scope, may run between the copy and its
     /// reads.
-    pub(super) fn slot_unchanged(&self, slot: SymbolId, from: Span, reads: &[NodeId], owner: u32) -> bool {
+    pub(super) fn slot_unchanged(
+        &self,
+        slot: SymbolId,
+        from: Span,
+        reads: &[NodeId],
+        owner: u32,
+    ) -> bool {
         self.slot_unchanged_with(slot, from, reads, owner, false)
     }
 
@@ -189,7 +225,11 @@ impl Plan<'_, '_> {
         if reads.is_empty() {
             return true;
         }
-        let last_read = reads.iter().map(|read| self.span_of(*read).start).max().unwrap_or(0);
+        let last_read = reads
+            .iter()
+            .map(|read| self.span_of(*read).start)
+            .max()
+            .unwrap_or(0);
         let range = (from.end, last_read);
         // Stores: write references, and every `var` redeclaration with an
         // initializer (a write with no reference).
@@ -222,7 +262,9 @@ impl Plan<'_, '_> {
         // Another function may store into the slot: then nothing between the
         // copy and its last read may run code.
         let shared = self.owner_of(self.scoping.symbol_declaration(slot)) != owner
-            || stores.iter().any(|(_, store_owner, _)| *store_owner != owner);
+            || stores
+                .iter()
+                .any(|(_, store_owner, _)| *store_owner != owner);
         // A shared slot is read safely when nothing can run between the copy
         // and its reads, or when every store writes a binding of the function
         // that runs it and the range does not suspend.
@@ -235,7 +277,9 @@ impl Plan<'_, '_> {
             .iter()
             .take_while(|(s, _, _)| *s < range.1)
             .any(|(s, e, run_owner)| {
-                *run_owner == owner && *e <= range.1 && !(property_mode && self.converts_only(*s, *e, &read_spans))
+                *run_owner == owner
+                    && *e <= range.1
+                    && !(property_mode && self.converts_only(*s, *e, &read_spans))
             });
         if shared
             && code_runs
@@ -318,9 +362,10 @@ impl Plan<'_, '_> {
                 _ => continue,
             };
             // Anything after the store in this block still runs.
-            if later.iter().any(|(_, span)| {
-                block_span.start <= span.start && span.end <= block_span.end
-            }) {
+            if later
+                .iter()
+                .any(|(_, span)| block_span.start <= span.start && span.end <= block_span.end)
+            {
                 return false;
             }
             match target {
@@ -370,7 +415,10 @@ impl Plan<'_, '_> {
         self.nodes
             .ancestor_ids(node)
             .take_while(|id| {
-                !matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_))
+                !matches!(
+                    self.nodes.kind(*id),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
             })
             .any(|id| matches!(self.nodes.kind(id), AstKind::TryStatement(_)))
     }
@@ -393,11 +441,9 @@ impl Plan<'_, '_> {
     /// cannot re-enter either.
     pub(super) fn stores_settled(&self, slot: SymbolId, stores: &[(u32, u32, NodeId)]) -> bool {
         let declaration_owner = self.owner_of(self.scoping.symbol_declaration(slot));
-        stores
-            .iter()
-            .all(|(_, store_owner, _)| {
-                *store_owner == PROGRAM_OWNER || *store_owner == declaration_owner
-            })
+        stores.iter().all(|(_, store_owner, _)| {
+            *store_owner == PROGRAM_OWNER || *store_owner == declaration_owner
+        })
     }
 
     /// `owner`'s code suspends (`await`/`yield`) within `start..end`, so an

@@ -42,9 +42,8 @@ use super::bindings::{
 use super::scanner::resolve_descriptor_ctor;
 use crate::signals::extract::layout::{CollectorRequest, ObserverSlot, ObserverWiring};
 use crate::signals::schema::{
-    BindingRef, BindingRole, ExprRecord, FunctionRef,
-    LiteralValue, ProgramProperties, ProgramPropertiesError, ProgramPropertiesLimits,
-    SourceIdentity, SourceSpan, ValueKind,
+    BindingRef, BindingRole, ExprRecord, FunctionRef, LiteralValue, ProgramProperties,
+    ProgramPropertiesError, ProgramPropertiesLimits, SourceIdentity, SourceSpan, ValueKind,
 };
 
 /// Version of the serialized [`WiringProperties`] contract.
@@ -520,10 +519,9 @@ fn wiring_and_properties(
         return Err(ProgramPropertiesError::Parse(error.clone()).into());
     }
     if parsed.panicked {
-        return Err(ProgramPropertiesError::Parse(
-            "Oxc parser panicked on the source".to_string(),
-        )
-        .into());
+        return Err(
+            ProgramPropertiesError::Parse("Oxc parser panicked on the source".to_string()).into(),
+        );
     }
     let (scoping, nodes) = crate::analysis::analyze(&parsed.program);
     let t = crate::signals::timing::span("   model");

@@ -12,7 +12,11 @@ impl Walk<'_, '_, '_> {
         let SimpleAssignmentTarget::AssignmentTargetIdentifier(identifier) = target else {
             return false;
         };
-        self.merger.scoping.get_reference(identifier.reference_id()).symbol_id() == Some(self.local)
+        self.merger
+            .scoping
+            .get_reference(identifier.reference_id())
+            .symbol_id()
+            == Some(self.local)
     }
 
     /// Whether the old value can still be read after `statement` runs.
@@ -74,7 +78,9 @@ impl Walk<'_, '_, '_> {
                         _ => None,
                     };
                     let targets = |jump: &Jump| match jump {
-                        Jump::Break(name) | Jump::Continue(name) => name.is_none() || *name == label,
+                        Jump::Break(name) | Jump::Continue(name) => {
+                            name.is_none() || *name == label
+                        }
                     };
                     let back = falls
                         || pending
@@ -117,7 +123,10 @@ impl Walk<'_, '_, '_> {
 
     /// The statements of `list` after the one at `after`.
     pub(super) fn rest(&self, list: &[Statement<'_>], after: Span) -> Flow {
-        let at = list.iter().position(|statement| statement.span() == after).map_or(list.len(), |i| i + 1);
+        let at = list
+            .iter()
+            .position(|statement| statement.span() == after)
+            .map_or(list.len(), |i| i + 1);
         self.sequence(&list[at..])
     }
 
@@ -168,11 +177,17 @@ impl Walk<'_, '_, '_> {
             Statement::VariableDeclaration(declaration) => {
                 // A `let` re-entered in a loop is a fresh binding.
                 let declares = declaration.declarations.iter().any(|declarator| {
-                    declarator.id.get_binding_identifier().is_some_and(|binding| binding.symbol_id() == self.local)
+                    declarator
+                        .id
+                        .get_binding_identifier()
+                        .is_some_and(|binding| binding.symbol_id() == self.local)
                 });
                 let kills = declares
                     && (declaration.kind != VariableDeclarationKind::Var
-                        || declaration.declarations.iter().all(|declarator| declarator.init.is_some()));
+                        || declaration
+                            .declarations
+                            .iter()
+                            .all(|declarator| declarator.init.is_some()));
                 Flow {
                     read: self.reads_in(declaration.span),
                     falls: !kills,
@@ -184,7 +199,10 @@ impl Walk<'_, '_, '_> {
                     return plain(true);
                 }
                 let consequent = self.statement(&branch.consequent);
-                let alternate = branch.alternate.as_ref().map_or_else(|| plain(false), |s| self.statement(s));
+                let alternate = branch
+                    .alternate
+                    .as_ref()
+                    .map_or_else(|| plain(false), |s| self.statement(s));
                 let mut jumps = consequent.jumps;
                 jumps.extend(alternate.jumps);
                 Flow {
@@ -201,12 +219,16 @@ impl Walk<'_, '_, '_> {
             Statement::BreakStatement(jump) => Flow {
                 read: false,
                 falls: false,
-                jumps: vec![Jump::Break(jump.label.as_ref().map(|label| label.name.to_string()))],
+                jumps: vec![Jump::Break(
+                    jump.label.as_ref().map(|label| label.name.to_string()),
+                )],
             },
             Statement::ContinueStatement(jump) => Flow {
                 read: false,
                 falls: false,
-                jumps: vec![Jump::Continue(jump.label.as_ref().map(|label| label.name.to_string()))],
+                jumps: vec![Jump::Continue(
+                    jump.label.as_ref().map(|label| label.name.to_string()),
+                )],
             },
             Statement::LabeledStatement(labeled) => {
                 let label = Some(labeled.label.name.to_string());
@@ -221,8 +243,14 @@ impl Walk<'_, '_, '_> {
             }
             Statement::TryStatement(statement) => {
                 let block = self.sequence(&statement.block.body);
-                let handler = statement.handler.as_ref().map(|handler| self.sequence(&handler.body.body));
-                let finalizer = statement.finalizer.as_ref().map(|finalizer| self.sequence(&finalizer.body));
+                let handler = statement
+                    .handler
+                    .as_ref()
+                    .map(|handler| self.sequence(&handler.body.body));
+                let finalizer = statement
+                    .finalizer
+                    .as_ref()
+                    .map(|finalizer| self.sequence(&finalizer.body));
                 let mut flow = Flow {
                     read: block.read
                         || handler.as_ref().is_some_and(|flow| flow.read)
@@ -242,7 +270,11 @@ impl Walk<'_, '_, '_> {
                 let mut flow = plain(self.reads_in(switch.span));
                 for case in &switch.cases {
                     let body = self.sequence(&case.consequent);
-                    flow.jumps.extend(body.jumps.into_iter().filter(|jump| *jump != Jump::Break(None)));
+                    flow.jumps.extend(
+                        body.jumps
+                            .into_iter()
+                            .filter(|jump| *jump != Jump::Break(None)),
+                    );
                 }
                 flow
             }
@@ -321,7 +353,10 @@ pub(super) fn definitely_stores(statement: &Statement<'_>, stores: &[Span]) -> b
         Statement::BlockStatement(block) => block.body.iter().any(|s| definitely_stores(s, stores)),
         Statement::IfStatement(branch) => {
             definitely_stores(&branch.consequent, stores)
-                && branch.alternate.as_ref().is_some_and(|alternate| definitely_stores(alternate, stores))
+                && branch
+                    .alternate
+                    .as_ref()
+                    .is_some_and(|alternate| definitely_stores(alternate, stores))
         }
         _ => false,
     }

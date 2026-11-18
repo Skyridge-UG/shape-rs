@@ -408,10 +408,7 @@ fn entry_host_parameter(program: &Program<'_>, scoping: &Scoping) -> Option<Symb
 
 /// The first parameter symbol of one candidate entry call, when the call has
 /// the proven outer-entry host shape.
-fn entry_host_parameter_of_call(
-    call: &CallExpression<'_>,
-    scoping: &Scoping,
-) -> Option<SymbolId> {
+fn entry_host_parameter_of_call(call: &CallExpression<'_>, scoping: &Scoping) -> Option<SymbolId> {
     let Expression::FunctionExpression(function) = call.callee.without_parentheses() else {
         return None;
     };

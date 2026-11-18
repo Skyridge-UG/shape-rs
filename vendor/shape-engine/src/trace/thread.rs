@@ -4,11 +4,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[cfg(test)]
-use crate::PropertyValue;
 use crate::emitted_cleanup::{
     simplify_cleaned_emitted_property_writes, simplify_emitted_property_writes,
 };
+#[cfg(test)]
+use crate::PropertyValue;
 use crate::{
     deobfuscate_with_report, emit_javascript, DescriptorRecord, DispatchStart, EmitOptions,
     KernelArtifact, PrefixLimits, PrefixStopReason, PrefixTraceReport, SymbolicValue,
@@ -232,8 +232,7 @@ pub fn walk_thread(artifact: &KernelArtifact, args: &ThreadOptions) -> Result<Th
         .map_err(|error| format!("thread startup rejected: {error}"))?
         .with_thread_captures(thread_captures(&artifact.descriptor_records()))
         .with_thread_starts(thread_starts(&artifact.descriptor_records()))
-        .with_branch_overrides(overrides.clone())
-        ;
+        .with_branch_overrides(overrides.clone());
     let asked = std::sync::Arc::new(
         crate::trace::return_shapes::Round::new(
             prepared.clone(),

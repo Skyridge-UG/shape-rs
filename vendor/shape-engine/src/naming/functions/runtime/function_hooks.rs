@@ -2,7 +2,10 @@
 //! whole-body proof lives in `signals::analysis::roles::function_interceptor`.
 use super::*;
 use crate::signals::analysis::roles::function_interceptor::{
-    function_interceptor, assignment_identifier, assignment_member, block, call_of, direct_call, exact_arguments, increments, is_break, is_continue, is_null_compare, is_null_literal, is_return_null, literal_object, member_on, plain_assignment, plain_local_in_body, plain_local_symbol, symbol_of,
+    assignment_identifier, assignment_member, block, call_of, direct_call, exact_arguments,
+    function_interceptor, increments, is_break, is_continue, is_null_compare, is_null_literal,
+    is_return_null, literal_object, member_on, plain_assignment, plain_local_in_body,
+    plain_local_symbol, symbol_of,
 };
 
 #[cfg(test)]

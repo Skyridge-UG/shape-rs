@@ -70,12 +70,14 @@ pub(crate) fn fresh_tuple_helper(function: &Function<'_>) -> Option<(SymbolId, u
         || function.r#async
         || function.generator
         || !body.directives.is_empty()
-        || !body.statements[..body.statements.len() - 1].iter().all(|stmt| {
-            matches!(
-                stmt,
-                Statement::VariableDeclaration(_) | Statement::ExpressionStatement(_)
-            )
-        })
+        || !body.statements[..body.statements.len() - 1]
+            .iter()
+            .all(|stmt| {
+                matches!(
+                    stmt,
+                    Statement::VariableDeclaration(_) | Statement::ExpressionStatement(_)
+                )
+            })
     {
         return None;
     }

@@ -36,21 +36,33 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
-use crate::signals::extract::bindings::{numeric_value, property_key_name, ParameterSlots};
-use crate::signals::schema::Confidence;
 use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 use crate::analysis;
+use crate::signals::extract::bindings::{numeric_value, property_key_name, ParameterSlots};
+use crate::signals::schema::Confidence;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 const BOOTSTRAP_SHELL: &str = "bootstrap_shell";
@@ -112,7 +124,10 @@ const LAZY_REGISTRY_CLASS: &str = "lazy_callback_registry_class";
 /// Every role this package can claim, with the one name it receives.
 pub(crate) const VOCABULARY: &[FinderRole] = &[
     function(BOOTSTRAP_SHELL, "bootstrapProgram"),
-    function(INSTALL_PROGRAM_INIT_LISTENERS, "installProgramInitListeners"),
+    function(
+        INSTALL_PROGRAM_INIT_LISTENERS,
+        "installProgramInitListeners",
+    ),
     function(INITIALIZE_PROGRAM_FROM_EVENT, "initializeProgramFromEvent"),
     function(CREATE_PROGRAM_RUNTIME, "createProgramRuntime"),
     function(EXCHANGE_VETO_LISTENER, "preventDefaultHandler"),
@@ -188,9 +203,10 @@ struct FnEntry<'a> {
 impl<'a> FnEntry<'a> {
     fn statements(&self) -> &'a [Statement<'a>] {
         match self.func {
-            FnNode::Function(function) => {
-                function.body.as_ref().map_or(&[], |body| body.statements.as_slice())
-            }
+            FnNode::Function(function) => function
+                .body
+                .as_ref()
+                .map_or(&[], |body| body.statements.as_slice()),
             FnNode::Arrow(arrow) => arrow.body.statements.as_slice(),
         }
     }
@@ -284,7 +300,12 @@ impl<'a> Index<'a> {
                 continue;
             };
             let entry = self.fns.len();
-            self.fns.push(FnEntry { node: id, span, func, parent: own });
+            self.fns.push(FnEntry {
+                node: id,
+                span,
+                func,
+                parent: own,
+            });
             self.own.push(Own::default());
             self.fn_by_span.insert((span.start, span.end), entry);
             fn_of_node[at] = entry as u32;
@@ -306,10 +327,18 @@ impl<'a> Index<'a> {
             {
                 if let AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left {
                     if let Some(symbol) = analysis::identifier_symbol(identifier, self.scoping) {
-                        self.writes.entry(symbol).or_default().push(&assignment.right);
+                        self.writes
+                            .entry(symbol)
+                            .or_default()
+                            .push(&assignment.right);
                     }
-                } else if let Some(symbol) = target_object(&assignment.left).and_then(|object| self.symbol(object)) {
-                    self.member_writes.entry(symbol).or_default().push(assignment);
+                } else if let Some(symbol) =
+                    target_object(&assignment.left).and_then(|object| self.symbol(object))
+                {
+                    self.member_writes
+                        .entry(symbol)
+                        .or_default()
+                        .push(assignment);
                 }
                 if let Some(owner) = owner {
                     self.own[owner].assignments.push(assignment);
@@ -359,10 +388,16 @@ impl<'a> Index<'a> {
     fn function_of(&self, expression: &Expression<'_>) -> Option<usize> {
         let mut symbol = match expression.without_parentheses() {
             Expression::FunctionExpression(function) => {
-                return self.fn_by_span.get(&(function.span.start, function.span.end)).copied();
+                return self
+                    .fn_by_span
+                    .get(&(function.span.start, function.span.end))
+                    .copied();
             }
             Expression::ArrowFunctionExpression(arrow) => {
-                return self.fn_by_span.get(&(arrow.span.start, arrow.span.end)).copied();
+                return self
+                    .fn_by_span
+                    .get(&(arrow.span.start, arrow.span.end))
+                    .copied();
             }
             other => self.symbol(other)?,
         };
@@ -479,9 +514,7 @@ impl<'a> Index<'a> {
     fn only_result(&self, entry: usize) -> Option<&'a Expression<'a>> {
         match self.fns[entry].effective_statements() {
             [Statement::ReturnStatement(statement)] => statement.argument.as_ref(),
-            [Statement::ExpressionStatement(statement)]
-                if matches!(self.fns[entry].func, FnNode::Arrow(arrow) if arrow.expression) =>
-            {
+            [Statement::ExpressionStatement(statement)] if matches!(self.fns[entry].func, FnNode::Arrow(arrow) if arrow.expression) => {
                 Some(&statement.expression)
             }
             _ => None,
@@ -504,7 +537,10 @@ impl<'a> Index<'a> {
 
     /// True when both expressions read the same binding or parameter slot.
     fn same_value(&self, left: &Expression<'_>, right: &Expression<'_>) -> bool {
-        match (self.slots.parameter_slot(left), self.slots.parameter_slot(right)) {
+        match (
+            self.slots.parameter_slot(left),
+            self.slots.parameter_slot(right),
+        ) {
             (Some(left), Some(right)) => left == right,
             (None, None) => self.symbol(left).is_some() && self.symbol(left) == self.symbol(right),
             _ => false,
@@ -520,7 +556,9 @@ impl<'a> Index<'a> {
         let (object, name) = member(&call.callee)?;
         let arguments = args(call);
         if name == "call" {
-            if let (Some((receiver, method)), Some((first, rest))) = (member(object), arguments.split_first()) {
+            if let (Some((receiver, method)), Some((first, rest))) =
+                (member(object), arguments.split_first())
+            {
                 if self.same_value(first, receiver) {
                     return Some((receiver, method, rest.to_vec()));
                 }
@@ -549,7 +587,8 @@ impl<'a> Index<'a> {
         }
         let arguments = args(call);
         matches!(arguments.as_slice(), [only] if is_void0(only))
-            && member(&call.callee).is_some_and(|(object, name)| name == "call" && object.span() == callee.span())
+            && member(&call.callee)
+                .is_some_and(|(object, name)| name == "call" && object.span() == callee.span())
     }
 
     /// The element an `array[index]` read denotes, when `array` is a binding
@@ -616,7 +655,9 @@ impl<'a> Index<'a> {
             Expression::NewExpression(new) => self.is_global(&new.callee, "CustomEvent"),
             Expression::CallExpression(call) => {
                 self.is_global_path(&call.callee, "document", &["createEvent"])
-                    && args(call).first().is_some_and(|argument| is_string(argument, "CustomEvent"))
+                    && args(call)
+                        .first()
+                        .is_some_and(|argument| is_string(argument, "CustomEvent"))
             }
             _ => false,
         }
@@ -680,7 +721,10 @@ fn statement_call<'e, 'a>(statement: &'e Statement<'a>) -> Option<&'e CallExpres
 }
 
 fn args<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 /// The elements of an array literal without holes or spreads.
@@ -688,11 +732,17 @@ fn elements<'e, 'a>(expression: &'e Expression<'a>) -> Option<Vec<&'e Expression
     let Expression::ArrayExpression(array) = expression.without_parentheses() else {
         return None;
     };
-    array.elements.iter().map(ArrayExpressionElement::as_expression).collect()
+    array
+        .elements
+        .iter()
+        .map(ArrayExpressionElement::as_expression)
+        .collect()
 }
 
 /// The `(name, value)` pairs of an object literal.
-fn object_members<'e, 'a>(expression: &'e Expression<'a>) -> Option<Vec<(String, &'e Expression<'a>)>> {
+fn object_members<'e, 'a>(
+    expression: &'e Expression<'a>,
+) -> Option<Vec<(String, &'e Expression<'a>)>> {
     let Expression::ObjectExpression(object) = expression.without_parentheses() else {
         return None;
     };
@@ -719,7 +769,10 @@ fn object_value<'e, 'a>(expression: &'e Expression<'a>, key: &str) -> Option<&'e
 
 fn has_exact_keys(expression: &Expression<'_>, keys: &[&str]) -> bool {
     object_members(expression).is_some_and(|members| {
-        members.len() == keys.len() && keys.iter().all(|key| members.iter().any(|(name, _)| name == key))
+        members.len() == keys.len()
+            && keys
+                .iter()
+                .all(|key| members.iter().any(|(name, _)| name == key))
     })
 }
 
@@ -741,7 +794,13 @@ struct Claims<'i, 'a> {
 }
 
 impl Claims<'_, '_> {
-    fn function(&mut self, role: &'static str, function: usize, alias_role: Option<&'static str>, evidence: &str) {
+    fn function(
+        &mut self,
+        role: &'static str,
+        function: usize,
+        alias_role: Option<&'static str>,
+        evidence: &str,
+    ) {
         self.out.push(FinderClaim::Function {
             role,
             function_span: self.index.fns[function].span,
@@ -769,7 +828,13 @@ impl Claims<'_, '_> {
     }
 
     /// [`Self::one`] for functions.
-    fn one_function(&mut self, role: &'static str, candidates: &[usize], alias_role: Option<&'static str>, evidence: &str) {
+    fn one_function(
+        &mut self,
+        role: &'static str,
+        candidates: &[usize],
+        alias_role: Option<&'static str>,
+        evidence: &str,
+    ) {
         if let [function] = candidates {
             self.function(role, *function, alias_role, evidence);
         }
@@ -808,7 +873,10 @@ pub(crate) fn find_thread_early(ctx: &FinderCtx) -> Vec<FinderClaim> {
 /// cost, independent of the number of functions.
 pub(crate) fn late_entry_claims(ctx: &FinderCtx) -> Vec<FinderClaim> {
     let index = Index::new(ctx);
-    let mut claims = Claims { index: &index, out: Vec::new() };
+    let mut claims = Claims {
+        index: &index,
+        out: Vec::new(),
+    };
     match find_shell(&index) {
         Some((_, main)) => {
             claims.function(
@@ -829,7 +897,10 @@ pub(crate) fn late_entry_claims(ctx: &FinderCtx) -> Vec<FinderClaim> {
 
 fn collect(ctx: &FinderCtx, include_listener: bool) -> Vec<FinderClaim> {
     let index = Index::new(ctx);
-    let mut claims = Claims { index: &index, out: Vec::new() };
+    let mut claims = Claims {
+        index: &index,
+        out: Vec::new(),
+    };
     match find_shell(&index) {
         Some((root, main)) => claim_shell(&index, &mut claims, root, main),
         None if include_listener => {
@@ -928,7 +999,10 @@ fn find_shell(index: &Index<'_>) -> Option<(usize, usize)> {
         let Some(root) = index.decl_fn.get(&symbol).copied() else {
             continue;
         };
-        if index.fns[root].parent.is_some() || !call.arguments.is_empty() || index.reads(symbol) != 1 {
+        if index.fns[root].parent.is_some()
+            || !call.arguments.is_empty()
+            || index.reads(symbol) != 1
+        {
             continue;
         }
         for publish in &index.own[root].calls {
@@ -944,7 +1018,10 @@ fn find_shell(index: &Index<'_>) -> Option<(usize, usize)> {
             if !is_bool(bubbles, false) || !is_bool(cancelable, false) {
                 continue;
             }
-            let Some(value) = index.symbol(detail).and_then(|symbol| index.single_value(symbol)) else {
+            let Some(value) = index
+                .symbol(detail)
+                .and_then(|symbol| index.single_value(symbol))
+            else {
                 continue;
             };
             let Expression::CallExpression(produced) = value.without_parentheses() else {
@@ -992,7 +1069,10 @@ fn find_listener_chain(index: &Index<'_>) -> Option<ListenerChain> {
         let Some(root) = index.decl_fn.get(&symbol).copied() else {
             continue;
         };
-        if index.fns[root].parent.is_some() || !call.arguments.is_empty() || index.reads(symbol) != 1 {
+        if index.fns[root].parent.is_some()
+            || !call.arguments.is_empty()
+            || index.reads(symbol) != 1
+        {
             continue;
         }
         let own = &index.own[root];
@@ -1015,7 +1095,12 @@ fn find_listener_chain(index: &Index<'_>) -> Option<ListenerChain> {
         let Some(main) = listener_receiver(index, registrar, receiver, names) else {
             continue;
         };
-        found.push(ListenerChain { root, registrar, receiver, main });
+        found.push(ListenerChain {
+            root,
+            registrar,
+            receiver,
+            main,
+        });
     }
     match found.as_slice() {
         [chain] => Some(*chain),
@@ -1107,7 +1192,9 @@ fn listener_receiver(
         let Expression::ComputedMemberExpression(entry) = name.without_parentheses() else {
             continue;
         };
-        if index.symbol(&entry.object) == Some(names) && index.function_of(handler) == Some(receiver) {
+        if index.symbol(&entry.object) == Some(names)
+            && index.function_of(handler) == Some(receiver)
+        {
             removes = true;
         }
     }
@@ -1144,7 +1231,9 @@ fn listener_factory_start(index: &Index<'_>, registrar: usize, receiver: usize) 
         if main == receiver || main == registrar {
             continue;
         }
-        if !index.own[receiver].nested.contains(&main) && !index.own[registrar].nested.contains(&main) {
+        if !index.own[receiver].nested.contains(&main)
+            && !index.own[registrar].nested.contains(&main)
+        {
             continue;
         }
         if !factory_takes_this(index, factory_call) {
@@ -1211,7 +1300,12 @@ fn returns_init_object(index: &Index<'_>, main: usize) -> bool {
 /// The public init is MAIN's returned `{ init }`: it publishes the exchange
 /// receiver in cancelable events, installs a capturing veto for the same names
 /// and then constructs and starts the runtime. Returns the runtime constructor.
-fn claim_handshake(index: &Index<'_>, main: usize, variables: &[SymbolId], claims: &mut Claims) -> Option<usize> {
+fn claim_handshake(
+    index: &Index<'_>,
+    main: usize,
+    variables: &[SymbolId],
+    claims: &mut Claims,
+) -> Option<usize> {
     let public_init = index.own[main].returns.iter().find_map(|statement| {
         let argument = statement.argument.as_ref()?;
         if !has_exact_keys(argument, &["init"]) {
@@ -1262,21 +1356,34 @@ fn claim_handshake(index: &Index<'_>, main: usize, variables: &[SymbolId], claim
     })?;
     let prevents = index.only_call(veto).is_some_and(|call| {
         call.arguments.is_empty()
-            && member(&call.callee)
-                .is_some_and(|(object, name)| name == "preventDefault" && index.is_slot(object, veto, 0))
+            && member(&call.callee).is_some_and(|(object, name)| {
+                name == "preventDefault" && index.is_slot(object, veto, 0)
+            })
     });
     if !prevents || !is_exchange_receiver(index, receiver, public_init) {
         return None;
     }
-    claims.function(EXCHANGE_VETO_LISTENER, veto, None, "capturing listener of the exchange events whose whole body is `event.preventDefault()`");
+    claims.function(
+        EXCHANGE_VETO_LISTENER,
+        veto,
+        None,
+        "capturing listener of the exchange events whose whole body is `event.preventDefault()`",
+    );
     claims.function(EXCHANGE_RECEIVER, receiver, None, "the `exchange` member of the event detail: stores its three arguments into three public-init locals");
     if variables.contains(&names) {
-        claims.binding(EXCHANGE_NAMES, names, "the list the public init indexes for the veto listeners of its exchange events");
+        claims.binding(
+            EXCHANGE_NAMES,
+            names,
+            "the list the public init indexes for the veto listeners of its exchange events",
+        );
     }
     let starts = own.calls.iter().any(|call| {
         call.arguments.is_empty() && member(&call.callee).is_some_and(|(_, name)| name == "init")
     });
-    let runtime = own.news.iter().find_map(|new| index.function_of(&new.callee));
+    let runtime = own
+        .news
+        .iter()
+        .find_map(|new| index.function_of(&new.callee));
     runtime.filter(|_| starts)
 }
 
@@ -1326,13 +1433,20 @@ fn claim_no_global(index: &Index<'_>, runtime: usize, claims: &mut Claims) {
         if target_key(&assignment.left) != Some("teardown") {
             continue;
         }
-        let Some(symbol) = target_object(&assignment.left).and_then(|object| index.symbol(object)) else {
+        let Some(symbol) = target_object(&assignment.left).and_then(|object| index.symbol(object))
+        else {
             continue;
         };
-        let Some(init) = index.single_value(symbol).and_then(|value| object_value(value, "init")) else {
+        let Some(init) = index
+            .single_value(symbol)
+            .and_then(|value| object_value(value, "init"))
+        else {
             continue;
         };
-        let (Some(init), Some(teardown)) = (index.function_of(init), index.function_of(&assignment.right)) else {
+        let (Some(init), Some(teardown)) = (
+            index.function_of(init),
+            index.function_of(&assignment.right),
+        ) else {
             continue;
         };
         let logs = matches!(index.fns[init].effective_statements(), [statement]
@@ -1343,7 +1457,12 @@ fn claim_no_global(index: &Index<'_>, runtime: usize, claims: &mut Claims) {
     }
     if let [(init, teardown)] = pairs.as_slice() {
         claims.function(NO_GLOBAL_INIT, *init, Some(NO_GLOBAL_INIT_ALIAS), "`init` of the runtime pair whose teardown is empty; its whole body logs through console.error");
-        claims.function(NO_GLOBAL_TEARDOWN, *teardown, None, "empty function assigned as `teardown` of the runtime's logging-only pair");
+        claims.function(
+            NO_GLOBAL_TEARDOWN,
+            *teardown,
+            None,
+            "empty function assigned as `teardown` of the runtime's logging-only pair",
+        );
     }
 }
 
@@ -1356,7 +1475,11 @@ fn claim_no_global(index: &Index<'_>, runtime: usize, claims: &mut Claims) {
 /// package's teardown role is claimed here; the logging initializer already
 /// carries the shared console-error label.
 fn claim_no_global_fallback(index: &Index<'_>, claims: &mut Claims) {
-    if claims.out.iter().any(|claim| claim.role() == NO_GLOBAL_TEARDOWN) {
+    if claims
+        .out
+        .iter()
+        .any(|claim| claim.role() == NO_GLOBAL_TEARDOWN)
+    {
         return;
     }
     let mut teardowns = BTreeSet::new();
@@ -1395,7 +1518,10 @@ fn no_global_fallback_teardown(index: &Index<'_>, candidate: usize) -> Option<us
         let Some(pair) = branch_returned_symbol(index, &statement.consequent) else {
             continue;
         };
-        let Some(init_value) = index.single_value(pair).and_then(|value| object_value(value, "init")) else {
+        let Some(init_value) = index
+            .single_value(pair)
+            .and_then(|value| object_value(value, "init"))
+        else {
             continue;
         };
         let Some(init) = index.function_of(init_value) else {
@@ -1460,7 +1586,9 @@ fn branch_teardown_write<'e, 'a>(
         let Statement::ExpressionStatement(statement) = statement else {
             continue;
         };
-        let Expression::AssignmentExpression(assignment) = statement.expression.without_parentheses() else {
+        let Expression::AssignmentExpression(assignment) =
+            statement.expression.without_parentheses()
+        else {
             continue;
         };
         if assignment.operator != AssignmentOperator::Assign {
@@ -1469,7 +1597,8 @@ fn branch_teardown_write<'e, 'a>(
         if target_key(&assignment.left) != Some("teardown") {
             continue;
         }
-        let Some(object) = target_object(&assignment.left).and_then(|object| index.symbol(object)) else {
+        let Some(object) = target_object(&assignment.left).and_then(|object| index.symbol(object))
+        else {
             continue;
         };
         if object != pair {
@@ -1491,10 +1620,14 @@ fn is_global_null_test(index: &Index<'_>, test: &Expression<'_>) -> bool {
     let Expression::BinaryExpression(binary) = test.without_parentheses() else {
         return false;
     };
-    if !matches!(binary.operator, BinaryOperator::Equality | BinaryOperator::StrictEquality) {
+    if !matches!(
+        binary.operator,
+        BinaryOperator::Equality | BinaryOperator::StrictEquality
+    ) {
         return false;
     }
-    let null = |value: &Expression<'_>| matches!(value.without_parentheses(), Expression::NullLiteral(_));
+    let null =
+        |value: &Expression<'_>| matches!(value.without_parentheses(), Expression::NullLiteral(_));
     let binding = |value: &Expression<'_>| index.symbol(value).is_some();
     (null(&binary.right) && binding(&binary.left)) || (null(&binary.left) && binding(&binary.right))
 }
@@ -1518,7 +1651,13 @@ fn logs_no_global(index: &Index<'_>, init: usize) -> bool {
 /// Every `pair.key = fn` write agrees on `expected`; no write may disagree or
 /// fail to resolve. `require_one` refuses an unassigned member (the teardown),
 /// while the initializer may live in the literal only.
-fn agreeing_member_write(index: &Index<'_>, pair: SymbolId, key: &str, expected: usize, require_one: bool) -> bool {
+fn agreeing_member_write(
+    index: &Index<'_>,
+    pair: SymbolId,
+    key: &str,
+    expected: usize,
+    require_one: bool,
+) -> bool {
     let mut written = BTreeSet::new();
     for assignment in index.member_writes.get(&pair).into_iter().flatten() {
         if target_key(&assignment.left) != Some(key) {
@@ -1549,8 +1688,9 @@ fn claim_teardown(index: &Index<'_>, teardown: usize, variables: &[SymbolId], cl
         if index.is_slot(cleanup, callback, 0) && index.is_plain_invocation(inner, cleanup) {
             cleanups.push((callback, index.symbol(list)));
         } else if inner.arguments.is_empty()
-            && member(&inner.callee)
-                .is_some_and(|(object, name)| name == "teardown" && index.is_slot(object, callback, 0))
+            && member(&inner.callee).is_some_and(|(object, name)| {
+                name == "teardown" && index.is_slot(object, callback, 0)
+            })
         {
             adapters.push(callback);
         }
@@ -1559,10 +1699,24 @@ fn claim_teardown(index: &Index<'_>, teardown: usize, variables: &[SymbolId], cl
         return;
     };
     claims.function(RUNTIME_TEARDOWN, teardown, None, "`teardown` of the runtime's started pair: runs every listed cleanup and every adapter's teardown");
-    claims.function(RUN_TEARDOWN_CALLBACK, *cleanup, None, "forEach callback of the runtime teardown calling its element with no arguments");
-    claims.function(TEARDOWN_ADAPTER, *adapter, None, "forEach callback of the runtime teardown calling its element's `teardown`");
+    claims.function(
+        RUN_TEARDOWN_CALLBACK,
+        *cleanup,
+        None,
+        "forEach callback of the runtime teardown calling its element with no arguments",
+    );
+    claims.function(
+        TEARDOWN_ADAPTER,
+        *adapter,
+        None,
+        "forEach callback of the runtime teardown calling its element's `teardown`",
+    );
     if let Some(list) = list.filter(|list| variables.contains(list)) {
-        claims.binding(TEARDOWN_CALLBACKS, list, "the MAIN list the runtime teardown runs as no-argument cleanups");
+        claims.binding(
+            TEARDOWN_CALLBACKS,
+            list,
+            "the MAIN list the runtime teardown runs as no-argument cleanups",
+        );
     }
 }
 
@@ -1584,13 +1738,20 @@ fn claim_adapter_start(index: &Index<'_>, init: usize, claims: &mut Claims) {
         let Some(callback) = index.function_of(argument) else {
             continue;
         };
-        let Some(inner) = index.only_call(callback).filter(|inner| inner.arguments.is_empty()) else {
+        let Some(inner) = index
+            .only_call(callback)
+            .filter(|inner| inner.arguments.is_empty())
+        else {
             continue;
         };
         let Some(callee) = index.symbol(&inner.callee) else {
             continue;
         };
-        if own.ifs.iter().any(|statement| is_typeof_function(index, &statement.test, callee)) {
+        if own
+            .ifs
+            .iter()
+            .any(|statement| is_typeof_function(index, &statement.test, callee))
+        {
             ready.push(callback);
         }
     }
@@ -1613,15 +1774,25 @@ fn claim_adapter_start(index: &Index<'_>, init: usize, claims: &mut Claims) {
         .filter_map(|call| index.method_callback(call, "push").map(|(_, relay)| relay))
         .filter(|relay| {
             index.only_call(*relay).is_some_and(|inner| {
-                index.method_call(inner).is_some_and(|(_, name, arguments)| {
-                    name == "next" && arguments.first().is_some_and(|value| index.is_slot(value, *relay, 0))
-                })
+                index
+                    .method_call(inner)
+                    .is_some_and(|(_, name, arguments)| {
+                        name == "next"
+                            && arguments
+                                .first()
+                                .is_some_and(|value| index.is_slot(value, *relay, 0))
+                    })
             })
         })
         .collect();
     if let [relay] = relays.as_slice() {
         claims.function(SUBSCRIBE_PROGRESS, *subscriber, None, "observable subscriber given to each adapter: pushes a relay to the subscriber's `next` onto a shared list");
-        claims.function(RELAY_PROGRESS, *relay, None, "relay forwarding its argument to the subscriber's `next`");
+        claims.function(
+            RELAY_PROGRESS,
+            *relay,
+            None,
+            "relay forwarding its argument to the subscriber's `next`",
+        );
     }
 }
 
@@ -1640,14 +1811,20 @@ fn is_typeof_function(index: &Index<'_>, test: &Expression<'_>, symbol: SymbolId
 }
 
 /// `list.map(i => table[i])` passed to the runtime's encoder.
-fn claim_encoder_inputs(index: &Index<'_>, runtime: usize, variables: &[SymbolId], claims: &mut Claims) {
+fn claim_encoder_inputs(
+    index: &Index<'_>,
+    runtime: usize,
+    variables: &[SymbolId],
+    claims: &mut Claims,
+) {
     let mut found = Vec::new();
     for call in &index.own[runtime].calls {
         let Some((list, callback)) = index.method_callback(call, "map") else {
             continue;
         };
-        let Some(Expression::ComputedMemberExpression(lookup)) =
-            index.only_result(callback).map(Expression::without_parentheses)
+        let Some(Expression::ComputedMemberExpression(lookup)) = index
+            .only_result(callback)
+            .map(Expression::without_parentheses)
         else {
             continue;
         };
@@ -1665,13 +1842,31 @@ fn claim_encoder_inputs(index: &Index<'_>, runtime: usize, variables: &[SymbolId
     let [(callback, list, table)] = found.as_slice() else {
         return;
     };
-    claims.function(LOOKUP_KEYSET, *callback, None, "map callback of the runtime constructor reading a MAIN table at its element");
-    claims.binding(KEYSET_INDEXES, *list, "the MAIN list mapped through the table for the runtime's encoder");
-    claims.binding(KEYSET_TABLE, *table, "the MAIN table indexed by the runtime's encoder key-set map");
+    claims.function(
+        LOOKUP_KEYSET,
+        *callback,
+        None,
+        "map callback of the runtime constructor reading a MAIN table at its element",
+    );
+    claims.binding(
+        KEYSET_INDEXES,
+        *list,
+        "the MAIN list mapped through the table for the runtime's encoder",
+    );
+    claims.binding(
+        KEYSET_TABLE,
+        *table,
+        "the MAIN table indexed by the runtime's encoder key-set map",
+    );
 }
 
 /// `[].map.call(factories, f => f(...))` in the runtime constructor.
-fn claim_hook_factories(index: &Index<'_>, runtime: usize, variables: &[SymbolId], claims: &mut Claims) {
+fn claim_hook_factories(
+    index: &Index<'_>,
+    runtime: usize,
+    variables: &[SymbolId],
+    claims: &mut Claims,
+) {
     let mut found = Vec::new();
     for call in &index.own[runtime].calls {
         let maps_array = member(&call.callee).is_some_and(|(object, name)| {
@@ -1689,8 +1884,9 @@ fn claim_hook_factories(index: &Index<'_>, runtime: usize, variables: &[SymbolId
         };
         let invokes = index.only_call(callback).is_some_and(|inner| {
             index.is_slot(&inner.callee, callback, 0)
-                || member(&inner.callee)
-                    .is_some_and(|(object, name)| name == "call" && index.is_slot(object, callback, 0))
+                || member(&inner.callee).is_some_and(|(object, name)| {
+                    name == "call" && index.is_slot(object, callback, 0)
+                })
         });
         if invokes && variables.contains(&list) {
             found.push((callback, list));
@@ -1699,11 +1895,27 @@ fn claim_hook_factories(index: &Index<'_>, runtime: usize, variables: &[SymbolId
     let [(callback, list)] = found.as_slice() else {
         return;
     };
-    claims.function(INVOKE_HOOK_FACTORY, *callback, None, "callback of the runtime's array-map over a MAIN list, calling its element");
-    claims.binding(HOOK_FACTORY_ALIAS, *list, "the MAIN list of factories the runtime constructor maps");
-    if let Some(origin) = index.single_value(*list).and_then(|value| index.symbol(value)) {
+    claims.function(
+        INVOKE_HOOK_FACTORY,
+        *callback,
+        None,
+        "callback of the runtime's array-map over a MAIN list, calling its element",
+    );
+    claims.binding(
+        HOOK_FACTORY_ALIAS,
+        *list,
+        "the MAIN list of factories the runtime constructor maps",
+    );
+    if let Some(origin) = index
+        .single_value(*list)
+        .and_then(|value| index.symbol(value))
+    {
         if variables.contains(&origin) {
-            claims.binding(HOOK_FACTORY_LIST, origin, "the array of factory functions behind the runtime's mapped list");
+            claims.binding(
+                HOOK_FACTORY_LIST,
+                origin,
+                "the array of factory functions behind the runtime's mapped list",
+            );
         }
     }
 }
@@ -1714,27 +1926,59 @@ fn claim_hook_factories(index: &Index<'_>, runtime: usize, variables: &[SymbolId
 
 fn claim_library(index: &Index<'_>, main: usize, variables: &[SymbolId], claims: &mut Claims) {
     let scope = index.subtree(main);
-    let refills: Vec<usize> = scope.iter().copied().filter(|entry| is_prng_refill(index, *entry)).collect();
+    let refills: Vec<usize> = scope
+        .iter()
+        .copied()
+        .filter(|entry| is_prng_refill(index, *entry))
+        .collect();
     claims.one_function(REFILL_PRNG, &refills, None, "pushes Math.sin/Math.fround derived fractions onto its first slot and bumps a counter element of it");
 
-    let decoders: Vec<(usize, usize)> = scope.iter().filter_map(|entry| code_units_decoder(index, *entry)).collect();
+    let decoders: Vec<(usize, usize)> = scope
+        .iter()
+        .filter_map(|entry| code_units_decoder(index, *entry))
+        .collect();
     if let [(decoder, push)] = decoders.as_slice() {
-        claims.function(CODE_UNITS_TO_STRING, *decoder, None, "maps its first slot through String.fromCharCode into an array and joins it");
-        claims.function(PUSH_CODE_UNIT, *push, None, "forEach callback pushing String.fromCharCode of its element");
+        claims.function(
+            CODE_UNITS_TO_STRING,
+            *decoder,
+            None,
+            "maps its first slot through String.fromCharCode into an array and joins it",
+        );
+        claims.function(
+            PUSH_CODE_UNIT,
+            *push,
+            None,
+            "forEach callback pushing String.fromCharCode of its element",
+        );
     }
 
-    let setters: Vec<(usize, usize, SymbolId)> = scope.iter().filter_map(|entry| prototype_setter(index, *entry)).collect();
+    let setters: Vec<(usize, usize, SymbolId)> = scope
+        .iter()
+        .filter_map(|entry| prototype_setter(index, *entry))
+        .collect();
     if let [(setter, fallback, memo)] = setters.as_slice() {
         claims.function(SET_PROTOTYPE, *setter, None, "picks Object.setPrototypeOf or a __proto__ fallback, memoizes it into an outer binding and tail-calls it");
-        claims.function(SET_PROTOTYPE_FALLBACK, *fallback, None, "assigns slot 1 to slot 0's __proto__");
+        claims.function(
+            SET_PROTOTYPE_FALLBACK,
+            *fallback,
+            None,
+            "assigns slot 1 to slot 0's __proto__",
+        );
         if variables.contains(memo) {
-            claims.binding(PROTOTYPE_SETTER, *memo, "outer binding the choosing function overwrites with the chosen prototype setter");
+            claims.binding(
+                PROTOTYPE_SETTER,
+                *memo,
+                "outer binding the choosing function overwrites with the chosen prototype setter",
+            );
         }
     }
 
     let mut unused = Vec::new();
     for symbol in variables {
-        let Some(Expression::CallExpression(call)) = index.single_value(*symbol).map(Expression::without_parentheses) else {
+        let Some(Expression::CallExpression(call)) = index
+            .single_value(*symbol)
+            .map(Expression::without_parentheses)
+        else {
             continue;
         };
         if index.reads(*symbol) != 0 || !call.arguments.is_empty() {
@@ -1748,17 +1992,37 @@ fn claim_library(index: &Index<'_>, main: usize, variables: &[SymbolId], claims:
         }
     }
     if let [(symbol, factory, definer)] = unused.as_slice() {
-        claims.function(CLASS_DEFINER_FACTORY, *factory, None, "returns a nested class-property definer; the binding of its result is never read");
-        claims.function(CLASS_DEFINER, *definer, None, "defines descriptors from slots 1 and 2 on slot 0's prototype and on slot 0");
-        claims.binding(CLASS_DEFINER_RESULT, *symbol, "single write of a class-property definer factory's result, never read");
+        claims.function(
+            CLASS_DEFINER_FACTORY,
+            *factory,
+            None,
+            "returns a nested class-property definer; the binding of its result is never read",
+        );
+        claims.function(
+            CLASS_DEFINER,
+            *definer,
+            None,
+            "defines descriptors from slots 1 and 2 on slot 0's prototype and on slot 0",
+        );
+        claims.binding(
+            CLASS_DEFINER_RESULT,
+            *symbol,
+            "single write of a class-property definer factory's result, never read",
+        );
     }
 }
 
 fn is_prng_refill(index: &Index<'_>, entry: usize) -> bool {
     let own = &index.own[entry];
-    let uses = |name: &str| own.calls.iter().any(|call| index.is_global_path(&call.callee, "Math", &[name]));
+    let uses = |name: &str| {
+        own.calls
+            .iter()
+            .any(|call| index.is_global_path(&call.callee, "Math", &[name]))
+    };
     let pushes = own.calls.iter().any(|call| {
-        index.method_call(call).is_some_and(|(object, name, _)| name == "push" && index.is_slot(object, entry, 0))
+        index
+            .method_call(call)
+            .is_some_and(|(object, name, _)| name == "push" && index.is_slot(object, entry, 0))
     });
     let bumps = own.assignments.iter().any(|assignment| {
         target_object(&assignment.left).is_some_and(|object| index.is_slot(object, entry, 0))
@@ -1779,11 +2043,13 @@ fn is_prng_refill(index: &Index<'_>, entry: usize) -> bool {
 fn code_units_decoder(index: &Index<'_>, entry: usize) -> Option<(usize, usize)> {
     let own = &index.own[entry];
     let joined = own.returns.iter().find_map(|statement| {
-        let Expression::CallExpression(call) = statement.argument.as_ref()?.without_parentheses() else {
+        let Expression::CallExpression(call) = statement.argument.as_ref()?.without_parentheses()
+        else {
             return None;
         };
         let (object, name, arguments) = index.method_call(call)?;
-        (name == "join" && arguments.first().is_some_and(|value| is_string(value, ""))).then(|| index.symbol(object))?
+        (name == "join" && arguments.first().is_some_and(|value| is_string(value, "")))
+            .then(|| index.symbol(object))?
     })?;
     own.calls.iter().find_map(|call| {
         let (list, callback) = index.method_callback(call, "forEach")?;
@@ -1793,9 +2059,14 @@ fn code_units_decoder(index: &Index<'_>, entry: usize) -> Option<(usize, usize)>
             return None;
         };
         let converts = index.is_global_path(&convert.callee, "String", &["fromCharCode"])
-            && args(convert).first().is_some_and(|value| index.is_slot(value, callback, 0));
-        (converts && name == "push" && index.is_slot(list, entry, 0) && index.symbol(target) == Some(joined))
-            .then_some((entry, callback))
+            && args(convert)
+                .first()
+                .is_some_and(|value| index.is_slot(value, callback, 0));
+        (converts
+            && name == "push"
+            && index.is_slot(list, entry, 0)
+            && index.symbol(target) == Some(joined))
+        .then_some((entry, callback))
     })
 }
 
@@ -1808,19 +2079,22 @@ fn prototype_setter(index: &Index<'_>, entry: usize) -> Option<(usize, usize, Sy
     let fallback = own.nested.iter().copied().find(|nested| {
         index.own[*nested].assignments.iter().any(|assignment| {
             target_key(&assignment.left) == Some("__proto__")
-                && target_object(&assignment.left).is_some_and(|object| index.is_slot(object, *nested, 0))
+                && target_object(&assignment.left)
+                    .is_some_and(|object| index.is_slot(object, *nested, 0))
                 && index.is_slot(&assignment.right, *nested, 1)
         })
     })?;
     let chosen = own.returns.iter().find_map(|statement| {
-        let Expression::CallExpression(call) = statement.argument.as_ref()?.without_parentheses() else {
+        let Expression::CallExpression(call) = statement.argument.as_ref()?.without_parentheses()
+        else {
             return None;
         };
         let arguments = args(call);
         let [first, second] = arguments.as_slice() else {
             return None;
         };
-        (index.is_slot(first, entry, 0) && index.is_slot(second, entry, 1)).then(|| index.symbol(&call.callee))?
+        (index.is_slot(first, entry, 0) && index.is_slot(second, entry, 1))
+            .then(|| index.symbol(&call.callee))?
     })?;
     let memo = own.assignments.iter().find_map(|assignment| {
         let AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left else {
@@ -1843,18 +2117,28 @@ fn class_definer(index: &Index<'_>, factory: usize) -> Option<usize> {
         .collect();
     let on_prototype = defines.iter().any(|call| {
         args(call).first().is_some_and(|target| {
-            member(target).is_some_and(|(object, name)| name == "prototype" && index.is_slot(object, definer, 0))
+            member(target).is_some_and(|(object, name)| {
+                name == "prototype" && index.is_slot(object, definer, 0)
+            })
         })
     });
-    (defines.len() == 2 && on_prototype && own.members.contains("enumerable") && own.members.contains("configurable"))
-        .then_some(definer)
+    (defines.len() == 2
+        && on_prototype
+        && own.members.contains("enumerable")
+        && own.members.contains("configurable"))
+    .then_some(definer)
 }
 
 // ===========================================================================
 // MAIN state
 // ===========================================================================
 
-fn claim_ready_flusher(index: &Index<'_>, main: usize, variables: &[SymbolId], claims: &mut Claims) {
+fn claim_ready_flusher(
+    index: &Index<'_>,
+    main: usize,
+    variables: &[SymbolId],
+    claims: &mut Claims,
+) {
     let mut flushers = Vec::new();
     for call in &index.own[main].calls {
         let arguments = args(call);
@@ -1862,12 +2146,19 @@ fn claim_ready_flusher(index: &Index<'_>, main: usize, variables: &[SymbolId], c
             index.is_global_path(&call.callee, "document", &["addEventListener"]),
             arguments.as_slice(),
         ) {
-            if let (true, Some(function)) = (is_string(event, "DOMContentLoaded"), index.function_of(handler)) {
+            if let (true, Some(function)) = (
+                is_string(event, "DOMContentLoaded"),
+                index.function_of(handler),
+            ) {
                 flushers.extend(index.aliases_of(variables, function));
             }
         }
     }
-    claims.one(READY_QUEUE_FLUSHER, &flushers, "MAIN alias of the DOMContentLoaded listener");
+    claims.one(
+        READY_QUEUE_FLUSHER,
+        &flushers,
+        "MAIN alias of the DOMContentLoaded listener",
+    );
 }
 
 /// Bindings no code reads: the name states only what the single write holds.
@@ -1878,11 +2169,17 @@ fn claim_unread(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) 
     let mut performance = Vec::new();
     let mut zero = Vec::new();
     for symbol in variables {
-        let Some(value) = index.single_value(*symbol).filter(|_| index.reads(*symbol) == 0) else {
+        let Some(value) = index
+            .single_value(*symbol)
+            .filter(|_| index.reads(*symbol) == 0)
+        else {
             continue;
         };
         if matches!(value.without_parentheses(), Expression::Identifier(_)) {
-            if index.function_of(value).is_some_and(|function| index.fns[function].effective_statements().is_empty()) {
+            if index
+                .function_of(value)
+                .is_some_and(|function| index.fns[function].effective_statements().is_empty())
+            {
                 empty.push(*symbol);
             }
         } else if member(value).is_some_and(|(_, name)| name == "performance") {
@@ -1891,9 +2188,21 @@ fn claim_unread(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) 
             zero.push(*symbol);
         }
     }
-    claims.one(EMPTY_CALLBACK, &empty, "never-read MAIN alias of an empty function");
-    claims.one(PERFORMANCE_API, &performance, "never-read MAIN binding holding the host `performance` object");
-    claims.one(UNREAD_ZERO, &zero, "never-read MAIN binding whose only write is zero");
+    claims.one(
+        EMPTY_CALLBACK,
+        &empty,
+        "never-read MAIN alias of an empty function",
+    );
+    claims.one(
+        PERFORMANCE_API,
+        &performance,
+        "never-read MAIN binding holding the host `performance` object",
+    );
+    claims.one(
+        UNREAD_ZERO,
+        &zero,
+        "never-read MAIN binding whose only write is zero",
+    );
 }
 
 fn claim_tostring_state(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) {
@@ -1908,7 +2217,9 @@ fn claim_tostring_state(index: &Index<'_>, variables: &[SymbolId], claims: &mut 
             && index.member_writes.get(symbol).is_some_and(|writes| {
                 writes.iter().any(|write| {
                     target_key(&write.left) == Some("toString")
-                        && index.function_of(&write.right).is_some_and(|function| index.own[function].members.contains("lastIndexOf"))
+                        && index.function_of(&write.right).is_some_and(|function| {
+                            index.own[function].members.contains("lastIndexOf")
+                        })
                 })
             });
         if facade {
@@ -1931,9 +2242,21 @@ fn claim_tostring_state(index: &Index<'_>, variables: &[SymbolId], claims: &mut 
             }
         }
     }
-    claims.one(TO_STRING_FACADE, &facades, "one-key `toString` object whose method looks its receiver up with lastIndexOf");
-    claims.one(NATIVE_TO_STRING_SOURCES, &sources, "array seeded with the source text of Function.prototype.toString");
-    claims.one(UNCURRY_BINDER, &binders, "holds Object.call.bind(Object.bind, Object.call), the uncurry-this binder");
+    claims.one(
+        TO_STRING_FACADE,
+        &facades,
+        "one-key `toString` object whose method looks its receiver up with lastIndexOf",
+    );
+    claims.one(
+        NATIVE_TO_STRING_SOURCES,
+        &sources,
+        "array seeded with the source text of Function.prototype.toString",
+    );
+    claims.one(
+        UNCURRY_BINDER,
+        &binders,
+        "holds Object.call.bind(Object.bind, Object.call), the uncurry-this binder",
+    );
 }
 
 fn claim_routes(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) {
@@ -1955,14 +2278,20 @@ fn claim_routes(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) 
                 patterns.push(list);
                 tables.push(*symbol);
             }
-        } else if holds_inline_route_patterns(index, first) && !read_as_call_argument(index, *symbol) {
+        } else if holds_inline_route_patterns(index, first)
+            && !read_as_call_argument(index, *symbol)
+        {
             // The capture inlines the pattern list as the table's element 0.
             // The table is proven through it; there is no pattern binding, so
             // no binding is claimed for `url_route_patterns`.
             tables.push(*symbol);
         }
     }
-    claims.one(ROUTE_PATTERNS, &patterns, "array of RegExp values, element 0 of the route table");
+    claims.one(
+        ROUTE_PATTERNS,
+        &patterns,
+        "array of RegExp values, element 0 of the route table",
+    );
     claims.one(ROUTE_TABLE, &tables, "pattern list (a binding or an inline RegExp list) followed by [[HTTP methods], [pattern indexes]] entries");
 }
 
@@ -1979,8 +2308,12 @@ fn is_regexp_call(index: &Index<'_>, value: &Expression<'_>) -> bool {
 /// An array of RegExp values with optional `void 0` holes, the shape a capture
 /// inlines in place of the pattern binding.
 fn are_route_patterns(index: &Index<'_>, items: &[&Expression<'_>]) -> bool {
-    items.first().is_some_and(|first| is_regexp_call(index, first))
-        && items.iter().all(|item| is_regexp_call(index, item) || is_void0(item))
+    items
+        .first()
+        .is_some_and(|first| is_regexp_call(index, first))
+        && items
+            .iter()
+            .all(|item| is_regexp_call(index, item) || is_void0(item))
 }
 
 fn holds_inline_route_patterns(index: &Index<'_>, expression: &Expression<'_>) -> bool {
@@ -1994,13 +2327,16 @@ fn holds_inline_route_patterns(index: &Index<'_>, expression: &Expression<'_>) -
 /// consumer reads an alias binding instead; a capture that inlines the
 /// patterns and passes the table itself has no separate data binding to name.
 fn read_as_call_argument(index: &Index<'_>, symbol: SymbolId) -> bool {
-    index.scoping.get_resolved_references(symbol).any(|reference| {
-        !reference.is_write()
-            && matches!(
-                index.nodes.kind(index.nodes.parent_id(reference.node_id())),
-                AstKind::CallExpression(_)
-            )
-    })
+    index
+        .scoping
+        .get_resolved_references(symbol)
+        .any(|reference| {
+            !reference.is_write()
+                && matches!(
+                    index.nodes.kind(index.nodes.parent_id(reference.node_id())),
+                    AstKind::CallExpression(_)
+                )
+        })
 }
 
 fn holds_route_patterns(index: &Index<'_>, symbol: SymbolId) -> bool {
@@ -2008,7 +2344,12 @@ fn holds_route_patterns(index: &Index<'_>, symbol: SymbolId) -> bool {
         .single_value(symbol)
         .and_then(elements)
         .is_some_and(|items| are_route_patterns(index, &items));
-    literal && index.member_writes.get(&symbol).is_some_and(|writes| writes.iter().all(|write| is_regexp_call(index, &write.right)))
+    literal
+        && index.member_writes.get(&symbol).is_some_and(|writes| {
+            writes
+                .iter()
+                .all(|write| is_regexp_call(index, &write.right))
+        })
 }
 
 /// A `[[methods...], [indexes...]]` pair, or a list of them.
@@ -2025,7 +2366,9 @@ fn is_route_entry(expression: &Expression<'_>) -> bool {
             if !methods.is_empty()
                 && methods.iter().all(method)
                 && !indexes.is_empty()
-                && indexes.iter().all(|value| numeric_value(value.without_parentheses()).is_some())
+                && indexes
+                    .iter()
+                    .all(|value| numeric_value(value.without_parentheses()).is_some())
             {
                 return true;
             }
@@ -2043,20 +2386,31 @@ fn is_route_entry(expression: &Expression<'_>) -> bool {
 /// (`return this.<subscription>.<observer> === void 0`). The sibling class's
 /// getter reads a direct `this.<observer>`, so the getter's member-chain depth
 /// separates the two sites without reading any generated name.
-fn claim_closed_descriptors(index: &Index<'_>, main: usize, variables: &[SymbolId], claims: &mut Claims) {
+fn claim_closed_descriptors(
+    index: &Index<'_>,
+    main: usize,
+    variables: &[SymbolId],
+    claims: &mut Claims,
+) {
     let mut found = Vec::new();
     for statement in &index.own[main].fors {
-        let Some(Expression::BinaryExpression(test)) = statement.test.as_ref().map(Expression::without_parentheses) else {
+        let Some(Expression::BinaryExpression(test)) =
+            statement.test.as_ref().map(Expression::without_parentheses)
+        else {
             continue;
         };
-        let (Some(counter), Some((list, "length"))) = (index.symbol(&test.left), member(&test.right)) else {
+        let (Some(counter), Some((list, "length"))) =
+            (index.symbol(&test.left), member(&test.right))
+        else {
             continue;
         };
         let Some(list) = index.symbol(list) else {
             continue;
         };
         let describes = index.writes.get(&list).is_some_and(|writes| {
-            writes.iter().any(|value| object_value(value, "key").is_some_and(|key| is_string(key, "closed")))
+            writes
+                .iter()
+                .any(|value| object_value(value, "key").is_some_and(|key| is_string(key, "closed")))
         });
         let defines = index.own[main].calls.iter().any(|call| {
             call.span.start >= statement.span.start
@@ -2077,7 +2431,11 @@ fn claim_closed_descriptors(index: &Index<'_>, main: usize, variables: &[SymbolI
         .collect();
     if let [(list, counter)] = delegating.as_slice() {
         claims.binding(CLOSED_DESCRIPTORS, *list, "`closed` property descriptor whose getter delegates through the inner subscription; re-bound to a one-element list and defined in a loop on a class prototype");
-        claims.binding(CLOSED_DESCRIPTOR_INDEX, *counter, "the counter of the delegating `closed` property definition loop");
+        claims.binding(
+            CLOSED_DESCRIPTOR_INDEX,
+            *counter,
+            "the counter of the delegating `closed` property definition loop",
+        );
     }
 }
 
@@ -2099,7 +2457,10 @@ fn closed_getter_delegates(index: &Index<'_>, list: SymbolId) -> bool {
     for statement in index.fns[getter].effective_statements() {
         match statement {
             Statement::ExpressionStatement(statement)
-                if matches!(statement.expression.without_parentheses(), Expression::StringLiteral(_)) => {}
+                if matches!(
+                    statement.expression.without_parentheses(),
+                    Expression::StringLiteral(_)
+                ) => {}
             Statement::ReturnStatement(statement) => returns.push(statement),
             _ => return false,
         }
@@ -2107,7 +2468,11 @@ fn closed_getter_delegates(index: &Index<'_>, list: SymbolId) -> bool {
     let [statement] = returns.as_slice() else {
         return false;
     };
-    let Some(argument) = statement.argument.as_ref().map(Expression::without_parentheses) else {
+    let Some(argument) = statement
+        .argument
+        .as_ref()
+        .map(Expression::without_parentheses)
+    else {
         return false;
     };
     let Expression::BinaryExpression(binary) = argument else {
@@ -2141,7 +2506,8 @@ fn this_member_depth(expression: &Expression<'_>) -> Option<usize> {
 /// Null, or a byte list whose eight little-endian bytes decode to a NaN. The
 /// literal bytes are decoded rather than compared, so no constant is read.
 fn claim_nan_bytes(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claims) {
-    let is_null = |value: &Expression<'_>| matches!(value.without_parentheses(), Expression::NullLiteral(_));
+    let is_null =
+        |value: &Expression<'_>| matches!(value.without_parentheses(), Expression::NullLiteral(_));
     let mut found = Vec::new();
     for symbol in variables {
         let Some([first, second]) = index.writes.get(symbol).map(Vec::as_slice) else {
@@ -2185,7 +2551,11 @@ fn claim_nan_bytes(index: &Index<'_>, variables: &[SymbolId], claims: &mut Claim
             found.push(*symbol);
         }
     }
-    claims.one(NAN_BYTES, &found, "null, or eight literal little-endian bytes that decode to a float64 NaN");
+    claims.one(
+        NAN_BYTES,
+        &found,
+        "null, or eight literal little-endian bytes that decode to a float64 NaN",
+    );
 }
 
 /// Collector bindings re-bound to a `{ ctor: self, ... }` descriptor.
@@ -2196,23 +2566,34 @@ fn claim_collectors(index: &Index<'_>, variables: &[SymbolId], claims: &mut Clai
         let Some([first, second]) = index.writes.get(symbol).map(Vec::as_slice) else {
             continue;
         };
-        let wraps_self = object_value(second, "ctor").is_some_and(|value| index.symbol(value) == Some(*symbol));
+        let wraps_self =
+            object_value(second, "ctor").is_some_and(|value| index.symbol(value) == Some(*symbol));
         let Expression::CallExpression(call) = first.without_parentheses() else {
             continue;
         };
-        let Some(callback) = args(call).first().and_then(|value| index.function_of(value)).filter(|_| wraps_self) else {
+        let Some(callback) = args(call)
+            .first()
+            .and_then(|value| index.function_of(value))
+            .filter(|_| wraps_self)
+        else {
             continue;
         };
         if index.calls_with_literal(callback, "querySelectorAll", |selector| selector == "*") {
             dom.push(*symbol);
         }
         if index.calls_with_literal(callback, "querySelector", |selector| selector == "title")
-            && index.calls_with_literal(callback, "querySelector", |selector| selector.contains("addToCart"))
+            && index.calls_with_literal(callback, "querySelector", |selector| {
+                selector.contains("addToCart")
+            })
         {
             product.push(*symbol);
         }
     }
-    claims.one(DOM_COLLECTOR, &dom, "collector walking querySelectorAll(\"*\"), re-bound to its { ctor } descriptor");
+    claims.one(
+        DOM_COLLECTOR,
+        &dom,
+        "collector walking querySelectorAll(\"*\"), re-bound to its { ctor } descriptor",
+    );
     claims.one(PRODUCT_COLLECTOR, &product, "collector reading the page title and add-to-cart button, re-bound to its { ctor } descriptor");
 }
 
@@ -2221,7 +2602,10 @@ fn claim_descriptors(index: &Index<'_>, variables: &[SymbolId], claims: &mut Cla
     let mut anchors = Vec::new();
     let mut protos = Vec::new();
     for symbol in variables {
-        let Some(Expression::CallExpression(call)) = index.single_value(*symbol).map(Expression::without_parentheses) else {
+        let Some(Expression::CallExpression(call)) = index
+            .single_value(*symbol)
+            .map(Expression::without_parentheses)
+        else {
             continue;
         };
         let arguments = args(call);
@@ -2235,36 +2619,63 @@ fn claim_descriptors(index: &Index<'_>, variables: &[SymbolId], claims: &mut Cla
             protos.push(*symbol);
         }
         let of_anchor = member(target).is_some_and(|(object, name)| {
-            name == "prototype" && member(object).is_some_and(|(_, name)| name == "HTMLAnchorElement")
+            name == "prototype"
+                && member(object).is_some_and(|(_, name)| name == "HTMLAnchorElement")
         });
         if of_anchor && is_string(key, "href") {
             anchors.push(*symbol);
         }
     }
-    claims.one(PROTO_DESCRIPTOR, &protos, "holds Object.getOwnPropertyDescriptor(Object.prototype, \"__proto__\")");
-    claims.one(ANCHOR_DESCRIPTOR, &anchors, "holds the HTMLAnchorElement.prototype `href` descriptor");
+    claims.one(
+        PROTO_DESCRIPTOR,
+        &protos,
+        "holds Object.getOwnPropertyDescriptor(Object.prototype, \"__proto__\")",
+    );
+    claims.one(
+        ANCHOR_DESCRIPTOR,
+        &anchors,
+        "holds the HTMLAnchorElement.prototype `href` descriptor",
+    );
     let [descriptor] = anchors.as_slice() else {
         return;
     };
     let binds = |value: &Expression<'_>, field: &str| {
         matches!(value.without_parentheses(), Expression::CallExpression(call)
-            if member(&call.callee).is_some_and(|(_, name)| name == "bind")
-                && args(call).first().is_some_and(|argument| {
-                    member(argument).is_some_and(|(object, name)| name == field && index.symbol(object) == Some(*descriptor))
-                }))
+        if member(&call.callee).is_some_and(|(_, name)| name == "bind")
+            && args(call).first().is_some_and(|argument| {
+                member(argument).is_some_and(|(object, name)| name == field && index.symbol(object) == Some(*descriptor))
+            }))
     };
     let setters: Vec<SymbolId> = variables
         .iter()
         .copied()
-        .filter(|symbol| index.writes.get(symbol).is_some_and(|writes| writes.iter().any(|value| binds(value, "set"))))
+        .filter(|symbol| {
+            index
+                .writes
+                .get(symbol)
+                .is_some_and(|writes| writes.iter().any(|value| binds(value, "set")))
+        })
         .collect();
-    claims.one(ANCHOR_SETTER, &setters, "bound from the anchor `href` descriptor's `set`, or a plain href-writing fallback");
+    claims.one(
+        ANCHOR_SETTER,
+        &setters,
+        "bound from the anchor `href` descriptor's `set`, or a plain href-writing fallback",
+    );
     let accessors: Vec<SymbolId> = variables
         .iter()
         .copied()
-        .filter(|symbol| index.member_writes.get(symbol).is_some_and(|writes| writes.iter().any(|write| binds(&write.right, "get"))))
+        .filter(|symbol| {
+            index
+                .member_writes
+                .get(symbol)
+                .is_some_and(|writes| writes.iter().any(|write| binds(&write.right, "get")))
+        })
         .collect();
-    claims.one(ANCHOR_ACCESSORS, &accessors, "object receiving the bound `get` of the anchor `href` descriptor");
+    claims.one(
+        ANCHOR_ACCESSORS,
+        &accessors,
+        "object receiving the bound `get` of the anchor `href` descriptor",
+    );
 }
 
 /// Serializer extension objects and the classes behind them.
@@ -2291,10 +2702,11 @@ fn claim_extensions(index: &Index<'_>, variables: &[SymbolId], claims: &mut Clai
         if !has_exact_keys(value, &["detector", "serialiser"]) {
             continue;
         }
-        let deserialiser = index
-            .member_writes
-            .get(symbol)
-            .and_then(|writes| writes.iter().find(|write| target_key(&write.left) == Some("deserialiser")));
+        let deserialiser = index.member_writes.get(symbol).and_then(|writes| {
+            writes
+                .iter()
+                .find(|write| target_key(&write.left) == Some("deserialiser"))
+        });
         let (Some(detector), Some(serialiser), Some(deserialiser)) = (
             object_value(value, "detector").and_then(|value| index.function_of(value)),
             object_value(value, "serialiser").and_then(|value| index.function_of(value)),
@@ -2302,26 +2714,56 @@ fn claim_extensions(index: &Index<'_>, variables: &[SymbolId], claims: &mut Clai
         ) else {
             continue;
         };
-        let never_matches = index.only_result(detector).is_some_and(|value| is_bool(value, false));
-        let throws = matches!(index.fns[serialiser].effective_statements(), [Statement::ThrowStatement(_)]);
-        let matched = index.only_result(detector).and_then(|value| match value.without_parentheses() {
-            Expression::BinaryExpression(binary)
-                if binary.operator == BinaryOperator::StrictEquality && index.is_slot(&binary.left, detector, 0) =>
-            {
-                index.symbol(&binary.right)
-            }
-            _ => None,
-        });
+        let never_matches = index
+            .only_result(detector)
+            .is_some_and(|value| is_bool(value, false));
+        let throws = matches!(
+            index.fns[serialiser].effective_statements(),
+            [Statement::ThrowStatement(_)]
+        );
+        let matched =
+            index
+                .only_result(detector)
+                .and_then(|value| match value.without_parentheses() {
+                    Expression::BinaryExpression(binary)
+                        if binary.operator == BinaryOperator::StrictEquality
+                            && index.is_slot(&binary.left, detector, 0) =>
+                    {
+                        index.symbol(&binary.right)
+                    }
+                    _ => None,
+                });
         if never_matches && throws {
             fixed.push(*symbol);
-        } else if matched.is_some() && matched == index.only_result(deserialiser).and_then(|value| index.symbol(value)) {
+        } else if matched.is_some()
+            && matched
+                == index
+                    .only_result(deserialiser)
+                    .and_then(|value| index.symbol(value))
+        {
             sentinel.push(*symbol);
         }
     }
-    claims.one(EXTENSION_REGISTRY, &registries, "result of a factory building a class that stores detector/serialiser/deserialiser records");
-    claims.one(FIXED_EXTENSION, &fixed, "extension whose detector is always false and whose serialiser throws");
-    claims.one(SENTINEL_EXTENSION, &sentinel, "extension detecting one value by identity and deserialising back to it");
-    claims.one(LAZY_REGISTRY_CLASS, &lazy, "subclass whose `register` first calls a no-argument function, then the base register");
+    claims.one(
+        EXTENSION_REGISTRY,
+        &registries,
+        "result of a factory building a class that stores detector/serialiser/deserialiser records",
+    );
+    claims.one(
+        FIXED_EXTENSION,
+        &fixed,
+        "extension whose detector is always false and whose serialiser throws",
+    );
+    claims.one(
+        SENTINEL_EXTENSION,
+        &sentinel,
+        "extension detecting one value by identity and deserialising back to it",
+    );
+    claims.one(
+        LAZY_REGISTRY_CLASS,
+        &lazy,
+        "subclass whose `register` first calls a no-argument function, then the base register",
+    );
 }
 
 fn is_extension_registry_factory(index: &Index<'_>, factory: usize) -> bool {
@@ -2329,7 +2771,10 @@ fn is_extension_registry_factory(index: &Index<'_>, factory: usize) -> bool {
         index.own[entry].assignments.iter().any(|assignment| {
             matches!(&assignment.left, AssignmentTarget::ComputedMemberExpression(target)
                 if member(&target.object).is_some_and(|(_, name)| name == "extensions"))
-                && has_exact_keys(&assignment.right, &["detector", "serialiser", "deserialiser"])
+                && has_exact_keys(
+                    &assignment.right,
+                    &["detector", "serialiser", "deserialiser"],
+                )
         })
     })
 }
@@ -2341,12 +2786,14 @@ fn is_lazy_registry_factory(index: &Index<'_>, factory: usize) -> bool {
         let [first, second, ..] = index.fns[*method].statements() else {
             return false;
         };
-        let installs = statement_call(first).is_some_and(|call| call.arguments.is_empty() && index.symbol(&call.callee).is_some());
+        let installs = statement_call(first)
+            .is_some_and(|call| call.arguments.is_empty() && index.symbol(&call.callee).is_some());
         let forwards = statement_call(second).is_some_and(|call| {
             member(&call.callee).is_some_and(|(object, name)| match name {
                 "register" => matches!(object, Expression::Super(_)),
                 "call" => member(object).is_some_and(|(prototype, name)| {
-                    name == "register" && member(prototype).is_some_and(|(_, name)| name == "prototype")
+                    name == "register"
+                        && member(prototype).is_some_and(|(_, name)| name == "prototype")
                 }),
                 _ => false,
             })

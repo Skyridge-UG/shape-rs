@@ -856,8 +856,12 @@ fn protocol_eval(
         return Some(PV::Word);
     }
     if let Expression::BinaryExpression(b) = e.without_parentheses() {
-        if b.operator.as_str() == "+" && s.position(model, &b.left)
-            && is_numeric(&b.right, 1.) && s.fields & 8 == 0 && !s.paired {
+        if b.operator.as_str() == "+"
+            && s.position(model, &b.left)
+            && is_numeric(&b.right, 1.)
+            && s.fields & 8 == 0
+            && !s.paired
+        {
             return Some(PV::PendingCursor(s.cursor + 1));
         }
     }
@@ -972,7 +976,9 @@ fn protocol_eval(
         && s.position(model, args[3])
     {
         let field = if s.value(model, args[1]) == Some(PV::Hardware)
-            || (s.direct_hardware_guard && path_is(model, args[1], &["navigator", "hardwareConcurrency"])) {
+            || (s.direct_hardware_guard
+                && path_is(model, args[1], &["navigator", "hardwareConcurrency"]))
+        {
             8
         } else {
             let count = call_of(args[1])?;
@@ -1071,7 +1077,9 @@ fn protocol_tag(
             return None;
         }
     } else if let Some(binding) = symbol(model, index) {
-        if s.values.get(&binding) != Some(&PV::PendingCursor(s.cursor + 1)) { return None; }
+        if s.values.get(&binding) != Some(&PV::PendingCursor(s.cursor + 1)) {
+            return None;
+        }
         update = Some(binding);
     } else if !(s.cursor == 0 && is_numeric(index, 4.0)) {
         return None;
@@ -1223,7 +1231,9 @@ fn protocol_nan(model: &Model<'_, '_>, e: &Expression<'_>) -> bool {
     if protocol_term(model, e) == Some(expected) {
         return true;
     }
-    if protocol_nan_array(model, e, 0).as_deref() == Some(&[0., 0., 0., 0., 0., 0., 248., 127.]) { return true; }
+    if protocol_nan_array(model, e, 0).as_deref() == Some(&[0., 0., 0., 0., 0., 0., 248., 127.]) {
+        return true;
+    }
     // Historical spelling: construct the same bytes through an executed IIFE.
     let Some(c) = call_of(e) else {
         return false;
@@ -1283,48 +1293,101 @@ fn protocol_nan(model: &Model<'_, '_>, e: &Expression<'_>) -> bool {
 // arrow calls whose sole effects are indexed writes to their first argument.
 // Argument identities, call order, every write, and the returned array are kept.
 fn protocol_nan_array(model: &Model<'_, '_>, e: &Expression<'_>, depth: usize) -> Option<Vec<f64>> {
-    if depth > 4 { return None; }
+    if depth > 4 {
+        return None;
+    }
     if let Some(items) = array_items(e) {
-        if items.len() > 8 { return None; }
+        if items.len() > 8 {
+            return None;
+        }
         return items.iter().map(|e| numeric(e)).collect();
     }
     let c = call_of(e)?;
     let args = call_arguments(c);
-    let Expression::ArrowFunctionExpression(f) = c.callee.without_parentheses() else { return None; };
-    if f.r#async || f.expression || f.params.rest.is_some() || !f.body.directives.is_empty()
-        || args.is_empty() || args.len() > 3 || args.len() != c.arguments.len()
-        || args.len() != f.params.items.len() { return None; }
-    let ids = f.params.items.iter().map(|p| {
-        let BindingPattern::BindingIdentifier(id) = &p.pattern else { return None; };
-        if p.initializer.is_some() || !p.decorators.is_empty() { return None; }
-        let b = id.symbol_id.get()?;
-        model.scoping.symbol_redeclarations(b).is_empty().then_some(b)
-    }).collect::<Option<Vec<_>>>()?;
-    if ids.iter().copied().collect::<BTreeSet<_>>().len() != ids.len() { return None; }
+    let Expression::ArrowFunctionExpression(f) = c.callee.without_parentheses() else {
+        return None;
+    };
+    if f.r#async
+        || f.expression
+        || f.params.rest.is_some()
+        || !f.body.directives.is_empty()
+        || args.is_empty()
+        || args.len() > 3
+        || args.len() != c.arguments.len()
+        || args.len() != f.params.items.len()
+    {
+        return None;
+    }
+    let ids = f
+        .params
+        .items
+        .iter()
+        .map(|p| {
+            let BindingPattern::BindingIdentifier(id) = &p.pattern else {
+                return None;
+            };
+            if p.initializer.is_some() || !p.decorators.is_empty() {
+                return None;
+            }
+            let b = id.symbol_id.get()?;
+            model
+                .scoping
+                .symbol_redeclarations(b)
+                .is_empty()
+                .then_some(b)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    if ids.iter().copied().collect::<BTreeSet<_>>().len() != ids.len() {
+        return None;
+    }
     let mut array = protocol_nan_array(model, args[0], depth + 1)?;
-    let numbers = args.iter().skip(1).map(|e| numeric(e)).collect::<Option<Vec<_>>>()?;
-    let scalar = |e: &Expression<'_>| numeric(e).or_else(|| {
-        ids.iter().skip(1).position(|&b| symbol(model, e) == Some(b)).map(|i| numbers[i])
-    });
+    let numbers = args
+        .iter()
+        .skip(1)
+        .map(|e| numeric(e))
+        .collect::<Option<Vec<_>>>()?;
+    let scalar = |e: &Expression<'_>| {
+        numeric(e).or_else(|| {
+            ids.iter()
+                .skip(1)
+                .position(|&b| symbol(model, e) == Some(b))
+                .map(|i| numbers[i])
+        })
+    };
     let (last, writes) = f.body.statements.split_last()?;
     for statement in writes {
         let a = protocol_assignment(statement)?;
-        let AssignmentTarget::ComputedMemberExpression(m) = &a.left else { return None; };
-        if m.optional || symbol(model, &m.object) != Some(ids[0]) { return None; }
+        let AssignmentTarget::ComputedMemberExpression(m) = &a.left else {
+            return None;
+        };
+        if m.optional || symbol(model, &m.object) != Some(ids[0]) {
+            return None;
+        }
         let index = scalar(&m.expression)?;
-        if index < 0. || index >= 8. || index.fract() != 0. { return None; }
+        if index < 0. || index >= 8. || index.fract() != 0. {
+            return None;
+        }
         let index = index as usize;
         // Disallow holes and writes beyond the bounded output array.
-        if index > array.len() { return None; }
+        if index > array.len() {
+            return None;
+        }
         let value = scalar(&a.right)?;
-        if index == array.len() { array.push(value); } else { array[index] = value; }
+        if index == array.len() {
+            array.push(value);
+        } else {
+            array[index] = value;
+        }
     }
-    let Statement::ReturnStatement(ret) = last else { return None; };
-    if ret.argument.as_ref().and_then(|e| symbol(model, e)) != Some(ids[0]) { return None; }
+    let Statement::ReturnStatement(ret) = last else {
+        return None;
+    };
+    if ret.argument.as_ref().and_then(|e| symbol(model, e)) != Some(ids[0]) {
+        return None;
+    }
     Some(array)
 }
 struct WrapperSetup {
-
     captures: BTreeMap<Symbol, PV>,
     key: Symbol,
     kinds: BTreeMap<Symbol, SetupValue>,
@@ -1479,7 +1542,8 @@ fn protocol_wrapper(
                 if assignment_target_symbol(model, &update.left) != Some(*index) {
                     return None;
                 }
-                let increments = (update.operator.as_str() == "+=" && is_numeric(&update.right, 2.))
+                let increments = (update.operator.as_str() == "+="
+                    && is_numeric(&update.right, 2.))
                     || (update.operator.as_str() == "="
                         && protocol_term(model, &update.right)
                             == Some(pb("+", ps(*index), pn(2.))));
@@ -1492,28 +1556,49 @@ fn protocol_wrapper(
             }
             Statement::IfStatement(i) => {
                 let term = protocol_term(model, &i.test)?;
-                let typeof_function = |name: &str| pb("===", pt("typeof", vec![pg(name)]), PT::String("function".to_string()));
-                let [yes] = protocol_block(&i.consequent)? else { return None; };
+                let typeof_function = |name: &str| {
+                    pb(
+                        "===",
+                        pt("typeof", vec![pg(name)]),
+                        PT::String("function".to_string()),
+                    )
+                };
+                let [yes] = protocol_block(&i.consequent)? else {
+                    return None;
+                };
                 let yes = protocol_assignment(yes)?;
                 let b = assignment_target_symbol(model, &yes.left)?;
-                if !declared.contains(&b) { return None; }
+                if !declared.contains(&b) {
+                    return None;
+                }
                 if term == typeof_function("Uint8Array") && !values.contains_key(&b) {
-                    let [no] = protocol_block(i.alternate.as_ref()?)? else { return None; };
+                    let [no] = protocol_block(i.alternate.as_ref()?)? else {
+                        return None;
+                    };
                     let no = protocol_assignment(no)?;
                     if assignment_target_symbol(model, &no.left) != Some(b)
                         || protocol_term(model, &yes.right) != Some(pg("Uint8Array"))
-                        || protocol_term(model, &no.right) != Some(PT::Null) { return None; }
+                        || protocol_term(model, &no.right) != Some(PT::Null)
+                    {
+                        return None;
+                    }
                     values.insert(b, SetupValue::Uint8);
                     *assignments.entry(b).or_default() += 2;
-                } else if term == ps(b) && values.get(&b) == Some(&SetupValue::Uint8)
-                    && i.alternate.is_none() && protocol_term(model, &yes.right) == Some(typeof_function("Float64Array"))
+                } else if term == ps(b)
+                    && values.get(&b) == Some(&SetupValue::Uint8)
+                    && i.alternate.is_none()
+                    && protocol_term(model, &yes.right) == Some(typeof_function("Float64Array"))
                 {
                     values.insert(b, SetupValue::Float64Guard);
                     *assignments.entry(b).or_default() += 1;
                 } else if !values.contains_key(&b) {
-                    let [no] = protocol_block(i.alternate.as_ref()?)? else { return None; };
+                    let [no] = protocol_block(i.alternate.as_ref()?)? else {
+                        return None;
+                    };
                     let no = protocol_assignment(no)?;
-                    if assignment_target_symbol(model, &no.left) != Some(b) { return None; }
+                    if assignment_target_symbol(model, &no.left) != Some(b) {
+                        return None;
+                    }
                     let float_guard = values.iter().find_map(|(&capture, value)| {
                         (*value == SetupValue::Uint8
                             && term == pb("&&", ps(capture), typeof_function("Float64Array")))
@@ -1526,17 +1611,25 @@ fn protocol_wrapper(
                         if protocol_term(model, &yes.right)
                             != Some(pt("new", vec![pg("Float64Array"), pn(1.)]))
                             || protocol_term(model, &no.right) != Some(PT::Null)
-                        { return None; }
+                        {
+                            return None;
+                        }
                         values.insert(b, SetupValue::Float64);
                         *assignments.entry(b).or_default() += 2;
                     } else if nan_guard.is_some() {
                         if protocol_term(model, &yes.right) != Some(PT::Null)
                             || !protocol_nan(model, &no.right)
-                        { return None; }
+                        {
+                            return None;
+                        }
                         values.insert(b, SetupValue::Nan);
                         *assignments.entry(b).or_default() += 2;
-                    } else { return None; }
-                } else { return None; }
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
             }
             Statement::VariableDeclaration(d) => {
                 for v in &d.declarations {
@@ -1700,12 +1793,17 @@ fn protocol_setup_value(
         return Some(SetupValue::Uint8);
     }
     for (&b, v) in values {
-        if *v == SetupValue::Float64Guard && term == Some(pt("?:", vec![ps(b), pt("new", vec![pg("Float64Array"), pn(1.)]), PT::Null])) {
+        if *v == SetupValue::Float64Guard
+            && term
+                == Some(pt(
+                    "?:",
+                    vec![ps(b), pt("new", vec![pg("Float64Array"), pn(1.)]), PT::Null],
+                ))
+        {
             return Some(SetupValue::Float64);
         }
         if *v == SetupValue::Uint8
             && term
-
                 == Some(pt(
                     "?:",
                     vec![
@@ -2428,7 +2526,7 @@ fn protocol_writer_factory(
     Some(())
 }
 
-#[path="worker_environment_numeric.rs"]
+#[path = "worker_environment_numeric.rs"]
 mod numeric_protocol;
 
 /// True only for the accepted sharing evaluator pair of one role. This is not a
@@ -2447,12 +2545,7 @@ fn claimed_role(
     })
 }
 
-fn arm_store_matches(
-    model: &Model<'_, '_>,
-    site: FunctionSite,
-    span: Span,
-    zero: bool,
-) -> bool {
+fn arm_store_matches(model: &Model<'_, '_>, site: FunctionSite, span: Span, zero: bool) -> bool {
     for node in model.nodes.iter() {
         if !owned(model, node.id(), site)
             || node.span().start < span.start
@@ -2512,7 +2605,8 @@ fn symbol_has_subtraction_store(
         }
         let value = match node.kind() {
             AstKind::VariableDeclarator(declarator)
-                if declarator.init.is_some() && declared_symbol(model, declarator) == Some(binding) =>
+                if declarator.init.is_some()
+                    && declared_symbol(model, declarator) == Some(binding) =>
             {
                 declarator.init.as_ref()
             }
@@ -2554,7 +2648,8 @@ fn has_fraction_select(model: &Model<'_, '_>, site: FunctionSite) -> bool {
                 let yes_zero = is_zero(yes);
                 let no_zero = is_zero(no);
                 let yes_sub = matches!(yes, Expression::BinaryExpression(sub) if sub.operator.as_str() == "-");
-                let no_sub = matches!(no, Expression::BinaryExpression(sub) if sub.operator.as_str() == "-");
+                let no_sub =
+                    matches!(no, Expression::BinaryExpression(sub) if sub.operator.as_str() == "-");
                 if (yes_zero && no_sub) || (no_zero && yes_sub) {
                     return true;
                 }
@@ -2621,7 +2716,10 @@ fn has_exponent_carry(model: &Model<'_, '_>, site: FunctionSite) -> bool {
         }
         let target = match node.kind() {
             AstKind::VariableDeclarator(declarator)
-                if declarator.init.as_ref().is_some_and(|init| is_numeric(init, 2047.)) =>
+                if declarator
+                    .init
+                    .as_ref()
+                    .is_some_and(|init| is_numeric(init, 2047.)) =>
             {
                 declared_symbol(model, declarator)
             }
@@ -2644,14 +2742,13 @@ fn has_exponent_carry(model: &Model<'_, '_>, site: FunctionSite) -> bool {
             continue;
         }
         let (target, value) = match node.kind() {
-            AstKind::VariableDeclarator(declarator)
-                if declarator.init.is_some() =>
-            {
+            AstKind::VariableDeclarator(declarator) if declarator.init.is_some() => {
                 (declared_symbol(model, declarator), declarator.init.as_ref())
             }
-            AstKind::AssignmentExpression(assignment) if assignment.operator.as_str() == "=" => {
-                (assignment_target_symbol(model, &assignment.left), Some(&assignment.right))
-            }
+            AstKind::AssignmentExpression(assignment) if assignment.operator.as_str() == "=" => (
+                assignment_target_symbol(model, &assignment.left),
+                Some(&assignment.right),
+            ),
             _ => (None, None),
         };
         let Some(target) = target else {
@@ -2804,9 +2901,9 @@ fn numeric_semantics_closed(
     setup: &WrapperSetup,
 ) -> Option<()> {
     const ALLOWED: &[f64] = &[
-        -1074., -1022., 0., 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 11., 12., 19., 26.,
-        31., 32., 51., 52., 56., 64., 127., 128., 1022., 1023., 1024., 1074., 2046.,
-        2047., 4096., 524288., 67108864.,
+        -1074., -1022., 0., 0.5, 1., 2., 3., 4., 5., 6., 7., 8., 11., 12., 19., 26., 31., 32., 51.,
+        52., 56., 64., 127., 128., 1022., 1023., 1024., 1074., 2046., 2047., 4096., 524288.,
+        67108864.,
     ];
     let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
         return None;
@@ -2898,9 +2995,9 @@ fn numeric_semantics_closed(
                     eq2047 = true;
                 }
                 if let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left {
-                    if symbol(model, &member.object)
-                        .is_some_and(|binding| setup.kinds.get(&binding) == Some(&SetupValue::Float64))
-                        && is_zero(&member.expression)
+                    if symbol(model, &member.object).is_some_and(|binding| {
+                        setup.kinds.get(&binding) == Some(&SetupValue::Float64)
+                    }) && is_zero(&member.expression)
                     {
                         scratch_write = true;
                     }
@@ -3017,7 +3114,10 @@ fn numeric_semantics_closed(
                                                     declared_symbol(model, declarator)
                                                 }
                                                 AstKind::AssignmentExpression(assignment) => {
-                                                    assignment_target_symbol(model, &assignment.left)
+                                                    assignment_target_symbol(
+                                                        model,
+                                                        &assignment.left,
+                                                    )
                                                 }
                                                 _ => None,
                                             };
@@ -3069,7 +3169,9 @@ fn numeric_semantics_closed(
                     continue;
                 }
                 let args = call_arguments(call);
-                if let Some(Expression::BinaryExpression(division)) = args.first().map(|arg| arg.without_parentheses()) {
+                if let Some(Expression::BinaryExpression(division)) =
+                    args.first().map(|arg| arg.without_parentheses())
+                {
                     if division.operator.as_str() == "/"
                         && symbol(model, &division.left) == Some(binding)
                         && is_numeric(&division.right, 2.)
@@ -3145,12 +3247,17 @@ fn numeric_semantics_closed(
     let body = loop8_body?;
     let mut final_increment = false;
     for node in model.nodes.iter() {
-        if !owned(model, node.id(), site) || node.span().start < body.start || node.span().end > body.end {
+        if !owned(model, node.id(), site)
+            || node.span().start < body.start
+            || node.span().end > body.end
+        {
             continue;
         }
         if let AstKind::AssignmentExpression(assignment) = node.kind() {
             if let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left {
-                if let Expression::UpdateExpression(update) = member.expression.without_parentheses() {
+                if let Expression::UpdateExpression(update) =
+                    member.expression.without_parentheses()
+                {
                     if update.prefix && update.operator.as_str() == "++" {
                         final_increment = true;
                     }
@@ -3186,7 +3293,11 @@ fn numeric_semantics_closed(
     Some(())
 }
 
-fn numeric_value_alias(model: &Model<'_, '_>, site: FunctionSite, expression: &Expression<'_>) -> bool {
+fn numeric_value_alias(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    expression: &Expression<'_>,
+) -> bool {
     if model.site_parameter_slot(expression, site) == Some(1) {
         return true;
     }
@@ -3317,7 +3428,12 @@ fn protocol_numeric_operations(
             return Some(());
         }
     }
-    if !claimed_role(proposals, site.span.start, "writeNumber", "thread_posthost_numeric") {
+    if !claimed_role(
+        proposals,
+        site.span.start,
+        "writeNumber",
+        "thread_posthost_numeric",
+    ) {
         return None;
     }
     numeric_semantics_closed(model, site, setup)

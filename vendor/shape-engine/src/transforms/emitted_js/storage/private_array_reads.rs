@@ -4,6 +4,7 @@
 //! Property reads are rematerialized; arithmetic/coercions are never duplicated.
 use super::super::{adjacent_ssa::LocalReads, index::SpanIndex};
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
 use oxc_ast_visit::{walk, Visit};
@@ -11,7 +12,6 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::transforms::emitted_js::support::unwrap;
 
 fn index(e: &Expression<'_>) -> Option<usize> {
     match unwrap(e) {

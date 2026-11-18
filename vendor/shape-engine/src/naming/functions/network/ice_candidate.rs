@@ -1,7 +1,7 @@
 //! Exact candidate-record collection protocol over opaque matcher/report ports.
 //! Native RTC/RegExp identity and matcher patterns are deliberately unproved.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::SymbolId;
 fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(b) = s else {

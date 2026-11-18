@@ -4,8 +4,7 @@ fn var_inputs_include_initializer_writes_and_annex_b_names() {
         "function f(){var n=read()|0;let result=n+1;effect();return [n,result];}",
         "function f(){var n=read();let result=[n];effect();consume(result);n=4;}",
     ] {
-        let (code, count) =
-            super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
         assert_eq!(count, 1, "{code}");
     }
     for source in [
@@ -30,8 +29,8 @@ fn readonly_argument_computations_reuse_the_existing_non_escape_proof() {
         "function f(){let result=arguments[0]==null;effect();return [result,result];}",
         "function f(){let result=arguments[0]===void 0?[]:arguments[0];effect();return result;}",
     ] {
-        let (code,count)=super::inline_fresh_values(source,&Default::default(),false).unwrap();
-        assert_eq!(count,1,"{code}");
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        assert_eq!(count, 1, "{code}");
     }
     for source in [
         "function f(){let result=arguments[0]==null;arguments[0]=4;return result;}",
@@ -51,8 +50,7 @@ fn bounded_identity_free_values_can_have_multiple_dynamic_reads() {
         "function f(){const n=read()|0;let result=n+1;effect();return [result,result];}",
         "function f(){const n=read();let result=n==null;effect();return [result,result];}",
     ] {
-        let (code, count) =
-            super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
         assert_eq!(count, 1, "{code}");
         assert!(!code.contains("let result"), "{code}");
     }
@@ -77,8 +75,7 @@ fn mutable_lexical_inputs_require_the_same_version_at_every_read() {
         "function f(){let n=read()|0; n=3;let result=n+1;effect();consume(result);n=4;}",
         "function f(){let n=read();let result=[n];effect();consume(result);n=4;}",
     ] {
-        let (code, count) =
-            super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
         assert_eq!(count, 1, "{code}");
         assert!(!code.contains("let result"), "{code}");
     }
@@ -99,8 +96,7 @@ fn immutable_primitive_computations_cross_effects_but_keep_coercion_barriers() {
         "function f(){const value=read();let result=value==null;effect();return result;}",
         "function f(){const value=read();let result=value?true:false;effect();return result;}",
     ] {
-        let (code, count) =
-            super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
         assert_eq!(count, 1, "{code}");
         assert!(!code.contains("let result"), "{code}");
     }
@@ -220,8 +216,7 @@ fn rematerialization_uses_output_cost_instead_of_a_reference_count_limit() {
     let source = format!(
         "function f(input){{let n=Number(input);let {name}=n+1;observe();return [{values}];}}"
     );
-    let (code, count) =
-        super::inline_fresh_values(&source, &Default::default(), false).unwrap();
+    let (code, count) = super::inline_fresh_values(&source, &Default::default(), false).unwrap();
     assert_eq!(count, 1, "{code}");
     assert!(!code.contains(name), "{code}");
     assert!(code.len() < source.len());
@@ -250,8 +245,9 @@ fn while_test_aliases_and_computations_use_one_reaching_version() {
         "function f(){let n=0;let $SSA_0;while($SSA_0=n,$SSA_0<3){observe($SSA_0);n=$SSA_0+1;}}",
         "function f(){let n=3;let $SSA_0;while($SSA_0=n-1,$SSA_0>=0){observe($SSA_0);n=$SSA_0;}}",
     ] {
-        let (code,count)=super::inline_fresh_values(source,&Default::default(),false).unwrap();
-        assert!(count>0,"{code}");assert!(!code.contains("$SSA_0="),"{code}");
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        assert!(count > 0, "{code}");
+        assert!(!code.contains("$SSA_0="), "{code}");
     }
     for source in [
         "function f(){let n=3;let $SSA_0;while($SSA_0=n-1,$SSA_0>=0){n=0;observe($SSA_0);}}",

@@ -4,6 +4,7 @@
 //! and require a receiver that cannot be observed during construction.
 use super::super::index::SpanIndex;
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
@@ -11,7 +12,6 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::AssignmentOperator;
 use std::collections::BTreeSet;
-use crate::transforms::emitted_js::support::unwrap;
 
 pub(crate) fn fold_dense_arrays(
     source: &str,

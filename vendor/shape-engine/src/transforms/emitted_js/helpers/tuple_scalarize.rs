@@ -110,12 +110,15 @@ struct Projections {
 /// symbol, and its (unparenthesized) array literal.
 fn literal_tuple<'b, 'a>(
     statement: &'b Statement<'a>,
-) -> Option<(&'b VariableDeclaration<'a>, SymbolId, &'b ArrayExpression<'a>)> {
+) -> Option<(
+    &'b VariableDeclaration<'a>,
+    SymbolId,
+    &'b ArrayExpression<'a>,
+)> {
     let Statement::VariableDeclaration(tuple_decl) = statement else {
         return None;
     };
-    if tuple_decl.kind != VariableDeclarationKind::Let || tuple_decl.declarations.len() != 1
-    {
+    if tuple_decl.kind != VariableDeclarationKind::Let || tuple_decl.declarations.len() != 1 {
         return None;
     }
     let tuple = &tuple_decl.declarations[0];
@@ -125,8 +128,7 @@ fn literal_tuple<'b, 'a>(
     if !tuple_id.name.starts_with("$SSA_") {
         return None;
     }
-    let (Some(symbol), Some(initializer)) = (tuple_id.symbol_id.get(), tuple.init.as_ref())
-    else {
+    let (Some(symbol), Some(initializer)) = (tuple_id.symbol_id.get(), tuple.init.as_ref()) else {
         return None;
     };
     let mut initializer = initializer;
@@ -256,9 +258,7 @@ impl Scan<'_> {
                 AstKind::TaggedTemplateExpression(_)
                 | AstKind::UpdateExpression(_)
                 | AstKind::ChainExpression(_) => return false,
-                AstKind::UnaryExpression(unary) => {
-                    return unary.operator != UnaryOperator::Delete
-                }
+                AstKind::UnaryExpression(unary) => return unary.operator != UnaryOperator::Delete,
                 AstKind::AssignmentExpression(assignment) => {
                     return assignment.right.span() == span
                 }
@@ -345,8 +345,7 @@ impl Scan<'_> {
             if !id.name.starts_with("$SSA_") {
                 break;
             }
-            let Some(Expression::ComputedMemberExpression(member)) = binding.init.as_ref()
-            else {
+            let Some(Expression::ComputedMemberExpression(member)) = binding.init.as_ref() else {
                 break;
             };
             let Expression::Identifier(object) = &member.object else {
@@ -496,8 +495,16 @@ mod tests {
     fn forwards_reads_of_a_plain_tuple_folded_into_later_expressions() {
         let source = "function f($PARAMA) { let $SSA_1 = [$PARAMA, $PARAMA]; let $SSA_2 = $SSA_1[0]; let $SSA_3 = ($SSA_1[1]) !== 'x'; return [$SSA_2, $SSA_3]; }";
         let output = scalarize_literal_tuples(source).unwrap();
-        assert!(output.code.contains("let $SSA_2 = ($PARAMA);"), "{}", output.code);
-        assert!(output.code.contains("(($PARAMA)) !== 'x'"), "{}", output.code);
+        assert!(
+            output.code.contains("let $SSA_2 = ($PARAMA);"),
+            "{}",
+            output.code
+        );
+        assert!(
+            output.code.contains("(($PARAMA)) !== 'x'"),
+            "{}",
+            output.code
+        );
         assert!(!output.code.contains("$SSA_1["), "{}", output.code);
     }
 
@@ -505,15 +512,31 @@ mod tests {
     fn keeps_reads_of_a_tuple_that_is_a_receiver_written_or_impure() {
         // `t[0]()` calls with `t` as `this`.
         let call = "function f($PARAMA) { let $SSA_1 = [$PARAMA, 1]; let $SSA_2 = $SSA_1[0](); return $SSA_2; }";
-        assert!(scalarize_literal_tuples(call).unwrap().code.contains("$SSA_1[0]()"));
+        assert!(scalarize_literal_tuples(call)
+            .unwrap()
+            .code
+            .contains("$SSA_1[0]()"));
         let write = "function f($PARAMA) { let $SSA_1 = [$PARAMA, 1]; $SSA_1[0] = 2; return $SSA_1[0] + $SSA_1[1]; }";
-        assert!(scalarize_literal_tuples(write).unwrap().code.contains("$SSA_1[0] + $SSA_1[1]"));
+        assert!(scalarize_literal_tuples(write)
+            .unwrap()
+            .code
+            .contains("$SSA_1[0] + $SSA_1[1]"));
         let reassigned = "function f($PARAMA) { let $SSA_9 = 1; let $SSA_1 = [$SSA_9, 1]; $SSA_9 = 2; return $SSA_1[0] + $SSA_1[1]; }";
-        assert!(scalarize_literal_tuples(reassigned).unwrap().code.contains("$SSA_1[0] + $SSA_1[1]"));
+        assert!(scalarize_literal_tuples(reassigned)
+            .unwrap()
+            .code
+            .contains("$SSA_1[0] + $SSA_1[1]"));
         let impure = "function f($PARAMA) { let $SSA_1 = [g(), 1]; return $SSA_1[0] + $SSA_1[1]; }";
-        assert!(scalarize_literal_tuples(impure).unwrap().code.contains("$SSA_1[0] + $SSA_1[1]"));
-        let escapes = "function f($PARAMA) { let $SSA_1 = [$PARAMA, 1]; return [$SSA_1, $SSA_1[0]]; }";
-        assert!(scalarize_literal_tuples(escapes).unwrap().code.contains("[$SSA_1, $SSA_1[0]]"));
+        assert!(scalarize_literal_tuples(impure)
+            .unwrap()
+            .code
+            .contains("$SSA_1[0] + $SSA_1[1]"));
+        let escapes =
+            "function f($PARAMA) { let $SSA_1 = [$PARAMA, 1]; return [$SSA_1, $SSA_1[0]]; }";
+        assert!(scalarize_literal_tuples(escapes)
+            .unwrap()
+            .code
+            .contains("[$SSA_1, $SSA_1[0]]"));
     }
 
     #[test]

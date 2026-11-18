@@ -8,8 +8,11 @@ const ALPHA: &str = include_str!("../../../tools/bandai-alphabet.txt");
 
 /// our exact decoder (mirror of seedfamily::seed_decode, test-local)
 fn decode(text: &str, alphabet: &str) -> Vec<u8> {
-    let map: std::collections::HashMap<char, u8> =
-        alphabet.chars().enumerate().map(|(i, c)| (c, i as u8)).collect();
+    let map: std::collections::HashMap<char, u8> = alphabet
+        .chars()
+        .enumerate()
+        .map(|(i, c)| (c, i as u8))
+        .collect();
     let mut out = Vec::new();
     let mut acc = 0u32;
     let mut bits = 0u32;

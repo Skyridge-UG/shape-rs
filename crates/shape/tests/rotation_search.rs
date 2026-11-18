@@ -7,8 +7,11 @@ const SMOKE_A: &str = include_str!("../../../tools/golden-a-smoke.txt");
 const SMOKE_ALPHA: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 fn decode(text: &str, alphabet: &[char]) -> Vec<u8> {
-    let map: std::collections::HashMap<char, u8> =
-        alphabet.iter().enumerate().map(|(i, c)| (*c, i as u8)).collect();
+    let map: std::collections::HashMap<char, u8> = alphabet
+        .iter()
+        .enumerate()
+        .map(|(i, c)| (*c, i as u8))
+        .collect();
     let mut out = Vec::new();
     let mut acc: u32 = 0;
     let mut bits = 0u32;
@@ -27,7 +30,9 @@ fn decode(text: &str, alphabet: &[char]) -> Vec<u8> {
 
 fn rotated(alpha: &str, by: usize) -> Vec<char> {
     let chars: Vec<char> = alpha.chars().collect();
-    (0..chars.len()).map(|i| chars[(i + by) % chars.len()]).collect()
+    (0..chars.len())
+        .map(|i| chars[(i + by) % chars.len()])
+        .collect()
 }
 
 #[test]
@@ -47,7 +52,11 @@ fn rotation_search_matches_smoke_grammar() {
             let scored = (len as i64 - bytes.len() as i64).abs();
             if best.as_ref().map(|(b, _)| scored < *b).unwrap_or(true) {
                 best = Some((scored, bytes.clone()));
-                println!("rot={rot} head={:02X?} declaredLen={len} total={}", &bytes[..4], bytes.len());
+                println!(
+                    "rot={rot} head={:02X?} declaredLen={len} total={}",
+                    &bytes[..4],
+                    bytes.len()
+                );
             }
         }
     }
@@ -56,5 +65,8 @@ fn rotation_search_matches_smoke_grammar() {
     // 'rotation search result') - the bandai container uses its own header
     // grammar. The assertion encodes today's finding so a future engine /
     // header change surfaces as a PASS here.
-    assert!(best.is_none(), "unexpected grammar match; re-check the recon note");
+    assert!(
+        best.is_none(),
+        "unexpected grammar match; re-check the recon note"
+    );
 }

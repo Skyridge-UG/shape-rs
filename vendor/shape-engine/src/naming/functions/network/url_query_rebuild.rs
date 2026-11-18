@@ -1009,15 +1009,21 @@ fn rebuild(model: &Model<'_, '_>, site: FunctionSite, function: &Function<'_>) -
     // split form must write search then hash directly, before href or exposure;
     // no calls, aliases, computed keys or extra stores can hide in this prefix.
     let (href_st, cache_write, tail) = if object.properties.len() == 4 {
-        let [search_store, hash_store, href_st, cache_write, tail @ ..] = after_parsed else { return None; };
+        let [search_store, hash_store, href_st, cache_write, tail @ ..] = after_parsed else {
+            return None;
+        };
         if fields.keys().map(String::as_str).collect::<BTreeSet<_>>()
             != BTreeSet::from(["protocol", "hostname", "port", "pathname"])
-        { return None; }
+        {
+            return None;
+        }
         field_assign(model, search_store, f(s(parsed), "search"), s(search))?;
         field_assign(model, hash_store, f(s(parsed), "hash"), s(hash))?;
         (href_st, cache_write, tail)
     } else {
-        let [href_st, cache_write, tail @ ..] = after_parsed else { return None; };
+        let [href_st, cache_write, tail @ ..] = after_parsed else {
+            return None;
+        };
         (href_st, cache_write, tail)
     };
     let port_expr = *fields.get("port")?;
@@ -1073,7 +1079,9 @@ fn rebuild(model: &Model<'_, '_>, site: FunctionSite, function: &Function<'_>) -
         ("search", s(search)),
         ("hash", s(hash)),
     ] {
-        if object.properties.len() == 4 && matches!(key, "search" | "hash") { continue; }
+        if object.properties.len() == 4 && matches!(key, "search" | "hash") {
+            continue;
+        }
         if !eq(model, fields.get(key)?, expected) {
             return None;
         }

@@ -2,8 +2,8 @@
 //! remain late-bound data; neither native context nor child payload semantics
 //! are inferred. The local callback's declaration is consumed as an opaque
 //! value, never used as donor evidence for the parent's role.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::SymbolId;
 use oxc_span::GetSpan;
 

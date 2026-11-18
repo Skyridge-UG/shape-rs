@@ -1,10 +1,11 @@
 //! `LocationPropertyNames`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::analysis::{leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `LocationPropertyNames`. Card: [`CARD`].
 pub(crate) fn recognize_location_property_names(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -21,8 +22,11 @@ pub(crate) fn recognize_location_property_names(view: &SlotView, ctx: &FinderCtx
     (plain_ops(view, &[LeafOp::String])
         && code_lookup
         && (census.member("location") || view.value_reads_api("location"))
-        && (census.calls("keys") || view.leaves().any(|leaf| leaf.transforms.iter().any(|t| t == "Object.keys"))))
-        .then(|| Claim::new(["for-in over location", "one key-code string"]))
+        && (census.calls("keys")
+            || view
+                .leaves()
+                .any(|leaf| leaf.transforms.iter().any(|t| t == "Object.keys"))))
+    .then(|| Claim::new(["for-in over location", "one key-code string"]))
 }
 
 pub(crate) fn bind_location_property_names(

@@ -1,7 +1,7 @@
 //! Bounded map-only protocol. Each declaration is consumed in its exact role;
 //! no sibling body or inherited finder label supplies evidence.
-use crate::naming::shared::*;
 use crate::naming::functions::observables::observable_factory;
+use crate::naming::shared::*;
 use crate::naming::*;
 use oxc_semantic::{NodeId, SymbolId};
 use oxc_span::GetSpan;
@@ -26,10 +26,12 @@ pub(in crate::naming) fn constructor_epochs(
 mod joined_stream_state_and_cleanup {
     use super::*;
 
-    pub(super) const ACTUAL: &str =
-        include_str!("../../../../tests/fixtures/joined_stream_state_and_cleanup/constructor-epoch-parent.js");
-    pub(super) const CONTROL: &str =
-        include_str!("../../../../tests/fixtures/naming/joined_observables/joined-state-excerpt-alternate.js");
+    pub(super) const ACTUAL: &str = include_str!(
+        "../../../../tests/fixtures/joined_stream_state_and_cleanup/constructor-epoch-parent.js"
+    );
+    pub(super) const CONTROL: &str = include_str!(
+        "../../../../tests/fixtures/naming/joined_observables/joined-state-excerpt-alternate.js"
+    );
 
     pub(super) fn inspect(
         source: &str,
@@ -596,7 +598,10 @@ fn executor<'a>(
     executor_with_origin(m, f, factory, false)
 }
 fn executor_with_origin<'a>(
-    m: &Model<'_, '_>, f: &'a Function<'a>, factory: Sym, ordinary: bool,
+    m: &Model<'_, '_>,
+    f: &'a Function<'a>,
+    factory: Sym,
+    ordinary: bool,
 ) -> Option<(&'a ArrowFunctionExpression<'a>, Sym, Sym)> {
     let p = params(m, f, 1)?[0];
     let [capture, returned] = body(f)? else {
@@ -652,7 +657,11 @@ fn one_arg(
 fn prove_merge(m: &Model<'_, '_>, f: &Function<'_>) -> Option<Vec<(Span, &'static str)>> {
     prove_merge_with_origin(m, f, false)
 }
-fn prove_merge_with_origin(m: &Model<'_, '_>, f: &Function<'_>, ordinary: bool) -> Option<Vec<(Span, &'static str)>> {
+fn prove_merge_with_origin(
+    m: &Model<'_, '_>,
+    f: &Function<'_>,
+    ordinary: bool,
+) -> Option<Vec<(Span, &'static str)>> {
     // A named expression's private self symbol is not its external callable binding.
     if f.r#type != FunctionType::FunctionDeclaration {
         return None;
@@ -811,7 +820,13 @@ pub(in crate::naming) fn evaluate(
                     return vec![proposal(name,"shared_observable_merge_map_operator","Whole merge-map subscription protocol: native constructor origin and exposure readiness; exact ordered local initialization, increment-before-subscribe, next/error forwarding, completion countdown and unsubscribe-all teardown; every callback body and SymbolId link consumed",facts)];
                 }
             }
-            for roles in [prove_join_with_origin(m, f, true), prove_merge_with_origin(m, f, true)].into_iter().flatten() {
+            for roles in [
+                prove_join_with_origin(m, f, true),
+                prove_merge_with_origin(m, f, true),
+            ]
+            .into_iter()
+            .flatten()
+            {
                 if let Some((_, name)) = roles.iter().find(|(span, _)| *span == site.span) {
                     return vec![proposal(name, "shared_subscriber_stream_join_merge", "Whole owned join or merge subscription protocol; independently complete ordinary strict subscriber constructor API with closed object reads and executed initialization at every exposure; exact source indices, ordered next/error/completion, countdown and teardown; no native class identity claimed", facts)];
                 }
@@ -825,7 +840,11 @@ pub(in crate::naming) fn evaluate(
 fn prove_join(m: &Model<'_, '_>, f: &Function<'_>) -> Option<Vec<(Span, &'static str)>> {
     prove_join_with_origin(m, f, false)
 }
-fn prove_join_with_origin(m: &Model<'_, '_>, f: &Function<'_>, ordinary: bool) -> Option<Vec<(Span, &'static str)>> {
+fn prove_join_with_origin(
+    m: &Model<'_, '_>,
+    f: &Function<'_>,
+    ordinary: bool,
+) -> Option<Vec<(Span, &'static str)>> {
     // A named expression's private self symbol is not its external callable binding.
     if f.r#type != FunctionType::FunctionDeclaration {
         return None;
@@ -1226,8 +1245,8 @@ mod actual_join_composition {
             let constructor = id(m, &n.callee).unwrap();
             assert_eq!(m.binding_writes(constructor), 3);
             assert!(single_native_origin(m, &n.callee, factory, 8).is_none());
-            let epochs = epochs::collect(m, constructor)
-                .expect("every writer and closed constructor read");
+            let epochs =
+                epochs::collect(m, constructor).expect("every writer and closed constructor read");
             assert_eq!(epochs.stores.len(), 3);
             assert_eq!(epochs.makers.len(), 3);
             let expected = [
@@ -1243,8 +1262,7 @@ mod actual_join_composition {
             }).collect();
             let ready = epochs::publications_ready(m, factory, &epochs);
             assert!(ready);
-            epochs::prove(m, &n.callee, factory)
-                .expect("all epochs, producers and publications");
+            epochs::prove(m, &n.callee, factory).expect("all epochs, producers and publications");
             native_origin(m, &n.callee, factory, 8).expect("production origin entry point");
             let (exec, source, sink) =
                 executor(m, f, factory).expect("exact executor and captured source");

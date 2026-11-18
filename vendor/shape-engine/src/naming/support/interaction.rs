@@ -1,10 +1,7 @@
 use super::*;
 use oxc_semantic::SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<SymbolId> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -86,9 +83,7 @@ pub(in crate::naming) fn member<'a>(
     (!m.optional && m.property.name == key).then_some(&m.object)
 }
 
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     let Expression::CallExpression(c) = e else {
         return None;
     };
@@ -155,9 +150,7 @@ pub(in crate::naming) fn single_variable<'a>(
     Some(v)
 }
 
-pub(in crate::naming) fn variable<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a VariableDeclarator<'a>> {
+pub(in crate::naming) fn variable<'a>(s: &'a Statement<'a>) -> Option<&'a VariableDeclarator<'a>> {
     let Statement::VariableDeclaration(d) = s else {
         return None;
     };

@@ -382,19 +382,32 @@ fn subscription<'a>(
     })
 }
 fn new_executor_with_origin<'a>(
-    m: &Model<'_, '_>, e: &'a Expression<'a>, factory: Sym, assignment_copies: bool, ordinary: bool,
+    m: &Model<'_, '_>,
+    e: &'a Expression<'a>,
+    factory: Sym,
+    assignment_copies: bool,
+    ordinary: bool,
 ) -> Option<&'a ArrowFunctionExpression<'a>> {
-    let Expression::NewExpression(n) = e.without_parentheses() else { return None; };
+    let Expression::NewExpression(n) = e.without_parentheses() else {
+        return None;
+    };
     if ordinary {
         closed_constructor(m, id(m, &n.callee)?, &mut BTreeSet::new(), 32)?;
-        observables::observable_map_operator::ordinary_origin(m, &n.callee, factory, 8)
-            .or_else(|| assignment_copies.then(|| readiness::ordinary_constructor(m, &n.callee, factory, 8)).flatten())?;
+        observables::observable_map_operator::ordinary_origin(m, &n.callee, factory, 8).or_else(
+            || {
+                assignment_copies
+                    .then(|| readiness::ordinary_constructor(m, &n.callee, factory, 8))
+                    .flatten()
+            },
+        )?;
     } else {
-    observables::observable_map_operator::native_origin(m, &n.callee, factory, 8).or_else(|| {
-        assignment_copies
-            .then(|| readiness::constructor(m, &n.callee, factory, 8))
-            .flatten()
-    })?;
+        observables::observable_map_operator::native_origin(m, &n.callee, factory, 8).or_else(
+            || {
+                assignment_copies
+                    .then(|| readiness::constructor(m, &n.callee, factory, 8))
+                    .flatten()
+            },
+        )?;
     }
     let [a] = n.arguments.as_slice() else {
         return None;
@@ -506,7 +519,10 @@ fn operator<'a>(
     operator_with_origin(m, f, returned, false)
 }
 fn operator_with_origin<'a>(
-    m: &Model<'_, '_>, f: &'a Function<'a>, returned: &Statement<'_>, ordinary: bool,
+    m: &Model<'_, '_>,
+    f: &'a Function<'a>,
+    returned: &Statement<'_>,
+    ordinary: bool,
 ) -> Option<(Sym, &'a ArrowFunctionExpression<'a>)> {
     let s = fs(f)?;
     if !fixed(m, s) || m.binding_references(s) != 1 || id(m, ret(returned)?) != Some(s) {
@@ -519,12 +535,19 @@ fn operator_with_origin<'a>(
     let source = alias(m, capture, input)?;
     let parent = m.enclosing_function(m.scoping.symbol_declaration(s))?;
     let factory = parent.binding_symbol?;
-    Some((source, new_executor_with_origin(m, ret(finish)?, factory, true, ordinary)?))
+    Some((
+        source,
+        new_executor_with_origin(m, ret(finish)?, factory, true, ordinary)?,
+    ))
 }
 fn scan<'a>(m: &Model<'_, '_>, f: &'a Function<'a>) -> Option<Vec<(Span, &'static str)>> {
     scan_with_origin(m, f, false)
 }
-fn scan_with_origin<'a>(m: &Model<'_, '_>, f: &'a Function<'a>, ordinary: bool) -> Option<Vec<(Span, &'static str)>> {
+fn scan_with_origin<'a>(
+    m: &Model<'_, '_>,
+    f: &'a Function<'a>,
+    ordinary: bool,
+) -> Option<Vec<(Span, &'static str)>> {
     let p = params(m, f, 2)?;
     let [capture, initial, default, inner, returned] = body(f)? else {
         return None;
@@ -609,7 +632,11 @@ fn scan_with_origin<'a>(m: &Model<'_, '_>, f: &'a Function<'a>, ordinary: bool) 
 fn last<'a>(m: &Model<'_, '_>, f: &'a Function<'a>) -> Option<Vec<(Span, &'static str)>> {
     last_with_origin(m, f, false)
 }
-fn last_with_origin<'a>(m: &Model<'_, '_>, f: &'a Function<'a>, ordinary: bool) -> Option<Vec<(Span, &'static str)>> {
+fn last_with_origin<'a>(
+    m: &Model<'_, '_>,
+    f: &'a Function<'a>,
+    ordinary: bool,
+) -> Option<Vec<(Span, &'static str)>> {
     let p = params(m, f, 2)?;
     let [capture, default, inner, returned] = body(f)? else {
         return None;
@@ -725,7 +752,11 @@ impl<'a> Visit<'a> for ArgumentsOrigin<'_, '_, 'a> {
 fn callback<'a>(m: &Model<'_, '_>, f: &'a Function<'a>) -> Option<Vec<(Span, &'static str)>> {
     callback_with_origin(m, f, false)
 }
-fn callback_with_origin<'a>(m: &Model<'_, '_>, f: &'a Function<'a>, ordinary: bool) -> Option<Vec<(Span, &'static str)>> {
+fn callback_with_origin<'a>(
+    m: &Model<'_, '_>,
+    f: &'a Function<'a>,
+    ordinary: bool,
+) -> Option<Vec<(Span, &'static str)>> {
     let p = params(m, f, 1)?;
     let [capture, inner, returned] = body(f)? else {
         return None;
@@ -920,7 +951,14 @@ pub(in crate::naming) fn evaluate(
                     }
                 }
             }
-            for roles in [scan_with_origin(m, f, true), last_with_origin(m, f, true), callback_with_origin(m, f, true)].into_iter().flatten() {
+            for roles in [
+                scan_with_origin(m, f, true),
+                last_with_origin(m, f, true),
+                callback_with_origin(m, f, true),
+            ]
+            .into_iter()
+            .flatten()
+            {
                 if let Some((_, name)) = roles.iter().find(|(span, _)| *span == site.span) {
                     return vec![proposal(name, "shared_subscriber_stream_state_operator", "Complete own factory/operator/executor body; scoped formals and state producer-consumer identities, exact every writer, error/catch, ordered return and cleanup; independently complete ordinary strict subscriber constructor API with closed object reads and executed initialization at every exposure; no native class identity claimed", facts)];
                 }

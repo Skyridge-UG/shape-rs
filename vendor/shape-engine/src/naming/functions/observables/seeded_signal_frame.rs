@@ -571,7 +571,8 @@ pub(in crate::naming) fn evaluate(
             f,
         ));
     }
-    if claims.is_empty() && captured_scalar_frame(model, site, function, body, proposals).is_some() {
+    if claims.is_empty() && captured_scalar_frame(model, site, function, body, proposals).is_some()
+    {
         let mut claim = proposal("emitSeededCapturedScalarFrame", "signals_seeded_captured_scalar_frame", "Complete zero-formal body: keep Math.random()*2^32 as a Number, perform each source int32 coercion separately while packing the big-endian header, derive a factory-owned source from the same nonce XOR its exact literal, write the sole opaque captured scalar once at cursor3 through the independently source-proved numeric writer, discard its return, then next([[], sameHeader]) and complete on one captured emitter; all local references/writes and callback captures are closed; no native property-count purpose claimed", f);
         claim.evidence = vec![site.span.into()];
         claims.push(claim);
@@ -586,79 +587,209 @@ fn scalar_integer_seed(model: &Model<'_, '_>, e: &Expression<'_>, seed: SymbolId
 // This variant keeps the floating random sample intact and coerces each read.
 // It never normalizes the sample to one early int32 store.
 fn scalar_frame_header(model: &Model<'_, '_>, e: &Expression<'_>, seed: SymbolId) -> bool {
-    let Expression::ArrayExpression(a)=e else{return false;};
-    let Some(parts)=a.elements.iter().map(|e|e.as_expression()).collect::<Option<Vec<_>>>() else{return false;};
-    if parts.len()!=4{return false;}
-    let Some((first,shift))=binary(parts[0],">>>") else{return false;};
-    if !scalar_integer_seed(model,first,seed)||!number(shift,24.0){return false;}
-    for (part,shift) in [(parts[1],Some(16.0)),(parts[2],Some(8.0)),(parts[3],None)] {
-        let Some((left,mask))=binary(part,"&") else{return false;};
-        if !number(mask,255.0){return false;}
-        if let Some(shift)=shift {
-            let Some((left,right))=binary(left,">>") else{return false;};
-            if !scalar_integer_seed(model,left,seed)||!number(right,shift){return false;}
-        } else if !scalar_integer_seed(model,left,seed){return false;}
+    let Expression::ArrayExpression(a) = e else {
+        return false;
+    };
+    let Some(parts) = a
+        .elements
+        .iter()
+        .map(|e| e.as_expression())
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    if parts.len() != 4 {
+        return false;
+    }
+    let Some((first, shift)) = binary(parts[0], ">>>") else {
+        return false;
+    };
+    if !scalar_integer_seed(model, first, seed) || !number(shift, 24.0) {
+        return false;
+    }
+    for (part, shift) in [
+        (parts[1], Some(16.0)),
+        (parts[2], Some(8.0)),
+        (parts[3], None),
+    ] {
+        let Some((left, mask)) = binary(part, "&") else {
+            return false;
+        };
+        if !number(mask, 255.0) {
+            return false;
+        }
+        if let Some(shift) = shift {
+            let Some((left, right)) = binary(left, ">>") else {
+                return false;
+            };
+            if !scalar_integer_seed(model, left, seed) || !number(right, shift) {
+                return false;
+            }
+        } else if !scalar_integer_seed(model, left, seed) {
+            return false;
+        }
     }
     true
 }
 
 fn captured_scalar_frame(
-    model:&Model<'_, '_>,site:FunctionSite,function:&Function<'_>,body:&FunctionBody<'_>,
-    proposals:&BTreeMap<u32,Vec<Proposal>>,
-)->Option<()> {
-    if function.params.rest.is_some()||!function.params.items.is_empty(){return None;}
-    let [nonce,header,write,next,complete]=body.statements.as_slice() else{return None;};
-    let nonce=variable(nonce)?;let seed=plain_var(model,nonce)?;
-    let (random,scale)=binary(nonce.init.as_ref()?,"*")?;
-    let random=call(random)?;
-    if !number(scale,4294967296.0)||!random.arguments.is_empty()||expression_path(model,&random.callee)!=["Math","random"]{return None;}
-    let header=variable(header)?;let bytes=plain_var(model,header)?;
-    if !scalar_frame_header(model,header.init.as_ref()?,seed){return None;}
-    let write=call(expression_statement(write)?)?;let a=arguments(write)?;
-    let [factory,data,target,cursor]=a.as_slice() else{return None;};
-    if symbol(model,target)!=Some(bytes)||!number(cursor,3.0){return None;}
-    let data=captured_symbol(model,site,symbol(model,data)?)?;
-    let factory=call(factory)?;let factory_args=arguments(factory)?;
-    let [xor]=factory_args.as_slice() else{return None;};
-    let (nonce,literal)=binary(xor,"^")?;
-    if !scalar_integer_seed(model,nonce,seed)||!matches!(literal,Expression::NumericLiteral(n) if n.value.is_finite() && n.value.fract()==0.0 && n.value>=0.0 && n.value<=4294967295.0){return None;}
-    captured_symbol(model,site,symbol(model,&factory.callee)?)?;
-    let factory_site=stable_callable(model,site,factory)?;
-    let factory_facts=callee_facts(model,factory_site);
-    let factory_claim=crate::naming::shared::evaluate_shared(model,factory_site,&factory_facts,proposals)?;
-    if factory_claim.name!="createKeystreamByteSource"||factory_claim.evaluator!="shared_scoped_role"{return None;}
-    super::super::encoding::curried_seeded_emitter::factory_role(model,site,&factory.callee,proposals,"nextKeystreamByte")?;
-    captured_symbol(model,site,symbol(model,&write.callee)?)?;
-    let writer=stable_callable(model,site,write)?;let writer_facts=callee_facts(model,writer);
-    if !super::super::encoding::numeric_writer::evaluate(model,writer,&writer_facts,proposals).iter().any(|claim|claim.name=="writeNumber"&&claim.evaluator=="thread_posthost_numeric"){return None;}
-    if writer.span==factory_site.span{return None;}
-    let next=call(expression_statement(next)?)?;let complete=call(expression_statement(complete)?)?;
-    let receiver=captured_symbol(model,site,method_receiver(model,next,"next")?)?;
-    if !complete.arguments.is_empty()||method_receiver(model,complete,"complete")!=Some(receiver){return None;}
-    let a=arguments(next)?;let [frame]=a.as_slice() else{return None;};
-    let Expression::ArrayExpression(frame)=frame else{return None;};
-    let [payload,header]=frame.elements.as_slice() else{return None;};
-    if !matches!(payload.as_expression()?,Expression::ArrayExpression(a) if a.elements.is_empty())||symbol(model,header.as_expression()?)!=Some(bytes){return None;}
-    if [seed,bytes,data,receiver].into_iter().collect::<BTreeSet<_>>().len()!=4
-        ||!local_references(model,site,seed,5,0)||!local_references(model,site,bytes,2,0){return None;}
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    function: &Function<'_>,
+    body: &FunctionBody<'_>,
+    proposals: &BTreeMap<u32, Vec<Proposal>>,
+) -> Option<()> {
+    if function.params.rest.is_some() || !function.params.items.is_empty() {
+        return None;
+    }
+    let [nonce, header, write, next, complete] = body.statements.as_slice() else {
+        return None;
+    };
+    let nonce = variable(nonce)?;
+    let seed = plain_var(model, nonce)?;
+    let (random, scale) = binary(nonce.init.as_ref()?, "*")?;
+    let random = call(random)?;
+    if !number(scale, 4294967296.0)
+        || !random.arguments.is_empty()
+        || expression_path(model, &random.callee) != ["Math", "random"]
+    {
+        return None;
+    }
+    let header = variable(header)?;
+    let bytes = plain_var(model, header)?;
+    if !scalar_frame_header(model, header.init.as_ref()?, seed) {
+        return None;
+    }
+    let write = call(expression_statement(write)?)?;
+    let a = arguments(write)?;
+    let [factory, data, target, cursor] = a.as_slice() else {
+        return None;
+    };
+    if symbol(model, target) != Some(bytes) || !number(cursor, 3.0) {
+        return None;
+    }
+    let data = captured_symbol(model, site, symbol(model, data)?)?;
+    let factory = call(factory)?;
+    let factory_args = arguments(factory)?;
+    let [xor] = factory_args.as_slice() else {
+        return None;
+    };
+    let (nonce, literal) = binary(xor, "^")?;
+    if !scalar_integer_seed(model, nonce, seed)
+        || !matches!(literal,Expression::NumericLiteral(n) if n.value.is_finite() && n.value.fract()==0.0 && n.value>=0.0 && n.value<=4294967295.0)
+    {
+        return None;
+    }
+    captured_symbol(model, site, symbol(model, &factory.callee)?)?;
+    let factory_site = stable_callable(model, site, factory)?;
+    let factory_facts = callee_facts(model, factory_site);
+    let factory_claim =
+        crate::naming::shared::evaluate_shared(model, factory_site, &factory_facts, proposals)?;
+    if factory_claim.name != "createKeystreamByteSource"
+        || factory_claim.evaluator != "shared_scoped_role"
+    {
+        return None;
+    }
+    super::super::encoding::curried_seeded_emitter::factory_role(
+        model,
+        site,
+        &factory.callee,
+        proposals,
+        "nextKeystreamByte",
+    )?;
+    captured_symbol(model, site, symbol(model, &write.callee)?)?;
+    let writer = stable_callable(model, site, write)?;
+    let writer_facts = callee_facts(model, writer);
+    if !super::super::encoding::numeric_writer::evaluate(model, writer, &writer_facts, proposals)
+        .iter()
+        .any(|claim| claim.name == "writeNumber" && claim.evaluator == "thread_posthost_numeric")
+    {
+        return None;
+    }
+    if writer.span == factory_site.span {
+        return None;
+    }
+    let next = call(expression_statement(next)?)?;
+    let complete = call(expression_statement(complete)?)?;
+    let receiver = captured_symbol(model, site, method_receiver(model, next, "next")?)?;
+    if !complete.arguments.is_empty()
+        || method_receiver(model, complete, "complete") != Some(receiver)
+    {
+        return None;
+    }
+    let a = arguments(next)?;
+    let [frame] = a.as_slice() else {
+        return None;
+    };
+    let Expression::ArrayExpression(frame) = frame else {
+        return None;
+    };
+    let [payload, header] = frame.elements.as_slice() else {
+        return None;
+    };
+    if !matches!(payload.as_expression()?,Expression::ArrayExpression(a) if a.elements.is_empty())
+        || symbol(model, header.as_expression()?) != Some(bytes)
+    {
+        return None;
+    }
+    if [seed, bytes, data, receiver]
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .len()
+        != 4
+        || !local_references(model, site, seed, 5, 0)
+        || !local_references(model, site, bytes, 2, 0)
+    {
+        return None;
+    }
     Some(())
 }
 
 #[cfg(test)]
 mod scalar_frame_tests {
     use super::*;
-    const SOURCE:&str=include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/tests/fixtures/program/observable-setup-order/ordinary-parent.js"));
-    fn check(source:&str,expected:bool){
-        let result=crate::naming::name_threads(source,true).unwrap();
-        let outcome=result.report.outcomes.iter().find(|o|o.binding.name=="$THREAD_1_121688").unwrap();
-        assert_eq!(outcome.evaluator.as_deref()==Some("signals_seeded_captured_scalar_frame"),expected,"{:?}",outcome.reason);
+    const SOURCE: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/program/observable-setup-order/ordinary-parent.js"
+    ));
+    fn check(source: &str, expected: bool) {
+        let result = crate::naming::name_threads(source, true).unwrap();
+        let outcome = result
+            .report
+            .outcomes
+            .iter()
+            .find(|o| o.binding.name == "$THREAD_1_121688")
+            .unwrap();
+        assert_eq!(
+            outcome.evaluator.as_deref() == Some("signals_seeded_captured_scalar_frame"),
+            expected,
+            "{:?}",
+            outcome.reason
+        );
     }
     #[test]
-    fn captured_scalar_frame_full_dataflow_and_mutations(){
-        check(SOURCE,true);check(&SOURCE.replace("$KEY_22","capturedScalar"),true);
-        let begin=SOURCE.find("function $THREAD_1_121688()").unwrap();let finish=begin+SOURCE[begin..].find("$KEY_0.complete();").unwrap()+"$KEY_0.complete();".len();let own=&SOURCE[begin..finish];
-        for (from,to) in [("($DA | 0) >>> 24","($DA | 1) >>> 24"),("$KEY_1, 3)","$KEY_1, 4)"),("$KEY_0.next([[], $KEY_1]);","$KEY_0.next([[], []]);"),("$KEY_0.complete();","extra(); $KEY_0.complete();")] {
-            assert!(own.contains(from));let changed=format!("{}{}{}",&SOURCE[..begin],own.replace(from,to),&SOURCE[finish..]);check(&changed,false);
+    fn captured_scalar_frame_full_dataflow_and_mutations() {
+        check(SOURCE, true);
+        check(&SOURCE.replace("$KEY_22", "capturedScalar"), true);
+        let begin = SOURCE.find("function $THREAD_1_121688()").unwrap();
+        let finish = begin
+            + SOURCE[begin..].find("$KEY_0.complete();").unwrap()
+            + "$KEY_0.complete();".len();
+        let own = &SOURCE[begin..finish];
+        for (from, to) in [
+            ("($DA | 0) >>> 24", "($DA | 1) >>> 24"),
+            ("$KEY_1, 3)", "$KEY_1, 4)"),
+            ("$KEY_0.next([[], $KEY_1]);", "$KEY_0.next([[], []]);"),
+            ("$KEY_0.complete();", "extra(); $KEY_0.complete();"),
+        ] {
+            assert!(own.contains(from));
+            let changed = format!(
+                "{}{}{}",
+                &SOURCE[..begin],
+                own.replace(from, to),
+                &SOURCE[finish..]
+            );
+            check(&changed, false);
         }
     }
 }

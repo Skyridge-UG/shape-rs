@@ -51,15 +51,14 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
-mod members;
-mod build;
 mod babel;
+mod build;
+mod members;
 #[cfg(test)]
 mod tests;
-
 
 pub(crate) fn rebuild_classes(source: &str) -> Result<(String, usize), String> {
     // A base class converts once its subclass no longer calls it.
@@ -83,7 +82,13 @@ fn round(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new(), count: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+        count: 0,
+    };
     scan.visit_program(&program);
     if scan.count == 0 {
         return Ok((source.into(), 0));
@@ -101,7 +106,11 @@ struct Scan<'s, 'a> {
 }
 
 fn strict(function: &Function<'_>) -> bool {
-    function.body.as_ref().is_some_and(|body| body.directives.iter().any(|directive| directive.directive == "use strict"))
+    function.body.as_ref().is_some_and(|body| {
+        body.directives
+            .iter()
+            .any(|directive| directive.directive == "use strict")
+    })
 }
 
 /// A sloppy function that runs the same in strict mode: nothing in it
@@ -132,7 +141,9 @@ impl SloppyOnly {
     fn clean(&self) -> bool {
         !self.found
             && self.block_functions.iter().all(|(name, block)| {
-                self.references.iter().all(|(read, span)| read != name || block.contains_inclusive(*span))
+                self.references
+                    .iter()
+                    .all(|(read, span)| read != name || block.contains_inclusive(*span))
             })
     }
 
@@ -160,7 +171,9 @@ impl<'a> Visit<'a> for SloppyOnly {
         self.found = true;
     }
     fn visit_function(&mut self, function: &Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
-        if let (true, Some(id), Some(&block)) = (function.is_declaration(), &function.id, self.blocks.last()) {
+        if let (true, Some(id), Some(&block)) =
+            (function.is_declaration(), &function.id, self.blocks.last())
+        {
             self.block_functions.push((id.name.to_string(), block));
         }
         let blocks = std::mem::take(&mut self.blocks);
@@ -182,10 +195,13 @@ impl<'a> Visit<'a> for SloppyOnly {
         self.in_block(block.span, |this| walk::walk_block_statement(this, block));
     }
     fn visit_switch_statement(&mut self, switch: &SwitchStatement<'a>) {
-        self.in_block(switch.span, |this| walk::walk_switch_statement(this, switch));
+        self.in_block(switch.span, |this| {
+            walk::walk_switch_statement(this, switch)
+        });
     }
     fn visit_identifier_reference(&mut self, identifier: &IdentifierReference<'a>) {
-        self.references.push((identifier.name.to_string(), identifier.span));
+        self.references
+            .push((identifier.name.to_string(), identifier.span));
         if identifier.name == "eval" || identifier.name == "arguments" && self.mapped {
             self.found = true;
         }
@@ -203,7 +219,12 @@ impl<'a> Visit<'a> for SloppyOnly {
         walk::walk_simple_assignment_target(self, target);
     }
     fn visit_unary_expression(&mut self, unary: &UnaryExpression<'a>) {
-        if unary.operator == oxc_syntax::operator::UnaryOperator::Delete && matches!(unary.argument.get_inner_expression(), Expression::Identifier(_)) {
+        if unary.operator == oxc_syntax::operator::UnaryOperator::Delete
+            && matches!(
+                unary.argument.get_inner_expression(),
+                Expression::Identifier(_)
+            )
+        {
             self.found = true;
         }
         walk::walk_unary_expression(self, unary);
@@ -221,7 +242,10 @@ impl<'a> Visit<'a> for SloppyOnly {
 fn thread<'e, 'a>(statement: &'e Statement<'a>) -> Option<&'e Function<'a>> {
     match statement {
         Statement::FunctionDeclaration(function)
-            if function.id.as_ref().is_some_and(|id| id.name.starts_with("$THREAD_"))
+            if function
+                .id
+                .as_ref()
+                .is_some_and(|id| id.name.starts_with("$THREAD_"))
                 && !function.generator
                 && !function.r#async =>
         {
@@ -241,8 +265,12 @@ fn literal_key(expression: &Expression<'_>) -> Option<String> {
 /// `o["k"]` / `o.k`: the object and key.
 fn member_key<'e, 'a>(member: &'e MemberExpression<'a>) -> Option<(&'e Expression<'a>, String)> {
     match member {
-        MemberExpression::StaticMemberExpression(member) if !member.optional => Some((&member.object, member.property.name.to_string())),
-        MemberExpression::ComputedMemberExpression(member) if !member.optional => Some((&member.object, literal_key(&member.expression)?)),
+        MemberExpression::StaticMemberExpression(member) if !member.optional => {
+            Some((&member.object, member.property.name.to_string()))
+        }
+        MemberExpression::ComputedMemberExpression(member) if !member.optional => {
+            Some((&member.object, literal_key(&member.expression)?))
+        }
         _ => None,
     }
 }
@@ -295,7 +323,17 @@ fn squeeze(text: &str) -> String {
 
 /// Removes one leading tab from every line after the first.
 fn dedent(text: &str) -> String {
-    text.split('\n').enumerate().map(|(at, line)| if at == 0 { line } else { line.strip_prefix('\t').unwrap_or(line) }).collect::<Vec<_>>().join("\n")
+    text.split('\n')
+        .enumerate()
+        .map(|(at, line)| {
+            if at == 0 {
+                line
+            } else {
+                line.strip_prefix('\t').unwrap_or(line)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn text(source: &str, span: Span) -> &str {
@@ -316,4 +354,3 @@ impl<'a> Visit<'a> for Scan<'_, 'a> {
         walk::walk_program(self, program);
     }
 }
-

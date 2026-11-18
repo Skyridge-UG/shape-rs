@@ -27,7 +27,7 @@
 //! They retain a separate single-capture-origin gate; the historical proof
 //! remains available with its original acceptance and naming behavior.
 use super::*;
-#[path="snapshot_partitioned.rs"]
+#[path = "snapshot_partitioned.rs"]
 pub(super) mod partitioned;
 use oxc_semantic::SymbolId;
 
@@ -1068,10 +1068,8 @@ fn signal_snapshot(
                 else {
                     return None;
                 };
-                let [
-                    ObjectPropertyKind::ObjectProperty(value_property),
-                    ObjectPropertyKind::ObjectProperty(signal_property),
-                ] = record_shape.properties.as_slice()
+                let [ObjectPropertyKind::ObjectProperty(value_property), ObjectPropertyKind::ObjectProperty(signal_property)] =
+                    record_shape.properties.as_slice()
                 else {
                     return None;
                 };
@@ -1143,11 +1141,7 @@ fn signal_snapshot(
             scan.as_ref(),
             result,
         ),
-        [
-            cursor_declaration,
-            Statement::ForStatement(scan),
-            result @ ..,
-        ] => {
+        [cursor_declaration, Statement::ForStatement(scan), result @ ..] => {
             let cursor_declaration = one_variable(cursor_declaration)?;
             let cursor = plain(model, &cursor_declaration.id, 1)?;
             if !matches!(cursor_declaration.init.as_ref()?, Expression::NumericLiteral(n) if n.value == 0.0)
@@ -1237,11 +1231,8 @@ fn signal_snapshot(
             // same conditional's `.push` computed directly. The three
             // assignments may appear in any order, but a `target.push` read
             // must follow the `target` definition.
-            let [
-                (named_sink, named_sink_at),
-                (named_push, named_push_at),
-                (named_payload, _),
-            ] = selector_values(model, block(&partition.consequent)?, target, push, payload)?;
+            let [(named_sink, named_sink_at), (named_push, named_push_at), (named_payload, _)] =
+                selector_values(model, block(&partition.consequent)?, target, push, payload)?;
             if !numeric_routing(model, named_sink, descriptor, keyed, named) {
                 return None;
             }
@@ -1271,17 +1262,14 @@ fn signal_snapshot(
 
             // Unnamed branch: the sink is the positional list and the push
             // selector is that same list's `.push`, in any assignment order.
-            let [
-                (positional_sink, _),
-                (positional_push, _),
-                (positional_payload, _),
-            ] = selector_values(
-                model,
-                block(partition.alternate.as_ref()?)?,
-                target,
-                push,
-                payload,
-            )?;
+            let [(positional_sink, _), (positional_push, _), (positional_payload, _)] =
+                selector_values(
+                    model,
+                    block(partition.alternate.as_ref()?)?,
+                    target,
+                    push,
+                    payload,
+                )?;
             if symbol(model, positional_sink) != Some(positional)
                 || symbol(model, member(positional_push, "push")?) != Some(positional)
             {

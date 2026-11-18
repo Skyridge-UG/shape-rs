@@ -24,24 +24,42 @@ use oxc_syntax::operator::{
     AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator,
 };
 
-use crate::signals::extract::bindings::{array_elements, object_members, object_members_of, ParameterSlots};
-use crate::signals::schema::Confidence;
 use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::signals::extract::bindings::{
+    array_elements, object_members, object_members_of, ParameterSlots,
+};
+use crate::signals::schema::Confidence;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn main_binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 const fn class(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Class }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Class,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -49,7 +67,10 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     // Random-fraction pool.
     function("random_fraction_pool_draw", "drawRandomFractionFromPool"),
     alias("random_fraction_pool_draw_alias", "randomFractionPoolDraw"),
-    main_binding("random_fraction_pool_refill_alias", "refillRandomFractionPool"),
+    main_binding(
+        "random_fraction_pool_refill_alias",
+        "refillRandomFractionPool",
+    ),
     // Character codes.
     function("first_char_code", "firstCharCode"),
     alias("first_char_code_alias", "firstCharCodeReader"),
@@ -76,7 +97,10 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     main_binding("emoji_glyph_pixel_probes", "emojiGlyphPixelProbes"),
     // Bundle framing.
     function("signal_bundle_encoder_factory", "createSignalBundleEncoder"),
-    alias("signal_bundle_encoder_factory_alias", "signalBundleEncoderFactory"),
+    alias(
+        "signal_bundle_encoder_factory_alias",
+        "signalBundleEncoderFactory",
+    ),
     function("signal_bundle_encoder", "encodeSignalBundle"),
     main_binding("bundle_value_encoder", "binaryDataEncoder"),
     main_binding("bundle_entropy_counter", "entropyCounter"),
@@ -132,7 +156,10 @@ impl Out {
     }
 
     fn main(&mut self, role: &'static str, identifier_span: Span, evidence: Vec<String>) {
-        if self.seen.insert((role, identifier_span.start, identifier_span.end)) {
+        if self
+            .seen
+            .insert((role, identifier_span.start, identifier_span.end))
+        {
             self.claims.push(FinderClaim::MainBinding {
                 role,
                 identifier_span,
@@ -272,7 +299,10 @@ impl<'c, 'a> Index<'c, 'a> {
                 let Some(init) = &declarator.init else {
                     return;
                 };
-                (identifier.symbol_id.get(), Write::Value(init, declarator.span))
+                (
+                    identifier.symbol_id.get(),
+                    Write::Value(init, declarator.span),
+                )
             }
             AstKind::AssignmentExpression(assignment) => {
                 let AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left
@@ -325,7 +355,10 @@ impl<'c, 'a> Index<'c, 'a> {
                 continue;
             };
             if let Some(method) = self.function_value(&assignment.right) {
-                methods.entry(constructor).or_default().insert(name.to_string(), method);
+                methods
+                    .entry(constructor)
+                    .or_default()
+                    .insert(name.to_string(), method);
             }
         }
         self.prototype_methods = methods;
@@ -336,7 +369,10 @@ impl<'c, 'a> Index<'c, 'a> {
     // -----------------------------------------------------------------------
 
     fn kinds(&self, function: usize) -> impl Iterator<Item = AstKind<'a>> + '_ {
-        self.fns[function].own.iter().map(move |id| self.ctx.nodes.kind(*id))
+        self.fns[function]
+            .own
+            .iter()
+            .map(move |id| self.ctx.nodes.kind(*id))
     }
 
     fn symbol(&self, expression: &Expression<'_>) -> Option<SymbolId> {
@@ -345,7 +381,9 @@ impl<'c, 'a> Index<'c, 'a> {
 
     /// The slot `expression` denotes in `function` (formal or `arguments[N]`).
     fn slot(&self, expression: &Expression<'_>, function: usize) -> Option<u32> {
-        let slot = self.slots.parameter_slot(expression.without_parentheses())?;
+        let slot = self
+            .slots
+            .parameter_slot(expression.without_parentheses())?;
         (slot.owner == self.fns[function].node).then_some(slot.index)
     }
 
@@ -368,7 +406,10 @@ impl<'c, 'a> Index<'c, 'a> {
     }
 
     fn declared_outside(&self, symbol: SymbolId, function: usize) -> bool {
-        !contains(self.fns[function].span, self.ctx.scoping.symbol_span(symbol))
+        !contains(
+            self.fns[function].span,
+            self.ctx.scoping.symbol_span(symbol),
+        )
     }
 
     fn is_global(&self, expression: &Expression<'_>, name: &str) -> bool {
@@ -378,7 +419,11 @@ impl<'c, 'a> Index<'c, 'a> {
     }
 
     fn label(&self, span: Span) -> String {
-        let text = self.ctx.source.get(span.start as usize..span.end as usize).unwrap_or("");
+        let text = self
+            .ctx
+            .source
+            .get(span.start as usize..span.end as usize)
+            .unwrap_or("");
         let line = text.lines().next().unwrap_or("").trim();
         let mut shown: String = line.chars().take(90).collect();
         if shown.len() < line.len() || text.lines().nth(1).is_some() {
@@ -438,7 +483,8 @@ impl<'c, 'a> Index<'c, 'a> {
         function: usize,
         method: &'n str,
     ) -> impl Iterator<Item = &'a CallExpression<'a>> + 'n {
-        self.calls(function).filter(move |call| member_name(&call.callee) == Some(method))
+        self.calls(function)
+            .filter(move |call| member_name(&call.callee) == Some(method))
     }
 
     fn binaries(&self, function: usize) -> impl Iterator<Item = &'a BinaryExpression<'a>> + '_ {
@@ -449,14 +495,18 @@ impl<'c, 'a> Index<'c, 'a> {
     }
 
     fn count_binary(&self, function: usize, operator: BinaryOperator) -> usize {
-        self.binaries(function).filter(|binary| binary.operator == operator).count()
+        self.binaries(function)
+            .filter(|binary| binary.operator == operator)
+            .count()
     }
 
     fn has_loop(&self, function: usize) -> bool {
         self.kinds(function).any(|kind| {
             matches!(
                 kind,
-                AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_) | AstKind::ForStatement(_)
+                AstKind::WhileStatement(_)
+                    | AstKind::DoWhileStatement(_)
+                    | AstKind::ForStatement(_)
             )
         })
     }
@@ -497,7 +547,9 @@ impl<'c, 'a> Index<'c, 'a> {
 
     /// Member names read anywhere in the function's own body.
     fn member_names(&self, function: usize) -> BTreeSet<&'a str> {
-        self.kinds(function).filter_map(|kind| kind_member(kind).map(|(_, name)| name)).collect()
+        self.kinds(function)
+            .filter_map(|kind| kind_member(kind).map(|(_, name)| name))
+            .collect()
     }
 
     /// Every resolved binding declared outside `function` its own body reads.
@@ -576,8 +628,9 @@ impl<'c, 'a> Index<'c, 'a> {
                 AstKind::WhileStatement(statement) => self.mentions_symbol(&statement.test, value),
                 _ => false,
             });
-            let returns_value =
-                self.returns(function).any(|argument| self.symbol(argument) == Some(value));
+            let returns_value = self
+                .returns(function)
+                .any(|argument| self.symbol(argument) == Some(value));
             let length_guard = self.binaries(function).any(|binary| {
                 binary.operator == BinaryOperator::LessThan
                     && member_name(&binary.left) == Some("length")
@@ -620,8 +673,10 @@ impl<'c, 'a> Index<'c, 'a> {
             );
             // The refill callee, when it is a MAIN alias of a function. A
             // function declaration belongs to its own package.
-            let callees: BTreeSet<SymbolId> =
-                refills.iter().filter_map(|call| self.symbol(&call.callee)).collect();
+            let callees: BTreeSet<SymbolId> = refills
+                .iter()
+                .filter_map(|call| self.symbol(&call.callee))
+                .collect();
             if let [callee] = callees.into_iter().collect::<Vec<_>>()[..] {
                 let aliases_function = self
                     .single_value(callee)
@@ -646,13 +701,17 @@ impl<'c, 'a> Index<'c, 'a> {
 
     fn mentions_symbol(&self, expression: &Expression<'_>, symbol: SymbolId) -> bool {
         let mut found = false;
-        visit_expressions(expression, &mut |inner| found |= self.symbol(inner) == Some(symbol));
+        visit_expressions(expression, &mut |inner| {
+            found |= self.symbol(inner) == Some(symbol)
+        });
         found
     }
 
     fn mentions_global(&self, expression: &Expression<'_>, name: &str) -> bool {
         let mut found = false;
-        visit_expressions(expression, &mut |inner| found |= self.is_global(inner, name));
+        visit_expressions(expression, &mut |inner| {
+            found |= self.is_global(inner, name)
+        });
         found
     }
 
@@ -686,15 +745,12 @@ impl<'c, 'a> Index<'c, 'a> {
             };
             let value = match statement {
                 Statement::ReturnStatement(statement) => statement.argument.as_ref(),
-                Statement::ExpressionStatement(statement)
-                    if self.fns[function].expression_body =>
-                {
+                Statement::ExpressionStatement(statement) if self.fns[function].expression_body => {
                     Some(&statement.expression)
                 }
                 _ => None,
             };
-            let Some(Expression::CallExpression(call)) =
-                value.map(Expression::without_parentheses)
+            let Some(Expression::CallExpression(call)) = value.map(Expression::without_parentheses)
             else {
                 continue;
             };
@@ -754,8 +810,10 @@ impl<'c, 'a> Index<'c, 'a> {
                 Expression::LogicalExpression(_) => {
                     let mut leaves = Vec::new();
                     and_leaves(value, &mut leaves);
-                    let subjects: BTreeSet<String> =
-                        leaves.iter().filter_map(|leaf| self.typeof_subject(leaf)).collect();
+                    let subjects: BTreeSet<String> = leaves
+                        .iter()
+                        .filter_map(|leaf| self.typeof_subject(leaf))
+                        .collect();
                     if leaves.iter().all(|leaf| self.is_feature_test(leaf))
                         && subjects.contains("ArrayBuffer.isView")
                         && subjects.contains("Int32Array")
@@ -852,7 +910,8 @@ impl<'c, 'a> Index<'c, 'a> {
                 let Some(alternate) = &statement.alternate else {
                     return false;
                 };
-                self.symbol(&statement.test).is_some_and(|test| float_scratch.contains(&test))
+                self.symbol(&statement.test)
+                    .is_some_and(|test| float_scratch.contains(&test))
                     && contains(statement.consequent.span(), null_write)
                     && contains(alternate.span(), array_write)
             });
@@ -903,8 +962,10 @@ impl<'c, 'a> Index<'c, 'a> {
             return false;
         };
         self.typeof_subject(leaf).is_some()
-            || (matches!(binary.right.without_parentheses(), Expression::NullLiteral(_))
-                && self.global_path(&binary.left).is_some())
+            || (matches!(
+                binary.right.without_parentheses(),
+                Expression::NullLiteral(_)
+            ) && self.global_path(&binary.left).is_some())
     }
 
     // -----------------------------------------------------------------------
@@ -1033,8 +1094,10 @@ impl<'c, 'a> Index<'c, 'a> {
                     binary.operator == BinaryOperator::Remainder
                         && numeric_literal(&binary.right) == Some(4.0)
                 });
-                let lanes: BTreeSet<u32> =
-                    self.returns(next).filter_map(|argument| byte_lane(argument)).collect();
+                let lanes: BTreeSet<u32> = self
+                    .returns(next)
+                    .filter_map(|argument| byte_lane(argument))
+                    .collect();
                 let warmed = self.calls(factory).any(|call| {
                     call.arguments.is_empty()
                         && self.fns[next]
@@ -1069,27 +1132,32 @@ impl<'c, 'a> Index<'c, 'a> {
                 if self.slot_width(cipher) != 4 {
                     continue;
                 }
-                let output = self.own_values(cipher).into_iter().find_map(|(symbol, value)| {
-                    let arguments = match value.without_parentheses() {
-                        Expression::CallExpression(call)
-                            if self.is_global(&call.callee, "Array") =>
-                        {
-                            &call.arguments
-                        }
-                        Expression::NewExpression(new) if self.is_global(&new.callee, "Array") => {
-                            &new.arguments
-                        }
-                        _ => return None,
-                    };
-                    let [argument] = arguments.as_slice() else {
-                        return None;
-                    };
-                    let argument = argument.as_expression()?;
-                    (member_name(argument) == Some("length")
-                        && member_object(argument)
-                            .is_some_and(|object| self.is_slot(object, cipher, 0)))
-                    .then_some(symbol)
-                });
+                let output = self
+                    .own_values(cipher)
+                    .into_iter()
+                    .find_map(|(symbol, value)| {
+                        let arguments = match value.without_parentheses() {
+                            Expression::CallExpression(call)
+                                if self.is_global(&call.callee, "Array") =>
+                            {
+                                &call.arguments
+                            }
+                            Expression::NewExpression(new)
+                                if self.is_global(&new.callee, "Array") =>
+                            {
+                                &new.arguments
+                            }
+                            _ => return None,
+                        };
+                        let [argument] = arguments.as_slice() else {
+                            return None;
+                        };
+                        let argument = argument.as_expression()?;
+                        (member_name(argument) == Some("length")
+                            && member_object(argument)
+                                .is_some_and(|object| self.is_slot(object, cipher, 0)))
+                        .then_some(symbol)
+                    });
                 let Some(output) = output else {
                     continue;
                 };
@@ -1105,8 +1173,9 @@ impl<'c, 'a> Index<'c, 'a> {
                             },
                         )
                 });
-                let returns_output =
-                    self.returns(cipher).any(|argument| self.symbol(argument) == Some(output));
+                let returns_output = self
+                    .returns(cipher)
+                    .any(|argument| self.symbol(argument) == Some(output));
                 let xors = self.count_binary(cipher, BinaryOperator::BitwiseXOR);
                 let shifts = self.count_binary(cipher, BinaryOperator::ShiftRightZeroFill);
                 if !blocks || !returns_output || xors < 16 || shifts < 16 || !self.has_loop(cipher)
@@ -1166,7 +1235,9 @@ impl<'c, 'a> Index<'c, 'a> {
             }
             let put = self.method_calls(function, "put").find(|call| {
                 call.arguments.len() == 1
-                    && call.arguments[0].as_expression().and_then(|argument| self.symbol(argument))
+                    && call.arguments[0]
+                        .as_expression()
+                        .and_then(|argument| self.symbol(argument))
                         == Some(record)
                     && member_object(&call.callee)
                         .and_then(|object| self.symbol(object))
@@ -1184,7 +1255,10 @@ impl<'c, 'a> Index<'c, 'a> {
                         "copies {} error fields of slot 0 into a null-prototype record",
                         copied.len()
                     ),
-                    format!("puts the record into a captured ring: `{}`", self.label(put.span)),
+                    format!(
+                        "puts the record into a captured ring: `{}`",
+                        self.label(put.span)
+                    ),
                 ],
             );
         }
@@ -1215,7 +1289,11 @@ impl<'c, 'a> Index<'c, 'a> {
             }
             if let Some(constructor) = constructor {
                 if self.ring_buffer(out, constructor, &methods)
-                    && class.id.as_ref().and_then(|id| id.symbol_id.get()).is_some()
+                    && class
+                        .id
+                        .as_ref()
+                        .and_then(|id| id.symbol_id.get())
+                        .is_some()
                 {
                     out.class(
                         "ring_buffer_class",
@@ -1237,10 +1315,17 @@ impl<'c, 'a> Index<'c, 'a> {
     /// The constructor sets two zero fields, an empty backing array and a
     /// capacity from slot 0 (Infinity otherwise) on `this`; `put`, `toArray`
     /// and `clear` use exactly those fields.
-    fn ring_buffer(&self, out: &mut Out, constructor: usize, methods: &BTreeMap<String, usize>) -> bool {
-        let (Some(&put), Some(&to_array), Some(&clear)) =
-            (methods.get("put"), methods.get("toArray"), methods.get("clear"))
-        else {
+    fn ring_buffer(
+        &self,
+        out: &mut Out,
+        constructor: usize,
+        methods: &BTreeMap<String, usize>,
+    ) -> bool {
+        let (Some(&put), Some(&to_array), Some(&clear)) = (
+            methods.get("put"),
+            methods.get("toArray"),
+            methods.get("clear"),
+        ) else {
             return false;
         };
         let mut fields: BTreeMap<&str, &Expression> = BTreeMap::new();
@@ -1254,7 +1339,11 @@ impl<'c, 'a> Index<'c, 'a> {
             }
         }
         let select = |test: &dyn Fn(&Expression) -> bool| -> Vec<&str> {
-            fields.iter().filter(|(_, value)| test(value)).map(|(name, _)| *name).collect()
+            fields
+                .iter()
+                .filter(|(_, value)| test(value))
+                .map(|(name, _)| *name)
+                .collect()
         };
         let arrays = select(&is_empty_array);
         let zeros = select(&|value| numeric_literal(value) == Some(0.0));
@@ -1288,11 +1377,11 @@ impl<'c, 'a> Index<'c, 'a> {
             && self.method_calls(to_array, "concat").count() == 1;
         let clears = self.kinds(clear).any(|kind| {
             matches!(kind, AstKind::AssignmentExpression(assignment)
-                if is_empty_array(&assignment.right)
-                    && target_member(&assignment.left).is_some_and(|(object, name)| {
-                        matches!(object.without_parentheses(), Expression::ThisExpression(_))
-                            && name == array
-                    }))
+            if is_empty_array(&assignment.right)
+                && target_member(&assignment.left).is_some_and(|(object, name)| {
+                    matches!(object.without_parentheses(), Expression::ThisExpression(_))
+                        && name == array
+                }))
         });
         if !wraps || !snapshot || !clears {
             return false;
@@ -1322,7 +1411,10 @@ impl<'c, 'a> Index<'c, 'a> {
             "ring_buffer_to_array",
             self.fns[to_array].span,
             None,
-            vec![shared.clone(), "returns an oldest-first copy through slice/concat".to_string()],
+            vec![
+                shared.clone(),
+                "returns an oldest-first copy through slice/concat".to_string(),
+            ],
         );
         out.function(
             "ring_buffer_clear",
@@ -1342,9 +1434,15 @@ impl<'c, 'a> Index<'c, 'a> {
     fn emoji_probe(&self, out: &mut Out) {
         for function in 0..self.fns.len() {
             let names = self.member_names(function);
-            if !["getContext", "fillText", "getImageData", "emoji", "component"]
-                .iter()
-                .all(|name| names.contains(name))
+            if ![
+                "getContext",
+                "fillText",
+                "getImageData",
+                "emoji",
+                "component",
+            ]
+            .iter()
+            .all(|name| names.contains(name))
             {
                 continue;
             }
@@ -1436,7 +1534,9 @@ impl<'c, 'a> Index<'c, 'a> {
                     "signal_bundle_encoder_factory",
                     self.fns[factory].span,
                     Some("signal_bundle_encoder_factory_alias"),
-                    vec![format!("returns the signal bundle encoder, which {framing}")],
+                    vec![format!(
+                        "returns the signal bundle encoder, which {framing}"
+                    )],
                 );
                 self.bundle_value_encoder(out, factory, encoder);
                 self.bundle_entropy_counter(out, factory, encoder);
@@ -1493,7 +1593,10 @@ impl<'c, 'a> Index<'c, 'a> {
                     matches!(write, Write::Value(value, _) if numeric_literal(value) == Some(0.0))
                 })
                 .count();
-            let increments = writes.iter().filter(|write| matches!(write, Write::Increment)).count();
+            let increments = writes
+                .iter()
+                .filter(|write| matches!(write, Write::Increment))
+                .count();
             let encoder_increments = self
                 .kinds(encoder)
                 .filter(|kind| {
@@ -1532,18 +1635,24 @@ impl<'c, 'a> Index<'c, 'a> {
     /// extensions map, told apart by what the detector and serialiser do.
     fn bundle_extensions(&self, out: &mut Out, factory: usize) {
         for symbol in self.captured_reads(factory) {
-            let Some(target) = self.single_value(symbol).and_then(|value| self.symbol(value))
+            let Some(target) = self
+                .single_value(symbol)
+                .and_then(|value| self.symbol(value))
             else {
                 continue;
             };
-            let Some(Expression::ObjectExpression(object)) =
-                self.single_value(target).map(Expression::without_parentheses)
+            let Some(Expression::ObjectExpression(object)) = self
+                .single_value(target)
+                .map(Expression::without_parentheses)
             else {
                 continue;
             };
             let members = object_members_of(object);
             let member = |name: &str| {
-                members.iter().find(|member| member.name == name).map(|member| member.value)
+                members
+                    .iter()
+                    .find(|member| member.name == name)
+                    .map(|member| member.value)
             };
             let (Some(detector), Some(serialiser)) = (
                 member("detector").and_then(|value| self.function_value(value)),
@@ -1555,7 +1664,9 @@ impl<'c, 'a> Index<'c, 'a> {
             let [returned] = returns.as_slice() else {
                 continue;
             };
-            let throws = self.kinds(serialiser).any(|kind| matches!(kind, AstKind::ThrowStatement(_)));
+            let throws = self
+                .kinds(serialiser)
+                .any(|kind| matches!(kind, AstKind::ThrowStatement(_)));
             match returned.without_parentheses() {
                 Expression::BooleanLiteral(literal) if !literal.value && throws => {
                     out.main(
@@ -1591,7 +1702,8 @@ impl<'c, 'a> Index<'c, 'a> {
     /// `new alias(budget).schedule(task)`.
     fn batch_scheduler_alias(&self, out: &mut Out) {
         let defers = |index: usize| {
-            self.calls(index).any(|call| self.is_global(&call.callee, "setTimeout"))
+            self.calls(index)
+                .any(|call| self.is_global(&call.callee, "setTimeout"))
         };
         let mut schedulers = BTreeSet::new();
         for node in self.ctx.nodes.iter() {
@@ -1621,7 +1733,10 @@ impl<'c, 'a> Index<'c, 'a> {
             let [Write::Value(value, _)] = writes.as_slice() else {
                 continue;
             };
-            if !self.symbol(value).is_some_and(|target| schedulers.contains(&target)) {
+            if !self
+                .symbol(value)
+                .is_some_and(|target| schedulers.contains(&target))
+            {
                 continue;
             }
             let site = self.ctx.nodes.iter().find_map(|node| {
@@ -1643,8 +1758,12 @@ impl<'c, 'a> Index<'c, 'a> {
                     "batch_scheduler_alias",
                     self.identifier_span(symbol),
                     vec![
-                        "alias of a class whose schedule method defers work with setTimeout".to_string(),
-                        format!("constructed with a budget and scheduled: `{}`", self.label(site)),
+                        "alias of a class whose schedule method defers work with setTimeout"
+                            .to_string(),
+                        format!(
+                            "constructed with a budget and scheduled: `{}`",
+                            self.label(site)
+                        ),
                     ],
                 );
             }

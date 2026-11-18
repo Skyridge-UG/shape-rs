@@ -33,8 +33,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn hoist_branch_tails(source: &str) -> Result<(String, usize), String> {
     let mut code = source.to_string();
@@ -69,7 +69,12 @@ fn round(source: &str) -> Result<(String, usize), String> {
             _ => None,
         })
         .collect();
-    let scan = Scan { source, scoping: &scoping, nodes: &nodes, captured: HashMap::default().into() };
+    let scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        captured: HashMap::default().into(),
+    };
     let mut planned: Vec<(Span, Vec<analysis::Edit>)> = Vec::new();
     for &(node, chain) in &ifs {
         if alternates.contains(&chain.span) {
@@ -82,13 +87,24 @@ fn round(source: &str) -> Result<(String, usize), String> {
     // Innermost first: a chain holding another planned one waits a round.
     let edits: Vec<_> = planned
         .iter()
-        .filter(|(outer, _)| !planned.iter().any(|(inner, _)| inner != outer && outer.start <= inner.start && inner.end <= outer.end))
+        .filter(|(outer, _)| {
+            !planned.iter().any(|(inner, _)| {
+                inner != outer && outer.start <= inner.start && inner.end <= outer.end
+            })
+        })
         .collect();
     let count = edits.len();
     if count == 0 {
         return Ok((source.into(), 0));
     }
-    let output = super::super::support::apply_checked(source, edits.into_iter().flat_map(|(_, edits)| edits.iter().cloned()).collect(), "branch tail")?;
+    let output = super::super::support::apply_checked(
+        source,
+        edits
+            .into_iter()
+            .flat_map(|(_, edits)| edits.iter().cloned())
+            .collect(),
+        "branch tail",
+    )?;
     Ok((output, count))
 }
 
@@ -125,9 +141,14 @@ fn is_arguments(expression: &Expression<'_>) -> bool {
 fn pure_builtin(callee: &Expression<'_>) -> bool {
     match callee.get_inner_expression() {
         Expression::Identifier(identifier) => {
-            matches!(identifier.name.as_str(), "Number" | "String" | "Boolean" | "parseInt" | "parseFloat" | "isNaN" | "isFinite")
+            matches!(
+                identifier.name.as_str(),
+                "Number" | "String" | "Boolean" | "parseInt" | "parseFloat" | "isNaN" | "isFinite"
+            )
         }
-        Expression::StaticMemberExpression(member) => matches!(&member.object, Expression::Identifier(object) if object.name == "Math"),
+        Expression::StaticMemberExpression(member) => {
+            matches!(&member.object, Expression::Identifier(object) if object.name == "Math")
+        }
         Expression::ComputedMemberExpression(member) => {
             matches!(&member.object, Expression::Identifier(object) if object.name == "Math")
                 || matches!((&member.object, &member.expression), (Expression::Identifier(object), Expression::StringLiteral(name)) if object.name == "String" && name.value == "fromCharCode")
@@ -229,7 +250,10 @@ impl<'a> Visit<'a> for EffectScan<'_, 'a> {
         walk::walk_tagged_template_expression(self, tagged);
     }
     fn visit_binary_expression(&mut self, binary: &BinaryExpression<'a>) {
-        if matches!(binary.operator, BinaryOperator::In | BinaryOperator::Instanceof) {
+        if matches!(
+            binary.operator,
+            BinaryOperator::In | BinaryOperator::Instanceof
+        ) {
             self.effects.throws = true;
             self.effects.heap_read = true;
         }
@@ -290,7 +314,12 @@ fn text(source: &str, span: Span) -> &str {
 
 impl<'a> Scan<'_, 'a> {
     fn effects(&self, statement: &Statement<'a>) -> Effects {
-        let mut scan = EffectScan { scoping: self.scoping, effects: Effects::default(), member_object: false, _marker: std::marker::PhantomData };
+        let mut scan = EffectScan {
+            scoping: self.scoping,
+            effects: Effects::default(),
+            member_object: false,
+            _marker: std::marker::PhantomData,
+        };
         scan.visit_statement(statement);
         scan.effects
     }
@@ -318,7 +347,9 @@ impl<'a> Scan<'_, 'a> {
             || self
                 .scoping
                 .get_resolved_references(symbol)
-                .any(|reference| self.function_of(self.nodes.get_node(reference.node_id()).scope_id()) != home);
+                .any(|reference| {
+                    self.function_of(self.nodes.get_node(reference.node_id()).scope_id()) != home
+                });
         self.captured.borrow_mut().insert(symbol, captured);
         captured
     }
@@ -326,24 +357,38 @@ impl<'a> Scan<'_, 'a> {
     /// Only locals no call reaches: invisible once an exception leaves the
     /// function.
     fn local_only(&self, effects: &Effects) -> bool {
-        !effects.heap_write && !effects.arguments_write && !effects.calls && effects.writes.iter().all(|&symbol| !self.captured(symbol))
+        !effects.heap_write
+            && !effects.arguments_write
+            && !effects.calls
+            && effects.writes.iter().all(|&symbol| !self.captured(symbol))
     }
 
     fn depends(&self, a: &Effects, b: &Effects, guarded: bool) -> bool {
         if a.fixed || b.fixed {
             return true;
         }
-        let touches = |e: &Effects, symbols: &HashSet<SymbolId>| e.reads.iter().chain(&e.writes).any(|s| symbols.contains(s));
+        let touches = |e: &Effects, symbols: &HashSet<SymbolId>| {
+            e.reads.iter().chain(&e.writes).any(|s| symbols.contains(s))
+        };
         if touches(b, &a.writes) || touches(a, &b.writes) {
             return true;
         }
         if (a.heap_write && (b.heap_read || b.heap_write)) || (b.heap_write && a.heap_read) {
             return true;
         }
-        if (a.arguments_write && (b.arguments_read || b.arguments_write)) || (b.arguments_write && a.arguments_read) {
+        if (a.arguments_write && (b.arguments_read || b.arguments_write))
+            || (b.arguments_write && a.arguments_read)
+        {
             return true;
         }
-        let reaches = |call: &Effects, other: &Effects| call.calls && other.reads.iter().chain(&other.writes).any(|&s| self.captured(s));
+        let reaches = |call: &Effects, other: &Effects| {
+            call.calls
+                && other
+                    .reads
+                    .iter()
+                    .chain(&other.writes)
+                    .any(|&s| self.captured(s))
+        };
         if reaches(a, b) || reaches(b, a) {
             return true;
         }
@@ -374,14 +419,18 @@ impl<'a> Scan<'_, 'a> {
 
     /// Every reference resolves outside `chain` (or to a global).
     fn bound_outside(&self, statement: &Statement<'a>, chain: Span) -> bool {
-        let mut names = Names { references: Vec::new() };
+        let mut names = Names {
+            references: Vec::new(),
+        };
         names.visit_statement(statement);
-        names.references.iter().all(|&reference| match self.scoping.get_reference(reference).symbol_id() {
-            Some(symbol) => {
-                let declared = self.scoping.symbol_span(symbol);
-                declared.end <= chain.start || declared.start >= chain.end
+        names.references.iter().all(|&reference| {
+            match self.scoping.get_reference(reference).symbol_id() {
+                Some(symbol) => {
+                    let declared = self.scoping.symbol_span(symbol);
+                    declared.end <= chain.start || declared.start >= chain.end
+                }
+                None => true,
             }
-            None => true,
         })
     }
 
@@ -407,12 +456,18 @@ impl<'a> Scan<'_, 'a> {
             return None;
         }
         let guarded = self.guarded(node);
-        let effects: Vec<Vec<Effects>> = arms.iter().map(|arm| arm.iter().map(|s| self.effects(s)).collect()).collect();
+        let effects: Vec<Vec<Effects>> = arms
+            .iter()
+            .map(|arm| arm.iter().map(|s| self.effects(s)).collect())
+            .collect();
         // Candidates: the first arm's expression statements every arm has,
         // matched as the same occurrence counted from the end.
         let rank_from_end = |arm: &[Statement<'a>], index: usize| {
             let wanted = text(self.source, arm[index].span());
-            arm[index + 1..].iter().filter(|s| text(self.source, s.span()) == wanted).count()
+            arm[index + 1..]
+                .iter()
+                .filter(|s| text(self.source, s.span()) == wanted)
+                .count()
         };
         let find = |arm: &[Statement<'a>], wanted: &str, rank: usize| {
             arm.iter()
@@ -424,14 +479,22 @@ impl<'a> Scan<'_, 'a> {
         };
         let mut moved: Vec<Vec<usize>> = Vec::new();
         for (index, statement) in arms[0].iter().enumerate() {
-            if !matches!(statement, Statement::ExpressionStatement(_)) || effects[0][index].fixed || !self.bound_outside(statement, head.span) {
+            if !matches!(statement, Statement::ExpressionStatement(_))
+                || effects[0][index].fixed
+                || !self.bound_outside(statement, head.span)
+            {
                 continue;
             }
             let wanted = text(self.source, statement.span());
             let rank = rank_from_end(arms[0], index);
-            let places: Option<Vec<usize>> = arms.iter().map(|arm| find(arm, wanted, rank)).collect();
+            let places: Option<Vec<usize>> =
+                arms.iter().map(|arm| find(arm, wanted, rank)).collect();
             if let Some(places) = places {
-                if places.iter().zip(&arms).all(|(&place, arm)| self.bound_outside(&arm[place], head.span)) {
+                if places
+                    .iter()
+                    .zip(&arms)
+                    .all(|(&place, arm)| self.bound_outside(&arm[place], head.span))
+                {
                     moved.push(places);
                 }
             }
@@ -445,7 +508,12 @@ impl<'a> Scan<'_, 'a> {
                 .filter(|places| {
                     places.iter().enumerate().all(|(arm, &place)| {
                         (place + 1..arms[arm].len()).all(|later| {
-                            moved.iter().any(|other| other[arm] == later) || !self.depends(&effects[arm][place], &effects[arm][later], guarded)
+                            moved.iter().any(|other| other[arm] == later)
+                                || !self.depends(
+                                    &effects[arm][place],
+                                    &effects[arm][later],
+                                    guarded,
+                                )
                         })
                     })
                 })
@@ -458,7 +526,13 @@ impl<'a> Scan<'_, 'a> {
                 for (i, first) in kept.iter().enumerate() {
                     for second in &kept[i + 1..] {
                         for arm in 1..arms.len() {
-                            if first[arm] > second[arm] && self.depends(&effects[arm][first[arm]], &effects[arm][second[arm]], guarded) {
+                            if first[arm] > second[arm]
+                                && self.depends(
+                                    &effects[arm][first[arm]],
+                                    &effects[arm][second[arm]],
+                                    guarded,
+                                )
+                            {
                                 kept.remove(i);
                                 continue 'order;
                             }
@@ -475,7 +549,9 @@ impl<'a> Scan<'_, 'a> {
         if moved.is_empty() {
             return None;
         }
-        let line_start = self.source[..head.span.start as usize].rfind('\n').map_or(0, |at| at + 1);
+        let line_start = self.source[..head.span.start as usize]
+            .rfind('\n')
+            .map_or(0, |at| at + 1);
         let indent = &self.source[line_start..head.span.start as usize];
         if !indent.trim().is_empty() {
             return None;
@@ -487,10 +563,16 @@ impl<'a> Scan<'_, 'a> {
             tail.push_str(indent);
             tail.push_str(text(self.source, arms[0][places[0]].span()));
             for (arm, &place) in places.iter().enumerate() {
-                edits.push(analysis::Edit::delete(whole_line(self.source, arms[arm][place].span())));
+                edits.push(analysis::Edit::delete(whole_line(
+                    self.source,
+                    arms[arm][place].span(),
+                )));
             }
         }
-        edits.push(analysis::Edit::replace(Span::new(head.span.end, head.span.end), tail));
+        edits.push(analysis::Edit::replace(
+            Span::new(head.span.end, head.span.end),
+            tail,
+        ));
         Some(edits)
     }
 }

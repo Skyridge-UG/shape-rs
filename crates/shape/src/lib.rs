@@ -22,7 +22,10 @@ pub fn engine_seal(
     })?;
     let mut signals = crate::signal::NamedSignals::new();
     signals
-        .set("storage_access_api_presence", crate::signal::Value::Bool(true))
+        .set(
+            "storage_access_api_presence",
+            crate::signal::Value::Bool(true),
+        )
         .set(
             "device_memory",
             crate::signal::Value::Number(crate::signal::Number(9.0)),

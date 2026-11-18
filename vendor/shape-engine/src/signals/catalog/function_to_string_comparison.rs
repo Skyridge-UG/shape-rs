@@ -1,19 +1,23 @@
 //! `FunctionToStringComparison`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutLeaf, LayoutNode, LeafKind, LeafOp, SignalLayout, SlotView};
+use crate::signals::analysis::{buffer_writes, layout_nodes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutLeaf, LayoutNode, LeafKind, LeafOp,
+    SignalLayout, SlotView,
+};
+use crate::signals::catalog::card::{Card, CardBody, CardField};
 use crate::signals::extract::contracts::SourceClass;
 use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, layout_nodes::*};
-use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// The leaf of a field, also through a choice whose other arms are empty
 /// (an optional write of that one leaf).
 fn sole_leaf(node: &LayoutNode) -> Option<&LayoutLeaf> {
     match node {
         LayoutNode::Choice { arms } => {
-            let mut written = arms.iter().filter(|arm| !matches!(arm.node, LayoutNode::Empty));
+            let mut written = arms
+                .iter()
+                .filter(|arm| !matches!(arm.node, LayoutNode::Empty));
             match (written.next(), written.next()) {
                 (Some(arm), None) => leaf_of(&arm.node),
                 _ => None,
@@ -24,7 +28,10 @@ fn sole_leaf(node: &LayoutNode) -> Option<&LayoutLeaf> {
 }
 
 /// Name every top-level leaf of every message by its kind.
-fn bind_by_kind(layout: &SignalLayout, names: &[(LeafKind, &str)]) -> Result<FieldBinding, BindRefusal> {
+fn bind_by_kind(
+    layout: &SignalLayout,
+    names: &[(LeafKind, &str)],
+) -> Result<FieldBinding, BindRefusal> {
     let mut binding = FieldBinding::new();
     for (index, message) in layout.messages.iter().enumerate() {
         if message.fields.len() != names.len() {
@@ -93,22 +100,35 @@ fn counts_to_string_getter(view: &SlotView, ctx: &FinderCtx) -> bool {
     use oxc_span::GetSpan;
     let nodes = ctx.parse.nodes;
     let enclosing = |id: oxc_semantic::NodeId| {
-        nodes
-            .ancestor_ids(id)
-            .find(|a| matches!(nodes.kind(*a), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+        nodes.ancestor_ids(id).find(|a| {
+            matches!(
+                nodes.kind(*a),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            )
+        })
     };
     let returns_to_string = |function: oxc_semantic::NodeId| {
-        ctx.nodes_within(nodes.kind(function).span()).into_iter().any(|id| {
-            let AstKind::ReturnStatement(ret) = nodes.kind(id) else { return false };
-            let Some(Expression::StaticMemberExpression(outer)) = &ret.argument else { return false };
-            let Expression::StaticMemberExpression(inner) = &outer.object else { return false };
-            let Expression::Identifier(global) = &inner.object else { return false };
-            outer.property.name == "toString"
-                && inner.property.name == "prototype"
-                && global.name == "Function"
-                && ctx.identifier_symbol(global).is_none()
-                && enclosing(id) == Some(function)
-        })
+        ctx.nodes_within(nodes.kind(function).span())
+            .into_iter()
+            .any(|id| {
+                let AstKind::ReturnStatement(ret) = nodes.kind(id) else {
+                    return false;
+                };
+                let Some(Expression::StaticMemberExpression(outer)) = &ret.argument else {
+                    return false;
+                };
+                let Expression::StaticMemberExpression(inner) = &outer.object else {
+                    return false;
+                };
+                let Expression::Identifier(global) = &inner.object else {
+                    return false;
+                };
+                outer.property.name == "toString"
+                    && inner.property.name == "prototype"
+                    && global.name == "Function"
+                    && ctx.identifier_symbol(global).is_none()
+                    && enclosing(id) == Some(function)
+            })
     };
     view.leaves()
         .filter(|leaf| leaf.op == LeafOp::Number && has_transform(leaf, "count"))
@@ -122,24 +142,37 @@ fn counts_to_string_getter(view: &SlotView, ctx: &FinderCtx) -> bool {
 }
 
 /// `FunctionToStringComparison`. Card: [`CARD`].
-pub(crate) fn recognize_function_to_string_comparison(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_function_to_string_comparison(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let shaped = plain_ops(view, &[LeafOp::Number, LeafOp::Byte])
         || plain_ops(view, &[LeafOp::Byte, LeafOp::Number])
         || optional_counter(view);
     if !shaped {
         return None;
     }
-    let counter = view
-        .leaves()
-        .any(|leaf| leaf.op == LeafOp::Number && has_transform(leaf, "count") && leaf.classes.contains(&SourceClass::LoopIteration));
+    let counter = view.leaves().any(|leaf| {
+        leaf.op == LeafOp::Number
+            && has_transform(leaf, "count")
+            && leaf.classes.contains(&SourceClass::LoopIteration)
+    });
     if !counter {
         return None;
     }
     let info = slot_info(view, ctx);
     let compared = info.facts.member("toString") && info.facts.global("Function");
-    let getter = info.facts.call("defineProperty") || view.leaves().any(|leaf| has_transform(leaf, ".defineProperty"));
+    let getter = info.facts.call("defineProperty")
+        || view
+            .leaves()
+            .any(|leaf| has_transform(leaf, ".defineProperty"));
     (compared || getter && info.facts.string("toString") || counts_to_string_getter(view, ctx))
-        .then(|| claim(&["toString getter read counter", "implicit vs Function.prototype.toString comparison"]))
+        .then(|| {
+            claim(&[
+                "toString getter read counter",
+                "implicit vs Function.prototype.toString comparison",
+            ])
+        })
         .flatten()
 }
 
@@ -150,7 +183,10 @@ pub(crate) fn bind_function_to_string_comparison(
 ) -> Result<FieldBinding, BindRefusal> {
     bind_by_kind(
         layout,
-        &[(LeafKind::Number, "toStringGetterCalls"), (LeafKind::Byte, "probeFlags")],
+        &[
+            (LeafKind::Number, "toStringGetterCalls"),
+            (LeafKind::Byte, "probeFlags"),
+        ],
     )
 }
 

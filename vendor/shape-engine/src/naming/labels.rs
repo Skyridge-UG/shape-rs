@@ -2,9 +2,9 @@
 //! cross-build function order participate in a signature. Literals, API names,
 //! operators, control flow, lexical reference relationships and capture origins
 //! remain significant. Unknown/mutable captures fail closed.
+use crate::analysis::{self, Edit};
 use crate::signals::extract::bindings::{FunctionSite, Model};
 use crate::signals::schema::{ProgramPropertiesLimits, SourceIdentity, SourceSpan};
-use crate::analysis::{self, Edit};
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
 use oxc_span::{GetSpan, Span};

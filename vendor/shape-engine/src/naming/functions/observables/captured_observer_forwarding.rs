@@ -136,7 +136,6 @@ fn prove(m: &Model<'_, '_>, site: FunctionSite) -> Option<&'static str> {
         };
     }
     match (key, params.as_slice(), c.arguments.as_slice()) {
-
         ("next", [s], [a]) | ("error", [s], [a]) => {
             if symbol(m, a.as_expression()?) != Some(*s) {
                 return None;
@@ -322,11 +321,11 @@ fn value_ready(m: &Model<'_, '_>, e: &Expression<'_>, depth: usize) -> Option<()
 }
 
 pub(in crate::naming) mod paste {
+    use super::*;
     use crate::naming::support::interaction::{
         arguments, assignment, binary, boolean, call, captured_symbol, expression_statement,
         member, method_receiver, plain_binding, plain_param, symbol, target_symbol,
     };
-    use super::*;
     fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
         if let Statement::BlockStatement(b) = s {
             Some(&b.body)
@@ -520,7 +519,11 @@ pub(in crate::naming) mod paste {
             .all(|r| callable_origin_precedes(m, owner, end, r.node_id(), None, 0, true))
             .then_some(())
     }
-    pub(in crate::naming) fn evaluate(m: &Model<'_, '_>, site: FunctionSite, f: &Facts<'_>) -> Vec<Proposal> {
+    pub(in crate::naming) fn evaluate(
+        m: &Model<'_, '_>,
+        site: FunctionSite,
+        f: &Facts<'_>,
+    ) -> Vec<Proposal> {
         let AstKind::Function(function) = m.nodes.kind(site.node_id) else {
             return vec![];
         };

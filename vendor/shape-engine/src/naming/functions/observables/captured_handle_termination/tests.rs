@@ -1,5 +1,7 @@
 use super::*;
-const FOUR_CLEANUP_DECLARATIONS: &str = include_str!("../../../../../tests/fixtures/naming/captured_handle_termination/stateful-parent.js");
+const FOUR_CLEANUP_DECLARATIONS: &str = include_str!(
+    "../../../../../tests/fixtures/naming/captured_handle_termination/stateful-parent.js"
+);
 
 const START: usize = 368218;
 const END: usize = 368364;
@@ -53,7 +55,12 @@ fn claim(source: &str) -> bool {
 fn changed(from: &str, to: &str) -> String {
     let body = &FOUR_CLEANUP_DECLARATIONS[START..END];
     assert!(body.contains(from), "mutation hits own target: {from}");
-    format!("{}{}{}", &FOUR_CLEANUP_DECLARATIONS[..START], body.replace(from, to), &FOUR_CLEANUP_DECLARATIONS[END..])
+    format!(
+        "{}{}{}",
+        &FOUR_CLEANUP_DECLARATIONS[..START],
+        body.replace(from, to),
+        &FOUR_CLEANUP_DECLARATIONS[END..]
+    )
 }
 #[test]
 fn actual_whole_scope_and_scoped_alpha() {
@@ -64,7 +71,12 @@ fn actual_whole_scope_and_scoped_alpha() {
     let end = 368447;
     let alpha = FOUR_CLEANUP_DECLARATIONS[start..end].replace("$KEY_41", "handleAlpha");
     let target = start + alpha.find("function $THREAD_4_51062()").unwrap();
-    let source = format!("{}{}{}", &FOUR_CLEANUP_DECLARATIONS[..start], alpha, &FOUR_CLEANUP_DECLARATIONS[end..]);
+    let source = format!(
+        "{}{}{}",
+        &FOUR_CLEANUP_DECLARATIONS[..start],
+        alpha,
+        &FOUR_CLEANUP_DECLARATIONS[end..]
+    );
     assert!(
         claim_at(&source, target as u32),
         "must prove the changed declaration, not another bundle"
@@ -137,7 +149,11 @@ fn captures_preinit_writers_and_reentrant_exposures_refuse() {
     ] {
         let tail = &FOUR_CLEANUP_DECLARATIONS[END..];
         assert!(tail.contains(from));
-        let s = format!("{}{}", &FOUR_CLEANUP_DECLARATIONS[..END], tail.replacen(from, to, 1));
+        let s = format!(
+            "{}{}",
+            &FOUR_CLEANUP_DECLARATIONS[..END],
+            tail.replacen(from, to, 1)
+        );
         assert!(!claim(&s), "{to}");
     }
     // Prefix edits shift START: find the same generated binding by its shifted
@@ -157,7 +173,12 @@ fn captures_preinit_writers_and_reentrant_exposures_refuse() {
         assert!(own.contains(from), "{from}");
         let replacement = own.replacen(from, to, 1);
         let delta = replacement.len() as i64 - own.len() as i64;
-        let s = format!("{}{}{}", &prefix[..marker], replacement, &FOUR_CLEANUP_DECLARATIONS[START..]);
+        let s = format!(
+            "{}{}{}",
+            &prefix[..marker],
+            replacement,
+            &FOUR_CLEANUP_DECLARATIONS[START..]
+        );
         assert!(!claim_at(&s, (START as i64 + delta) as u32), "{from}->{to}");
     }
 }
@@ -171,7 +192,12 @@ fn owner_prefix_mutation(from: &str, to: &str) -> (String, u32) {
     let replacement = own.replacen(from, to, 1);
     let target = START as i64 + replacement.len() as i64 - own.len() as i64;
     (
-        format!("{}{}{}", &prefix[..marker], replacement, &FOUR_CLEANUP_DECLARATIONS[START..]),
+        format!(
+            "{}{}{}",
+            &prefix[..marker],
+            replacement,
+            &FOUR_CLEANUP_DECLARATIONS[START..]
+        ),
         target as u32,
     )
 }
@@ -216,7 +242,11 @@ fn same_target_preinit_branch_alias_and_synchronous_registration_controls() {
 fn handle_store_must_finish_before_cleanup_exposure() {
     let write = &FOUR_CLEANUP_DECLARATIONS[350817..353387];
     assert!(write.starts_with("$KEY_41 = new $KEY_5("));
-    let mut source = format!("{}void 0{}", &FOUR_CLEANUP_DECLARATIONS[..350817], &FOUR_CLEANUP_DECLARATIONS[353387..]);
+    let mut source = format!(
+        "{}void 0{}",
+        &FOUR_CLEANUP_DECLARATIONS[..350817],
+        &FOUR_CLEANUP_DECLARATIONS[353387..]
+    );
     source = source.replacen(
         "$KEY_8 = $THREAD_4_51062;",
         &format!("$KEY_8 = $THREAD_4_51062;{write};"),
@@ -232,7 +262,11 @@ fn handle_store_must_finish_before_cleanup_exposure() {
 fn private_expression_self_name_is_not_an_external_function_binding() {
     let prefix = "const externalCleanup = ";
     let body = format!("{prefix}{};", &FOUR_CLEANUP_DECLARATIONS[START..END]);
-    let tail = FOUR_CLEANUP_DECLARATIONS[END..].replacen("$KEY_8 = $THREAD_4_51062;", "$KEY_8 = externalCleanup;", 1);
+    let tail = FOUR_CLEANUP_DECLARATIONS[END..].replacen(
+        "$KEY_8 = $THREAD_4_51062;",
+        "$KEY_8 = externalCleanup;",
+        1,
+    );
     let source = format!("{}{}{}", &FOUR_CLEANUP_DECLARATIONS[..START], body, tail);
     assert!(!claim_at(&source, (START + prefix.len()) as u32));
 }

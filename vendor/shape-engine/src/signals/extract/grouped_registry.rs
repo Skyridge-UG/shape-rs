@@ -98,14 +98,21 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         if var.init.is_some() || self.model.binding_writes(symbol) != 1 {
             return None;
         }
-        let reference = self.model.scoping.get_resolved_references(symbol).find(|r| r.is_write())?;
+        let reference = self
+            .model
+            .scoping
+            .get_resolved_references(symbol)
+            .find(|r| r.is_write())?;
         let assignment = self.model.nodes.parent_id(reference.node_id());
         let AstKind::AssignmentExpression(a) = self.model.nodes.kind(assignment) else {
             return None;
         };
         let statement = self.model.nodes.parent_id(assignment);
         if a.operator != AssignmentOperator::Assign
-            || !matches!(self.model.nodes.kind(statement), AstKind::ExpressionStatement(_))
+            || !matches!(
+                self.model.nodes.kind(statement),
+                AstKind::ExpressionStatement(_)
+            )
         {
             return None;
         }
@@ -117,7 +124,10 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         let AstKind::IfStatement(guard) = self.model.nodes.kind(branch) else {
             return None;
         };
-        let declaration_list = self.model.nodes.parent_id(self.model.nodes.parent_id(declaration));
+        let declaration_list = self
+            .model
+            .nodes
+            .parent_id(self.model.nodes.parent_id(declaration));
         (guard.alternate.is_none()
             && guard.consequent.span() == self.model.nodes.get_node(block).span()
             && self.model.nodes.parent_id(branch) == declaration_list)
@@ -125,7 +135,12 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
     }
 
     fn within(&self, node: NodeId, region: NodeId) -> bool {
-        node == region || self.model.nodes.ancestor_ids(node).any(|ancestor| ancestor == region)
+        node == region
+            || self
+                .model
+                .nodes
+                .ancestor_ids(node)
+                .any(|ancestor| ancestor == region)
     }
 
     fn substituted(&self, e: &'a Expression<'a>, env: &Environment<'a>) -> &'a Expression<'a> {
@@ -153,18 +168,22 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         let Some(site) = site else {
             return false;
         };
-        if seen.len() >= 32 { return false; }
+        if seen.len() >= 32 {
+            return false;
+        }
         if !seen.insert(site.span.start) {
             return region.is_none();
         }
         let result = match self.model.nodes.kind(site.node_id) {
-            AstKind::ArrowFunctionExpression(_) => self.after(site.node_id, boundary, owner, region, seen),
+            AstKind::ArrowFunctionExpression(_) => {
+                self.after(site.node_id, boundary, owner, region, seen)
+            }
             AstKind::Function(f) if f.r#type != FunctionType::FunctionDeclaration => {
                 self.after(site.node_id, boundary, owner, region, seen)
             }
-            _ => site
-                .binding_symbol
-                .is_some_and(|s| self.uses_after(s, boundary, owner, region, seen, &mut BTreeSet::new())),
+            _ => site.binding_symbol.is_some_and(|s| {
+                self.uses_after(s, boundary, owner, region, seen, &mut BTreeSet::new())
+            }),
         };
         seen.remove(&site.span.start);
         result
@@ -179,11 +198,19 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         seen: &mut BTreeSet<u32>,
         aliases: &mut BTreeSet<SymbolId>,
     ) -> bool {
-        if aliases.len() >= 32 { return false; }
+        if aliases.len() >= 32 {
+            return false;
+        }
         if !aliases.insert(symbol) {
             return region.is_none();
         }
-        if region.is_some() && !self.model.scoping.get_resolved_references(symbol).any(|r| r.is_read()) {
+        if region.is_some()
+            && !self
+                .model
+                .scoping
+                .get_resolved_references(symbol)
+                .any(|r| r.is_read())
+        {
             return false;
         }
         self.model
@@ -351,11 +378,7 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
     // Resolve a transport callee without entering function-return transport.
     // In particular, a recursive factory or a call-valued alias cannot donate
     // a helper body (or recurse back into transport discovery).
-    fn transport_callee(
-        &self,
-        e: &'a Expression<'a>,
-        depth: usize,
-    ) -> Option<FunctionSite> {
+    fn transport_callee(&self, e: &'a Expression<'a>, depth: usize) -> Option<FunctionSite> {
         if depth > 16 {
             return None;
         }
@@ -403,9 +426,7 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             AstKind::ArrowFunctionExpression(f) if !f.expression && !f.r#async => {
                 (&f.params, &f.body)
             }
-            AstKind::Function(f) if !f.r#async && !f.generator => {
-                (&f.params, f.body.as_ref()?)
-            }
+            AstKind::Function(f) if !f.r#async && !f.generator => (&f.params, f.body.as_ref()?),
             _ => return None,
         };
         if call.optional
@@ -432,12 +453,18 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             }
             let actual = self.substituted(arg, env);
             let inert = match actual.without_parentheses() {
-                Expression::Identifier(_) => self.array(actual, env, 0).is_some() || self.function(actual, env, 0).is_some(),
-                Expression::NumericLiteral(_) | Expression::ArrowFunctionExpression(_) | Expression::FunctionExpression(_) => true,
+                Expression::Identifier(_) => {
+                    self.array(actual, env, 0).is_some() || self.function(actual, env, 0).is_some()
+                }
+                Expression::NumericLiteral(_)
+                | Expression::ArrowFunctionExpression(_)
+                | Expression::FunctionExpression(_) => true,
                 Expression::CallExpression(c) => self.identity_holder(c).is_some(),
                 _ => false,
             };
-            if !inert { return None; }
+            if !inert {
+                return None;
+            }
             local.insert(symbol, actual);
         }
         let mut writes = Vec::new();
@@ -501,8 +528,11 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         let Expression::StaticMemberExpression(member) = &call.callee else {
             return None;
         };
-        if call.optional || member.optional || member.property.name != "forEach"
-            || call.arguments.len() != 1 {
+        if call.optional
+            || member.optional
+            || member.property.name != "forEach"
+            || call.arguments.len() != 1
+        {
             return None;
         }
         let callback = self.function(*call_arguments(call).first()?, &HashMap::new(), 0)?;
@@ -517,9 +547,15 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             {
                 continue;
             }
-            let Some(coordinator) = self.function(&invoke.callee, &HashMap::new(), 0).or_else(|| {
-                self.coordinator_before_registries(&invoke.callee, self.symbol(&member.object)?)
-            }) else {
+            let Some(coordinator) =
+                self.function(&invoke.callee, &HashMap::new(), 0)
+                    .or_else(|| {
+                        self.coordinator_before_registries(
+                            &invoke.callee,
+                            self.symbol(&member.object)?,
+                        )
+                    })
+            else {
                 continue;
             };
             let abi = self
@@ -546,54 +582,98 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
     // coordinator. For the finite replacement lane only, its straight-line
     // owner initializer dominates every literal registry origin. An active
     // consumption before those origins is still rejected by ReplacementFlow.
-    fn coordinator_before_registries(&self, e: &'a Expression<'a>, root: SymbolId) -> Option<FunctionSite> {
+    fn coordinator_before_registries(
+        &self,
+        e: &'a Expression<'a>,
+        root: SymbolId,
+    ) -> Option<FunctionSite> {
         let declaration = self.model.scoping.symbol_declaration(root);
-        let AstKind::VariableDeclarator(var) = self.model.nodes.kind(declaration) else { return None; };
-        if var.init.is_some() || !self.model.scoping.symbol_redeclarations(root).is_empty() { return None; }
+        let AstKind::VariableDeclarator(var) = self.model.nodes.kind(declaration) else {
+            return None;
+        };
+        if var.init.is_some() || !self.model.scoping.symbol_redeclarations(root).is_empty() {
+            return None;
+        }
         let owner = self.model.owning_site(declaration)?.node_id;
         let mut earliest = u32::MAX;
         let mut writes = 0;
-        for reference in self.model.scoping.get_resolved_references(root).filter(|r| r.is_write()) {
+        for reference in self
+            .model
+            .scoping
+            .get_resolved_references(root)
+            .filter(|r| r.is_write())
+        {
             let node = self.model.nodes.parent_id(reference.node_id());
-            let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else { return None; };
-            if reference.is_read() || a.operator != AssignmentOperator::Assign
+            let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else {
+                return None;
+            };
+            if reference.is_read()
+                || a.operator != AssignmentOperator::Assign
                 || self.model.owning_site(node)?.node_id != owner
-                || !matches!(a.right.without_parentheses(), Expression::ArrayExpression(_)) {
+                || !matches!(
+                    a.right.without_parentheses(),
+                    Expression::ArrayExpression(_)
+                )
+            {
                 return None;
             }
             earliest = earliest.min(a.span.start);
             writes += 1;
         }
-        if !(2..=16).contains(&writes) { return None; }
+        if !(2..=16).contains(&writes) {
+            return None;
+        }
         self.coordinator_owner_value(e, owner, earliest, 0)
     }
 
-    fn coordinator_owner_value(&self, e: &'a Expression<'a>, owner: NodeId, before: u32, depth: usize) -> Option<FunctionSite> {
-        if depth >= 16 { return None; }
+    fn coordinator_owner_value(
+        &self,
+        e: &'a Expression<'a>,
+        owner: NodeId,
+        before: u32,
+        depth: usize,
+    ) -> Option<FunctionSite> {
+        if depth >= 16 {
+            return None;
+        }
         if let Some(symbol) = self.symbol(e) {
-            if !self.model.scoping.symbol_redeclarations(symbol).is_empty() { return None; }
+            if !self.model.scoping.symbol_redeclarations(symbol).is_empty() {
+                return None;
+            }
             let declaration = self.model.scoping.symbol_declaration(symbol);
             let list = match self.model.nodes.kind(declaration) {
                 AstKind::Function(f) if self.model.binding_writes(symbol) == 0 => {
                     let body = self.model.nodes.parent_id(declaration);
                     return (matches!(self.model.nodes.kind(body), AstKind::FunctionBody(_))
                         && self.model.nodes.parent_id(body) == owner)
-                        .then(|| self.model.site_by_span(f.span)).flatten();
+                        .then(|| self.model.site_by_span(f.span))
+                        .flatten();
                 }
-                AstKind::VariableDeclarator(_) => self.model.nodes.parent_id(self.model.nodes.parent_id(declaration)),
+                AstKind::VariableDeclarator(_) => self
+                    .model
+                    .nodes
+                    .parent_id(self.model.nodes.parent_id(declaration)),
                 _ => return None,
             };
             if !matches!(self.model.nodes.kind(list), AstKind::FunctionBody(_))
-                || self.model.nodes.parent_id(list) != owner || self.guarded_origin(symbol).is_some() {
+                || self.model.nodes.parent_id(list) != owner
+                || self.guarded_origin(symbol).is_some()
+            {
                 return None;
             }
             let value = self.value(symbol)?;
-            if value.span().end >= before { return None; }
+            if value.span().end >= before {
+                return None;
+            }
             return self.coordinator_owner_value(value, owner, value.span().start, depth + 1);
         }
         match e.without_parentheses() {
-            Expression::FunctionExpression(f) if !f.r#async && !f.generator => self.model.function_from_expression(e),
-            Expression::ArrowFunctionExpression(f) if !f.r#async => self.model.function_from_expression(e),
+            Expression::FunctionExpression(f) if !f.r#async && !f.generator => {
+                self.model.function_from_expression(e)
+            }
+            Expression::ArrowFunctionExpression(f) if !f.r#async => {
+                self.model.function_from_expression(e)
+            }
             _ => None,
         }
     }
@@ -608,10 +688,16 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
             }
         }
     }
-    let mut d = Discovery { model, calls, ordered_calls: BTreeSet::new() };
+    let mut d = Discovery {
+        model,
+        calls,
+        ordered_calls: BTreeSet::new(),
+    };
     for node in model.nodes.iter() {
         if let AstKind::CallExpression(call) = node.kind() {
-            if d.activation_ordered(node.id()) { d.ordered_calls.insert(call.span.start); }
+            if d.activation_ordered(node.id()) {
+                d.ordered_calls.insert(call.span.start);
+            }
         }
     }
     let empty = HashMap::new();
@@ -628,8 +714,11 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
             } else if let Some(invocation) = d.consumer_abi(call) {
                 if let Expression::StaticMemberExpression(member) = &call.callee {
                     if let Some(symbol) = d.symbol(&member.object) {
-                        replacements.entry(symbol).or_insert_with(Vec::new)
-                            .push((call.span, invocation, node.id()));
+                        replacements.entry(symbol).or_insert_with(Vec::new).push((
+                            call.span,
+                            invocation,
+                            node.id(),
+                        ));
                     }
                 }
             }
@@ -655,7 +744,9 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
         let region = d.guarded_origin(root);
         let root_list = region.unwrap_or_else(|| {
             model.nodes.parent_id(
-                model.nodes.parent_id(model.scoping.symbol_declaration(root)),
+                model
+                    .nodes
+                    .parent_id(model.scoping.symbol_declaration(root)),
             )
         });
         let mut allowed_transports = BTreeMap::new();
@@ -682,13 +773,18 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
                             AstKind::AssignmentExpression(a) if a.right.span() == call.span => {
                                 statement = model.nodes.parent_id(statement);
                             }
-                            AstKind::VariableDeclarator(v) if v.init.as_ref().is_some_and(|e| e.span() == call.span) => {
+                            AstKind::VariableDeclarator(v)
+                                if v.init.as_ref().is_some_and(|e| e.span() == call.span) =>
+                            {
                                 statement = model.nodes.parent_id(statement);
                             }
                             _ => {}
                         }
-                        if !matches!(model.nodes.kind(statement), AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_))
-                            || model.nodes.parent_id(statement) != root_list {
+                        if !matches!(
+                            model.nodes.kind(statement),
+                            AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_)
+                        ) || model.nodes.parent_id(statement) != root_list
+                        {
                             errors.push("registry transport is not evaluated in a straight-line owner statement".into());
                         }
                         allowed_transports.insert(call.span.start, call.span);
@@ -763,10 +859,17 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
                 .filter(|r| r.is_read())
             {
                 if region.is_some()
-                    && !d.after(reference.node_id(), array.span().end,
-                        root_owner, region, &mut BTreeSet::new())
+                    && !d.after(
+                        reference.node_id(),
+                        array.span().end,
+                        root_owner,
+                        region,
+                        &mut BTreeSet::new(),
+                    )
                 {
-                    errors.push("guarded registry read is not dominated by its own branch origin".into());
+                    errors.push(
+                        "guarded registry read is not dominated by its own branch origin".into(),
+                    );
                 }
                 let parent = model.nodes.parent_kind(reference.node_id());
                 let allowed = match parent {
@@ -796,7 +899,9 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
                     },
                     AstKind::CallExpression(_) => {
                         let span = model.nodes.get_node(reference.node_id()).span();
-                        allowed_transports.values().any(|call| call.start <= span.start && span.end <= call.end)
+                        allowed_transports
+                            .values()
+                            .any(|call| call.start <= span.start && span.end <= call.end)
                     }
                     _ => false,
                 };
@@ -811,11 +916,9 @@ pub(crate) fn discover(model: &Model<'_, '_>) -> Vec<GroupedRegistration> {
         }
         for (slot, (function, mut evidence, mut unresolved)) in slots {
             evidence.push(array.span().into());
-            evidence.extend(
-                consumers
-                    .iter()
-                    .flat_map(|(call, invoke, _)| [SourceSpan::from(*call), SourceSpan::from(*invoke)]),
-            );
+            evidence.extend(consumers.iter().flat_map(|(call, invoke, _)| {
+                [SourceSpan::from(*call), SourceSpan::from(*invoke)]
+            }));
             unresolved.extend(errors.iter().cloned());
             if function.is_none() {
                 unresolved.push("registry value has no unique stable function origin".into());
@@ -882,48 +985,92 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             AstKind::ArrowFunctionExpression(f) => Some(f.body.statements.as_slice()),
             _ => None,
         };
-        body.is_some_and(|body| body.iter().all(|s| replacement_control_supported(s, at))
-            && body.iter().any(|s| replacement_activation_supported(s, at)))
+        body.is_some_and(|body| {
+            body.iter().all(|s| replacement_control_supported(s, at))
+                && body.iter().any(|s| replacement_activation_supported(s, at))
+        })
     }
 
     fn opaque_loop_completes(&self, statement: &Statement<'_>) -> bool {
         let (body, no_test_exit, must_run) = match statement {
-            Statement::ForStatement(s) => (&s.body, s.test.as_ref().is_none_or(|t|
-                matches!(t.without_parentheses(), Expression::BooleanLiteral(b) if b.value)), false),
-            Statement::WhileStatement(s) => (&s.body,
-                matches!(s.test.without_parentheses(), Expression::BooleanLiteral(b) if b.value), false),
-            Statement::DoWhileStatement(s) => (&s.body,
-                matches!(s.test.without_parentheses(), Expression::BooleanLiteral(b) if b.value), true),
+            Statement::ForStatement(s) => (
+                &s.body,
+                s.test.as_ref().is_none_or(
+                    |t| matches!(t.without_parentheses(), Expression::BooleanLiteral(b) if b.value),
+                ),
+                false,
+            ),
+            Statement::WhileStatement(s) => (
+                &s.body,
+                matches!(s.test.without_parentheses(), Expression::BooleanLiteral(b) if b.value),
+                false,
+            ),
+            Statement::DoWhileStatement(s) => (
+                &s.body,
+                matches!(s.test.without_parentheses(), Expression::BooleanLiteral(b) if b.value),
+                true,
+            ),
             _ => return true,
         };
-        if !no_test_exit && !must_run { return true; }
+        if !no_test_exit && !must_run {
+            return true;
+        }
         let loop_span = statement.span();
         let breaks = self.model.nodes.iter().any(|node| {
-            let AstKind::BreakStatement(b) = node.kind() else { return false; };
-            if b.label.is_some() || b.span.start < body.span().start || b.span.end > body.span().end {
+            let AstKind::BreakStatement(b) = node.kind() else {
+                return false;
+            };
+            if b.label.is_some() || b.span.start < body.span().start || b.span.end > body.span().end
+            {
                 return false;
             }
-            let nearest = self.model.nodes.ancestor_ids(node.id()).find(|id| matches!(self.model.nodes.kind(*id),
-                AstKind::ForStatement(_) | AstKind::ForInStatement(_) | AstKind::ForOfStatement(_)
-                | AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_) | AstKind::SwitchStatement(_)
-                | AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)));
+            let nearest = self.model.nodes.ancestor_ids(node.id()).find(|id| {
+                matches!(
+                    self.model.nodes.kind(*id),
+                    AstKind::ForStatement(_)
+                        | AstKind::ForInStatement(_)
+                        | AstKind::ForOfStatement(_)
+                        | AstKind::WhileStatement(_)
+                        | AstKind::DoWhileStatement(_)
+                        | AstKind::SwitchStatement(_)
+                        | AstKind::Function(_)
+                        | AstKind::ArrowFunctionExpression(_)
+                )
+            });
             nearest.is_some_and(|id| self.model.nodes.get_node(id).span() == loop_span)
                 && replacement_statement_reaches(self, body, b.span).1
         });
-        if no_test_exit { breaks }
-        else { breaks || replacement_statement_reaches(self, body, Span::new(0, 0)).0 }
+        if no_test_exit {
+            breaks
+        } else {
+            breaks || replacement_statement_reaches(self, body, Span::new(0, 0)).0
+        }
     }
 
     fn inert_expression(&self, expression: &Expression<'_>) -> bool {
         match expression.without_parentheses() {
-            Expression::NumericLiteral(_) | Expression::StringLiteral(_)
-            | Expression::BooleanLiteral(_) | Expression::NullLiteral(_)
-            | Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_) => true,
-            Expression::Identifier(_) => self.symbol(expression).is_some_and(|s|
-                matches!(self.model.nodes.kind(self.model.scoping.symbol_declaration(s)), AstKind::Function(_))),
+            Expression::NumericLiteral(_)
+            | Expression::StringLiteral(_)
+            | Expression::BooleanLiteral(_)
+            | Expression::NullLiteral(_)
+            | Expression::FunctionExpression(_)
+            | Expression::ArrowFunctionExpression(_) => true,
+            Expression::Identifier(_) => self.symbol(expression).is_some_and(|s| {
+                matches!(
+                    self.model
+                        .nodes
+                        .kind(self.model.scoping.symbol_declaration(s)),
+                    AstKind::Function(_)
+                )
+            }),
             Expression::ObjectExpression(object) => object.properties.iter().all(|p| {
-                let ObjectPropertyKind::ObjectProperty(p) = p else { return false; };
-                !p.computed && !p.method && p.kind == PropertyKind::Init && self.inert_expression(&p.value)
+                let ObjectPropertyKind::ObjectProperty(p) = p else {
+                    return false;
+                };
+                !p.computed
+                    && !p.method
+                    && p.kind == PropertyKind::Init
+                    && self.inert_expression(&p.value)
             }),
             _ => false,
         }
@@ -933,13 +1080,22 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         match statement {
             Statement::FunctionDeclaration(_) | Statement::EmptyStatement(_) => false,
             Statement::ExpressionStatement(s) => !self.inert_expression(&s.expression),
-            Statement::VariableDeclaration(v) => v.declarations.iter()
+            Statement::VariableDeclaration(v) => v
+                .declarations
+                .iter()
                 .any(|v| v.init.as_ref().is_some_and(|e| !self.inert_expression(e))),
-            Statement::ReturnStatement(r) => r.argument.as_ref().is_some_and(|e| !self.inert_expression(e)),
+            Statement::ReturnStatement(r) => r
+                .argument
+                .as_ref()
+                .is_some_and(|e| !self.inert_expression(e)),
             Statement::BlockStatement(b) => b.body.iter().any(|s| self.statement_may_throw(s)),
-            Statement::IfStatement(b) => !self.inert_expression(&b.test)
-                || self.statement_may_throw(&b.consequent)
-                || b.alternate.as_ref().is_some_and(|s| self.statement_may_throw(s)),
+            Statement::IfStatement(b) => {
+                !self.inert_expression(&b.test)
+                    || self.statement_may_throw(&b.consequent)
+                    || b.alternate
+                        .as_ref()
+                        .is_some_and(|s| self.statement_may_throw(s))
+            }
             _ => true,
         }
     }
@@ -951,18 +1107,24 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         for _ in 0..128 {
             let parent = self.model.nodes.parent_id(current);
             match self.model.nodes.kind(parent) {
-                AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_)
-                | AstKind::ReturnStatement(_) | AstKind::ThrowStatement(_) => return true,
+                AstKind::ExpressionStatement(_)
+                | AstKind::VariableDeclaration(_)
+                | AstKind::ReturnStatement(_)
+                | AstKind::ThrowStatement(_) => return true,
                 AstKind::IfStatement(branch) => {
                     let at = self.model.nodes.get_node(current).span();
-                    return branch.test.span().start <= at.start && at.end <= branch.test.span().end;
+                    return branch.test.span().start <= at.start
+                        && at.end <= branch.test.span().end;
                 }
                 AstKind::CallExpression(call) if !call.optional => {}
-                AstKind::AssignmentExpression(a) if a.operator == AssignmentOperator::Assign
-                    && a.right.span() == self.model.nodes.get_node(current).span()
-                    && matches!(a.left, AssignmentTarget::AssignmentTargetIdentifier(_)) => {}
-                AstKind::NewExpression(_) | AstKind::ParenthesizedExpression(_)
-                | AstKind::ObjectProperty(_) | AstKind::ObjectExpression(_)
+                AstKind::AssignmentExpression(a)
+                    if a.operator == AssignmentOperator::Assign
+                        && a.right.span() == self.model.nodes.get_node(current).span()
+                        && matches!(a.left, AssignmentTarget::AssignmentTargetIdentifier(_)) => {}
+                AstKind::NewExpression(_)
+                | AstKind::ParenthesizedExpression(_)
+                | AstKind::ObjectProperty(_)
+                | AstKind::ObjectExpression(_)
                 | AstKind::VariableDeclarator(_) => {}
                 _ => return false,
             }
@@ -976,8 +1138,10 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
     // require a different proof and cannot contribute here.
     fn replacement_statement(&self, node: NodeId, owner: NodeId) -> Option<Span> {
         let statement = self.model.nodes.parent_id(node);
-        if !matches!(self.model.nodes.kind(statement),
-            AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_)) {
+        if !matches!(
+            self.model.nodes.kind(statement),
+            AstKind::ExpressionStatement(_) | AstKind::VariableDeclaration(_)
+        ) {
             return None;
         }
         let mut current = statement;
@@ -986,10 +1150,14 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             if parent == owner {
                 return Some(self.model.nodes.get_node(statement).span());
             }
-            if !matches!(self.model.nodes.kind(parent),
-                AstKind::BlockStatement(_) | AstKind::IfStatement(_) | AstKind::FunctionBody(_)
-                | AstKind::CatchClause(_))
-                && !matches!(self.model.nodes.kind(parent), AstKind::TryStatement(t) if t.finalizer.is_none()) {
+            if !matches!(
+                self.model.nodes.kind(parent),
+                AstKind::BlockStatement(_)
+                    | AstKind::IfStatement(_)
+                    | AstKind::FunctionBody(_)
+                    | AstKind::CatchClause(_)
+            ) && !matches!(self.model.nodes.kind(parent), AstKind::TryStatement(t) if t.finalizer.is_none())
+            {
                 return None;
             }
             current = parent;
@@ -997,24 +1165,26 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         None
     }
 
-    fn replacement_alias(
-        &self,
-        reference: NodeId,
-        symbol: SymbolId,
-    ) -> Option<SymbolId> {
+    fn replacement_alias(&self, reference: NodeId, symbol: SymbolId) -> Option<SymbolId> {
         match self.model.nodes.parent_kind(reference) {
             AstKind::VariableDeclarator(v)
-                if v.init.as_ref().is_some_and(|e| self.symbol(e) == Some(symbol)) => {
+                if v.init
+                    .as_ref()
+                    .is_some_and(|e| self.symbol(e) == Some(symbol)) =>
+            {
                 match &v.id {
                     BindingPattern::BindingIdentifier(id) => id.symbol_id.get(),
                     _ => None,
                 }
             }
             AstKind::AssignmentExpression(a)
-                if a.operator == AssignmentOperator::Assign && self.symbol(&a.right) == Some(symbol) => {
+                if a.operator == AssignmentOperator::Assign
+                    && self.symbol(&a.right) == Some(symbol) =>
+            {
                 match &a.left {
-                    AssignmentTarget::AssignmentTargetIdentifier(id) =>
-                        crate::analysis::identifier_symbol(id, self.model.scoping),
+                    AssignmentTarget::AssignmentTargetIdentifier(id) => {
+                        crate::analysis::identifier_symbol(id, self.model.scoping)
+                    }
                     _ => None,
                 }
             }
@@ -1039,7 +1209,12 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         if !trail.insert((symbol.index() as u32, identity)) {
             return None;
         }
-        for reference in self.model.scoping.get_resolved_references(symbol).filter(|r| r.is_read()) {
+        for reference in self
+            .model
+            .scoping
+            .get_resolved_references(symbol)
+            .filter(|r| r.is_read())
+        {
             if let Some(alias) = self.replacement_alias(reference.node_id(), symbol) {
                 aliases.insert(alias);
                 let mut next = context.clone();
@@ -1047,31 +1222,54 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
                 // need no longer hold the same value when the snapshot is used.
                 next.predicates.retain(|(s, _)| *s != symbol);
                 next.captured.retain(|(s, _)| *s != symbol);
-                if next.deferred { next.captured.push((alias, identity)); }
-                else { next.predicates.push((alias, identity)); }
+                if next.deferred {
+                    next.captured.push((alias, identity));
+                } else {
+                    next.predicates.push((alias, identity));
+                }
                 self.consumption_uses(alias, identity, owner, &next, aliases, trail, events)?;
                 continue;
             }
             let direct = match self.model.nodes.parent_kind(reference.node_id()) {
-                AstKind::CallExpression(call) => !call.optional && self.symbol(&call.callee) == Some(symbol)
-                    && call.callee.span() == self.model.nodes.get_node(reference.node_id()).span(),
-                AstKind::NewExpression(call) => self.symbol(&call.callee) == Some(symbol)
-                    && call.callee.span() == self.model.nodes.get_node(reference.node_id()).span(),
+                AstKind::CallExpression(call) => {
+                    !call.optional
+                        && self.symbol(&call.callee) == Some(symbol)
+                        && call.callee.span()
+                            == self.model.nodes.get_node(reference.node_id()).span()
+                }
+                AstKind::NewExpression(call) => {
+                    self.symbol(&call.callee) == Some(symbol)
+                        && call.callee.span()
+                            == self.model.nodes.get_node(reference.node_id()).span()
+                }
                 _ => false,
             };
-            if !direct && !matches!(self.model.nodes.parent_kind(reference.node_id()),
-                AstKind::CallExpression(_) | AstKind::NewExpression(_)
-                | AstKind::ReturnStatement(_) | AstKind::ObjectProperty(_)) {
+            if !direct
+                && !matches!(
+                    self.model.nodes.parent_kind(reference.node_id()),
+                    AstKind::CallExpression(_)
+                        | AstKind::NewExpression(_)
+                        | AstKind::ReturnStatement(_)
+                        | AstKind::ObjectProperty(_)
+                )
+            {
                 return None;
             }
-            if matches!(self.model.nodes.parent_kind(reference.node_id()), AstKind::ObjectProperty(_)) {
+            if matches!(
+                self.model.nodes.parent_kind(reference.node_id()),
+                AstKind::ObjectProperty(_)
+            ) {
                 let property = self.model.nodes.parent_id(reference.node_id());
                 let object = self.model.nodes.parent_id(property);
                 // Merely putting a function in a dormant property bag is not
                 // an activation. Only a directly returned/passed literal is
                 // an escape here; no property lookup is interpreted.
-                if !matches!(self.model.nodes.parent_kind(object),
-                    AstKind::ReturnStatement(_) | AstKind::CallExpression(_) | AstKind::NewExpression(_)) {
+                if !matches!(
+                    self.model.nodes.parent_kind(object),
+                    AstKind::ReturnStatement(_)
+                        | AstKind::CallExpression(_)
+                        | AstKind::NewExpression(_)
+                ) {
                     return None;
                 }
             }
@@ -1099,7 +1297,9 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         events: &mut Vec<Consumption>,
     ) -> Option<()> {
         let site = self.model.owning_site(node)?;
-        if !self.activation_ordered(node) { return None; }
+        if !self.activation_ordered(node) {
+            return None;
+        }
         if !self.site_activation_supported(site, self.model.nodes.get_node(node).span()) {
             return None;
         }
@@ -1110,14 +1310,18 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         if site.node_id == owner {
             // One capture boundary is the recovered module/consumer family.
             // Multiple independently timed captures need a separate proof.
-            if context.captured.len() > 1 { return None; }
+            if context.captured.len() > 1 {
+                return None;
+            }
             let mut event = context.clone();
             event.at = self.model.nodes.get_node(node).span();
             events.push(event);
             return (events.len() <= 128).then_some(());
         }
         let mut pending = context.clone();
-        if !pending.captured.is_empty() { pending.capture_pending = true; }
+        if !pending.captured.is_empty() {
+            pending.capture_pending = true;
+        }
         let context = &pending;
         // Only lexically contained callables may carry a context back to this
         // registry owner. Do not walk out through a parent/module caller.
@@ -1126,17 +1330,29 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
             return None;
         }
         if matches!(self.model.nodes.kind(site.node_id), AstKind::Function(f) if f.r#async || f.generator)
-            || matches!(self.model.nodes.kind(site.node_id), AstKind::ArrowFunctionExpression(f) if f.r#async) {
+            || matches!(self.model.nodes.kind(site.node_id), AstKind::ArrowFunctionExpression(f) if f.r#async)
+        {
             return None;
         }
         match self.model.nodes.kind(site.node_id) {
             AstKind::Function(f) if f.r#type == FunctionType::FunctionDeclaration => {
                 let symbol = site.binding_symbol?;
-                if f.r#async || f.generator || self.model.binding_writes(symbol) != 0
-                    || !self.model.scoping.symbol_redeclarations(symbol).is_empty() {
+                if f.r#async
+                    || f.generator
+                    || self.model.binding_writes(symbol) != 0
+                    || !self.model.scoping.symbol_redeclarations(symbol).is_empty()
+                {
                     return None;
                 }
-                self.consumption_uses(symbol, site.span.start, owner, context, aliases, trail, events)
+                self.consumption_uses(
+                    symbol,
+                    site.span.start,
+                    owner,
+                    context,
+                    aliases,
+                    trail,
+                    events,
+                )
             }
             AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => {
                 // Function expressions may be passed or returned and invoked
@@ -1146,13 +1362,27 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
                     aliases.insert(symbol);
                     let mut next = context.clone();
                     next.predicates.push((symbol, site.span.start));
-                    self.consumption_uses(symbol, site.span.start, owner, &next, aliases, trail, events)
+                    self.consumption_uses(
+                        symbol,
+                        site.span.start,
+                        owner,
+                        &next,
+                        aliases,
+                        trail,
+                        events,
+                    )
                 } else {
                     let mut next = context.clone();
                     let direct = matches!(self.model.nodes.parent_kind(site.node_id),
                         AstKind::CallExpression(call) if !call.optional && call.callee.span() == site.span);
-                    if !direct && !matches!(self.model.nodes.parent_kind(site.node_id),
-                        AstKind::CallExpression(_) | AstKind::NewExpression(_) | AstKind::ReturnStatement(_)) {
+                    if !direct
+                        && !matches!(
+                            self.model.nodes.parent_kind(site.node_id),
+                            AstKind::CallExpression(_)
+                                | AstKind::NewExpression(_)
+                                | AstKind::ReturnStatement(_)
+                        )
+                    {
                         return None;
                     }
                     next.deferred |= !direct;
@@ -1169,34 +1399,53 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         consumers: &[(Span, Span, NodeId)],
     ) -> Option<Vec<GroupedRegistration>> {
         let declaration = self.model.scoping.symbol_declaration(root);
-        let AstKind::VariableDeclarator(var) = self.model.nodes.kind(declaration) else { return None; };
+        let AstKind::VariableDeclarator(var) = self.model.nodes.kind(declaration) else {
+            return None;
+        };
         // The single guarded-origin lane has its own owner/proof. This lane
         // handles only bare locals replaced by at least two literal arrays.
         if var.init.is_some() || !self.model.scoping.symbol_redeclarations(root).is_empty() {
             return None;
         }
         let owner = self.model.owning_site(declaration)?.node_id;
-        let list = self.model.nodes.parent_id(self.model.nodes.parent_id(declaration));
+        let list = self
+            .model
+            .nodes
+            .parent_id(self.model.nodes.parent_id(declaration));
         if self.model.nodes.parent_id(list) != owner
-            || !matches!(self.model.nodes.kind(list), AstKind::FunctionBody(_)) {
+            || !matches!(self.model.nodes.kind(list), AstKind::FunctionBody(_))
+        {
             return None;
         }
         let mut origins = Vec::new();
         for reference in self.model.scoping.get_resolved_references(root) {
             if reference.is_write() {
                 let node = self.model.nodes.parent_id(reference.node_id());
-                let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else { return None; };
-                if reference.is_read() || a.operator != AssignmentOperator::Assign
+                let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else {
+                    return None;
+                };
+                if reference.is_read()
+                    || a.operator != AssignmentOperator::Assign
                     || self.model.owning_site(node)?.node_id != owner
-                    || !matches!(a.right.without_parentheses(), Expression::ArrayExpression(_)) {
+                    || !matches!(
+                        a.right.without_parentheses(),
+                        Expression::ArrayExpression(_)
+                    )
+                {
                     return None;
                 }
                 let statement = self.replacement_statement(node, owner)?;
-                if statement.start < var.span.end { return None; }
+                if statement.start < var.span.end {
+                    return None;
+                }
                 let array = a.right.without_parentheses();
                 for element in array_elements(array)? {
-                    if !matches!(element.without_parentheses(), Expression::Identifier(_)
-                        | Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_)) {
+                    if !matches!(
+                        element.without_parentheses(),
+                        Expression::Identifier(_)
+                            | Expression::FunctionExpression(_)
+                            | Expression::ArrowFunctionExpression(_)
+                    ) {
                         return None;
                     }
                     self.function(element, &HashMap::new(), 0)?;
@@ -1207,27 +1456,47 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
                 // old resolver. Every read must be this binding's ABI consumer.
                 let member = self.model.nodes.parent_id(reference.node_id());
                 let call = self.model.nodes.parent_id(member);
-                if !consumers.iter().any(|(_, _, n)| *n == call) { return None; }
+                if !consumers.iter().any(|(_, _, n)| *n == call) {
+                    return None;
+                }
             }
         }
-        if !(2..=16).contains(&origins.len()) { return None; }
+        if !(2..=16).contains(&origins.len()) {
+            return None;
+        }
         origins.sort_by_key(|(s, _)| s.start);
         let mut events = Vec::new();
         let mut aliases = BTreeSet::new();
         for (consumer, (_, _, node)) in consumers.iter().enumerate() {
-            let context_ok = self.consumption_context(*node, owner, &Consumption {
-                at: Span::new(0, 0), deferred: false, predicates: Vec::new(),
-                captured: Vec::new(), capture_pending: false, consumer,
-            }, &mut aliases, &mut BTreeSet::new(), &mut events);
-            if context_ok.is_none() { return None; }
+            let context_ok = self.consumption_context(
+                *node,
+                owner,
+                &Consumption {
+                    at: Span::new(0, 0),
+                    deferred: false,
+                    predicates: Vec::new(),
+                    captured: Vec::new(),
+                    capture_pending: false,
+                    consumer,
+                },
+                &mut aliases,
+                &mut BTreeSet::new(),
+                &mut events,
+            );
+            if context_ok.is_none() {
+                return None;
+            }
         }
-        if events.is_empty() { return None; }
+        if events.is_empty() {
+            return None;
+        }
         let aliases: Vec<_> = aliases.into_iter().collect();
         let callable_value = |value: &Expression<'_>| match value.without_parentheses() {
             Expression::FunctionExpression(f) => !f.r#async && !f.generator,
             Expression::ArrowFunctionExpression(f) => !f.r#async,
             Expression::Identifier(_) => self.symbol(value).is_some_and(|symbol| {
-                aliases.contains(&symbol) || matches!(
+                aliases.contains(&symbol)
+                    || matches!(
                     self.model.nodes.kind(self.model.scoping.symbol_declaration(symbol)),
                     AstKind::Function(f) if !f.r#async && !f.generator
                         && self.model.binding_writes(symbol) == 0
@@ -1237,47 +1506,96 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         };
         let mut writes: BTreeMap<u32, Vec<_>> = BTreeMap::new();
         for (index, symbol) in aliases.iter().enumerate() {
-            if !self.model.scoping.symbol_redeclarations(*symbol).is_empty() { return None; }
+            if !self.model.scoping.symbol_redeclarations(*symbol).is_empty() {
+                return None;
+            }
             let declaration = self.model.scoping.symbol_declaration(*symbol);
-            let AstKind::VariableDeclarator(v) = self.model.nodes.kind(declaration) else { return None; };
-            if self.model.owning_site(declaration)?.node_id != owner { return None; }
-            let list = self.model.nodes.parent_id(self.model.nodes.parent_id(declaration));
+            let AstKind::VariableDeclarator(v) = self.model.nodes.kind(declaration) else {
+                return None;
+            };
+            if self.model.owning_site(declaration)?.node_id != owner {
+                return None;
+            }
+            let list = self
+                .model
+                .nodes
+                .parent_id(self.model.nodes.parent_id(declaration));
             if self.model.nodes.parent_id(list) != owner
-                || !matches!(self.model.nodes.kind(list), AstKind::FunctionBody(_)) {
+                || !matches!(self.model.nodes.kind(list), AstKind::FunctionBody(_))
+            {
                 return None;
             }
             if let Some(value) = &v.init {
-                if !callable_value(value) { return None; }
-                let AstKind::VariableDeclaration(list) = self.model.nodes.parent_kind(declaration) else { return None; };
-                if list.declarations.len() != 1 { return None; }
+                if !callable_value(value) {
+                    return None;
+                }
+                let AstKind::VariableDeclaration(list) = self.model.nodes.parent_kind(declaration)
+                else {
+                    return None;
+                };
+                if list.declarations.len() != 1 {
+                    return None;
+                }
                 let statement = self.replacement_statement(declaration, owner)?;
-                writes.entry(statement.start).or_default().push((index, value));
+                writes
+                    .entry(statement.start)
+                    .or_default()
+                    .push((index, value));
             }
-            let AstKind::VariableDeclaration(list) = self.model.nodes.parent_kind(declaration) else { return None; };
-            if list.kind == VariableDeclarationKind::Const && self.model.binding_writes(*symbol) != 0 {
+            let AstKind::VariableDeclaration(list) = self.model.nodes.parent_kind(declaration)
+            else {
+                return None;
+            };
+            if list.kind == VariableDeclarationKind::Const
+                && self.model.binding_writes(*symbol) != 0
+            {
                 return None;
             }
-            for reference in self.model.scoping.get_resolved_references(*symbol).filter(|r| r.is_write()) {
+            for reference in self
+                .model
+                .scoping
+                .get_resolved_references(*symbol)
+                .filter(|r| r.is_write())
+            {
                 let node = self.model.nodes.parent_id(reference.node_id());
-                let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else { return None; };
-                if a.operator != AssignmentOperator::Assign || reference.is_read()
+                let AstKind::AssignmentExpression(a) = self.model.nodes.kind(node) else {
+                    return None;
+                };
+                if a.operator != AssignmentOperator::Assign
+                    || reference.is_read()
                     || self.model.owning_site(node)?.node_id != owner
-                    || !callable_value(&a.right) { return None; }
-                if a.span.start < v.span.end { return None; }
-                writes.entry(self.replacement_statement(node, owner)?.start).or_default().push((index, &a.right));
+                    || !callable_value(&a.right)
+                {
+                    return None;
+                }
+                if a.span.start < v.span.end {
+                    return None;
+                }
+                writes
+                    .entry(self.replacement_statement(node, owner)?.start)
+                    .or_default()
+                    .push((index, &a.right));
             }
         }
         for (start, assignments) in &writes {
             for (_, value) in assignments {
                 if let Some(symbol) = self.symbol(value).filter(|s| aliases.contains(s)) {
                     let declaration = self.model.scoping.symbol_declaration(symbol);
-                    if self.model.nodes.get_node(declaration).span().end >= *start { return None; }
+                    if self.model.nodes.get_node(declaration).span().end >= *start {
+                        return None;
+                    }
                 }
             }
         }
         let mut flow = ReplacementFlow {
-            discovery: self, origins, aliases, writes, events,
-            reached: BTreeMap::new(), exceptional: Vec::new(), failed: false,
+            discovery: self,
+            origins,
+            aliases,
+            writes,
+            events,
+            reached: BTreeMap::new(),
+            exceptional: Vec::new(),
+            failed: false,
         };
         let body = match self.model.nodes.kind(owner) {
             AstKind::Function(f) => &f.body.as_ref()?.statements,
@@ -1287,25 +1605,41 @@ impl<'m, 's, 'a> Discovery<'m, 's, 'a> {
         // Validate syntax independently of liveness. An event behind an
         // unconditional return is dormant, whereas one hidden in a loop/try
         // needs an unsupported ordering proof and must refuse this lane.
-        if !flow.events.iter().all(|e| body.iter().any(|s| replacement_activation_supported(s, e.at))) {
+        if !flow.events.iter().all(|e| {
+            body.iter()
+                .any(|s| replacement_activation_supported(s, e.at))
+        }) {
             return None;
         }
-        flow.statements(body, vec![(None, vec![None; flow.aliases.len()], BTreeSet::new())]);
-        if flow.failed || flow.reached.is_empty() { return None; }
+        flow.statements(
+            body,
+            vec![(None, vec![None; flow.aliases.len()], BTreeSet::new())],
+        );
+        if flow.failed || flow.reached.is_empty() {
+            return None;
+        }
         let mut rows = Vec::new();
         for (origin, contexts) in &flow.reached {
             let (statement, array) = flow.origins[*origin];
             for (slot, element) in array_elements(array)?.iter().enumerate() {
                 let function = self.function(element, &HashMap::new(), 0)?;
-                let mut evidence = vec![statement.into(), array.span().into(), element.span().into()];
+                let mut evidence =
+                    vec![statement.into(), array.span().into(), element.span().into()];
                 for event in contexts {
                     let context = &flow.events[*event];
                     let (call, invocation, _) = consumers[context.consumer];
-                    evidence.extend([SourceSpan::from(context.at), SourceSpan::from(call), SourceSpan::from(invocation)]);
+                    evidence.extend([
+                        SourceSpan::from(context.at),
+                        SourceSpan::from(call),
+                        SourceSpan::from(invocation),
+                    ]);
                 }
                 rows.push(GroupedRegistration {
-                    registry: self.model.binding_ref(root), slot,
-                    function: Some(self.model.function_ref(function)), evidence, unresolved: Vec::new(),
+                    registry: self.model.binding_ref(root),
+                    slot,
+                    function: Some(self.model.function_ref(function)),
+                    evidence,
+                    unresolved: Vec::new(),
                 });
             }
         }
@@ -1320,12 +1654,20 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
 
     fn may_throw(&self, statement: &Statement<'_>) -> bool {
         match statement {
-            Statement::FunctionDeclaration(_) | Statement::EmptyStatement(_)
-            | Statement::BlockStatement(_) | Statement::IfStatement(_) | Statement::TryStatement(_) => false,
+            Statement::FunctionDeclaration(_)
+            | Statement::EmptyStatement(_)
+            | Statement::BlockStatement(_)
+            | Statement::IfStatement(_)
+            | Statement::TryStatement(_) => false,
             Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_)
                 if self.origins.iter().any(|(s, _)| *s == statement.span())
-                    || self.writes.contains_key(&statement.span().start) => false,
-            Statement::ReturnStatement(returned) => returned.argument.as_ref().is_some_and(|e| !self.inert(e)),
+                    || self.writes.contains_key(&statement.span().start) =>
+            {
+                false
+            }
+            Statement::ReturnStatement(returned) => {
+                returned.argument.as_ref().is_some_and(|e| !self.inert(e))
+            }
             _ => self.discovery.statement_may_throw(statement),
         }
     }
@@ -1333,8 +1675,14 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
     fn exceptional(&mut self, states: &[ReplacementState]) {
         if let Some(exceptional) = self.exceptional.last_mut() {
             exceptional.extend(states.iter().cloned());
-            *exceptional = exceptional.drain(..).collect::<BTreeSet<_>>().into_iter().collect();
-            if exceptional.len() > 128 { self.failed = true; }
+            *exceptional = exceptional
+                .drain(..)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            if exceptional.len() > 128 {
+                self.failed = true;
+            }
         }
     }
 
@@ -1345,22 +1693,38 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
         }
         let declaration = self.discovery.model.scoping.symbol_declaration(symbol);
         match self.discovery.model.nodes.kind(declaration) {
-            AstKind::Function(f) if self.discovery.model.binding_writes(symbol) == 0 => Some(f.span.start),
+            AstKind::Function(f) if self.discovery.model.binding_writes(symbol) == 0 => {
+                Some(f.span.start)
+            }
             _ => None,
         }
     }
 
     fn captured(&self, event: usize, state: &ReplacementState) -> bool {
-        self.events[event].captured.iter().all(|(symbol, identity)| {
-            self.aliases.iter().position(|s| s == symbol).is_some_and(|i| state.1[i] == Some(*identity))
-        })
+        self.events[event]
+            .captured
+            .iter()
+            .all(|(symbol, identity)| {
+                self.aliases
+                    .iter()
+                    .position(|s| s == symbol)
+                    .is_some_and(|i| state.1[i] == Some(*identity))
+            })
     }
 
     fn observe(&mut self, event: usize, state: &ReplacementState) {
-        if !self.events[event].predicates.iter().all(|(symbol, identity)| {
-            self.aliases.iter().position(|s| s == symbol)
-                .is_some_and(|i| state.1[i] == Some(*identity))
-        }) { return; }
+        if !self.events[event]
+            .predicates
+            .iter()
+            .all(|(symbol, identity)| {
+                self.aliases
+                    .iter()
+                    .position(|s| s == symbol)
+                    .is_some_and(|i| state.1[i] == Some(*identity))
+            })
+        {
+            return;
+        }
         if let Some(origin) = state.0 {
             self.reached.entry(origin).or_default().insert(event);
         } else {
@@ -1384,32 +1748,59 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
                 for state in states.iter_mut() {
                     let captured = self.captured(event, state);
                     if self.events[event].deferred {
-                        if captured { state.2.insert((event, true)); }
-                        if self.events[event].capture_pending { state.2.insert((event, false)); }
+                        if captured {
+                            state.2.insert((event, true));
+                        }
+                        if self.events[event].capture_pending {
+                            state.2.insert((event, false));
+                        }
                     }
-                    if captured { self.observe(event, state); }
+                    if captured {
+                        self.observe(event, state);
+                    }
                 }
             }
         }
     }
 
-    fn statements(&mut self, statements: &[Statement<'a>], mut states: Vec<ReplacementState>) -> Vec<ReplacementState> {
+    fn statements(
+        &mut self,
+        statements: &[Statement<'a>],
+        mut states: Vec<ReplacementState>,
+    ) -> Vec<ReplacementState> {
         for statement in statements {
-            if states.is_empty() || self.failed { break; }
+            if states.is_empty() || self.failed {
+                break;
+            }
             // An opaque expression can throw. Keep whole reaching states for
             // the nearest catch instead of donating only its registry origin.
             let may_throw = self.may_throw(statement);
-            if may_throw { self.exceptional(&states); }
+            if may_throw {
+                self.exceptional(&states);
+            }
             states = self.statement(statement, states);
-            if may_throw { self.exceptional(&states); }
+            if may_throw {
+                self.exceptional(&states);
+            }
             // Bound state growth without joining mutually exclusive origins.
-            states = states.into_iter().collect::<BTreeSet<_>>().into_iter().collect();
-            if states.len() > 128 { self.failed = true; break; }
+            states = states
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect();
+            if states.len() > 128 {
+                self.failed = true;
+                break;
+            }
         }
         states
     }
 
-    fn statement(&mut self, statement: &Statement<'a>, mut states: Vec<ReplacementState>) -> Vec<ReplacementState> {
+    fn statement(
+        &mut self,
+        statement: &Statement<'a>,
+        mut states: Vec<ReplacementState>,
+    ) -> Vec<ReplacementState> {
         match statement {
             Statement::BlockStatement(block) => self.statements(&block.body, states),
             Statement::TryStatement(attempt) if attempt.finalizer.is_none() => {
@@ -1424,13 +1815,21 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
                 normal
             }
             Statement::IfStatement(branch) => {
-                if !self.inert(&branch.test) { self.exceptional(&states); }
+                if !self.inert(&branch.test) {
+                    self.exceptional(&states);
+                }
                 self.markers(branch.test.span(), &mut states);
-                if !self.inert(&branch.test) { self.exceptional(&states); }
+                if !self.inert(&branch.test) {
+                    self.exceptional(&states);
+                }
                 if let Expression::BooleanLiteral(test) = branch.test.without_parentheses() {
-                    return if test.value { self.statement(&branch.consequent, states) }
-                        else if let Some(alternate) = &branch.alternate { self.statement(alternate, states) }
-                        else { states };
+                    return if test.value {
+                        self.statement(&branch.consequent, states)
+                    } else if let Some(alternate) = &branch.alternate {
+                        self.statement(alternate, states)
+                    } else {
+                        states
+                    };
                 }
                 let mut yes = self.statement(&branch.consequent, states.clone());
                 let no = match &branch.alternate {
@@ -1440,15 +1839,20 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
                 yes.extend(no);
                 yes
             }
-            Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_)
-                | Statement::ReturnStatement(_) | Statement::ThrowStatement(_) => {
+            Statement::ExpressionStatement(_)
+            | Statement::VariableDeclaration(_)
+            | Statement::ReturnStatement(_)
+            | Statement::ThrowStatement(_) => {
                 let span = statement.span();
                 // Activations within a compound expression with tracked writes
                 // are deliberately refused: a source offset is not evaluation
                 // order. Accepted writes are whole plain statements only.
                 self.markers(span, &mut states);
                 if let Some(origin) = self.origins.iter().position(|(s, _)| *s == span) {
-                    for state in &mut states { state.0 = Some(origin); self.active(state); }
+                    for state in &mut states {
+                        state.0 = Some(origin);
+                        self.active(state);
+                    }
                 }
                 if let Some(writes) = self.writes.get(&span.start).cloned() {
                     for (alias, value) in writes {
@@ -1462,107 +1866,201 @@ impl<'d, 'm, 's, 'a> ReplacementFlow<'d, 'm, 's, 'a> {
                         }
                     }
                 }
-                if matches!(statement, Statement::ReturnStatement(_) | Statement::ThrowStatement(_)) {
-                    if self.may_throw(statement) { self.exceptional(&states); }
+                if matches!(
+                    statement,
+                    Statement::ReturnStatement(_) | Statement::ThrowStatement(_)
+                ) {
+                    if self.may_throw(statement) {
+                        self.exceptional(&states);
+                    }
                     Vec::new()
-                } else { states }
-            }
-            Statement::ForStatement(_) | Statement::ForInStatement(_) | Statement::ForOfStatement(_)
-                | Statement::WhileStatement(_) | Statement::DoWhileStatement(_) => {
-                    if self.discovery.opaque_loop_completes(statement) { states } else { Vec::new() }
+                } else {
+                    states
                 }
-            Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_)
-                | Statement::EmptyStatement(_) | Statement::DebuggerStatement(_) => states,
+            }
+            Statement::ForStatement(_)
+            | Statement::ForInStatement(_)
+            | Statement::ForOfStatement(_)
+            | Statement::WhileStatement(_)
+            | Statement::DoWhileStatement(_) => {
+                if self.discovery.opaque_loop_completes(statement) {
+                    states
+                } else {
+                    Vec::new()
+                }
+            }
+            Statement::FunctionDeclaration(_)
+            | Statement::ClassDeclaration(_)
+            | Statement::EmptyStatement(_)
+            | Statement::DebuggerStatement(_) => states,
             // No implicit success for switch/with/labels/finally or new AST
             // statement kinds. Loops above are opaque only after the exhaustive
             // symbol-write/read and activation checks proved no tracked effect.
-            _ => { self.failed = true; Vec::new() },
+            _ => {
+                self.failed = true;
+                Vec::new()
+            }
         }
     }
 }
 
 fn replacement_activation_supported(statement: &Statement<'_>, at: Span) -> bool {
     let span = statement.span();
-    if at.start < span.start || at.end > span.end { return false; }
+    if at.start < span.start || at.end > span.end {
+        return false;
+    }
     match statement {
-        Statement::BlockStatement(block) => block.body.iter().any(|s| replacement_activation_supported(s, at)),
+        Statement::BlockStatement(block) => block
+            .body
+            .iter()
+            .any(|s| replacement_activation_supported(s, at)),
         Statement::IfStatement(branch) => {
             let test = branch.test.span();
             (test.start <= at.start && at.end <= test.end)
                 || replacement_activation_supported(&branch.consequent, at)
-                || branch.alternate.as_ref().is_some_and(|s| replacement_activation_supported(s, at))
+                || branch
+                    .alternate
+                    .as_ref()
+                    .is_some_and(|s| replacement_activation_supported(s, at))
         }
         Statement::TryStatement(attempt) if attempt.finalizer.is_none() => {
-            attempt.block.body.iter().any(|s| replacement_activation_supported(s, at))
-                || attempt.handler.as_ref().is_some_and(|h|
-                    h.body.body.iter().any(|s| replacement_activation_supported(s, at)))
+            attempt
+                .block
+                .body
+                .iter()
+                .any(|s| replacement_activation_supported(s, at))
+                || attempt.handler.as_ref().is_some_and(|h| {
+                    h.body
+                        .body
+                        .iter()
+                        .any(|s| replacement_activation_supported(s, at))
+                })
         }
-        Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_)
-            | Statement::ReturnStatement(_) | Statement::ThrowStatement(_) => true,
+        Statement::ExpressionStatement(_)
+        | Statement::VariableDeclaration(_)
+        | Statement::ReturnStatement(_)
+        | Statement::ThrowStatement(_) => true,
         _ => false,
     }
 }
 
 // Lexical reachability only: blocks, branch alternatives and exceptional exits.
 // This never evaluates a test or a call. Literal booleans are syntax facts.
-fn replacement_reaches(discovery: &Discovery<'_, '_, '_>, statements: &[Statement<'_>], at: Span) -> (bool, bool) {
+fn replacement_reaches(
+    discovery: &Discovery<'_, '_, '_>,
+    statements: &[Statement<'_>],
+    at: Span,
+) -> (bool, bool) {
     let mut normal = true;
     for statement in statements {
-        if !normal { break; }
+        if !normal {
+            break;
+        }
         let (next, found) = replacement_statement_reaches(discovery, statement, at);
-        if found { return (next, true); }
+        if found {
+            return (next, true);
+        }
         normal = next;
     }
     (normal, false)
 }
 
-fn replacement_statement_reaches(discovery: &Discovery<'_, '_, '_>, statement: &Statement<'_>, at: Span) -> (bool, bool) {
+fn replacement_statement_reaches(
+    discovery: &Discovery<'_, '_, '_>,
+    statement: &Statement<'_>,
+    at: Span,
+) -> (bool, bool) {
     match statement {
         Statement::BlockStatement(block) => replacement_reaches(discovery, &block.body, at),
         Statement::IfStatement(branch) => {
             let test = branch.test.span();
-            if test.start <= at.start && at.end <= test.end { return (true, true); }
+            if test.start <= at.start && at.end <= test.end {
+                return (true, true);
+            }
             if let Expression::BooleanLiteral(test) = branch.test.without_parentheses() {
-                return if test.value { replacement_statement_reaches(discovery, &branch.consequent, at) }
-                    else { branch.alternate.as_ref().map_or((true, false), |s| replacement_statement_reaches(discovery, s, at)) };
+                return if test.value {
+                    replacement_statement_reaches(discovery, &branch.consequent, at)
+                } else {
+                    branch.alternate.as_ref().map_or((true, false), |s| {
+                        replacement_statement_reaches(discovery, s, at)
+                    })
+                };
             }
             let yes = replacement_statement_reaches(discovery, &branch.consequent, at);
-            let no = branch.alternate.as_ref().map_or((true, false), |s| replacement_statement_reaches(discovery, s, at));
+            let no = branch.alternate.as_ref().map_or((true, false), |s| {
+                replacement_statement_reaches(discovery, s, at)
+            });
             (yes.0 || no.0, yes.1 || no.1)
         }
         Statement::TryStatement(attempt) if attempt.finalizer.is_none() => {
             let normal = replacement_reaches(discovery, &attempt.block.body, at);
-            let caught = if attempt.block.body.iter().any(|s| discovery.statement_may_throw(s)) {
-                attempt.handler.as_ref().map_or((false, false), |h| replacement_reaches(discovery, &h.body.body, at))
-            } else { (false, false) };
+            let caught = if attempt
+                .block
+                .body
+                .iter()
+                .any(|s| discovery.statement_may_throw(s))
+            {
+                attempt.handler.as_ref().map_or((false, false), |h| {
+                    replacement_reaches(discovery, &h.body.body, at)
+                })
+            } else {
+                (false, false)
+            };
             (normal.0 || caught.0, normal.1 || caught.1)
         }
-        Statement::ReturnStatement(_) | Statement::ThrowStatement(_)
-            | Statement::BreakStatement(_) | Statement::ContinueStatement(_) => {
+        Statement::ReturnStatement(_)
+        | Statement::ThrowStatement(_)
+        | Statement::BreakStatement(_)
+        | Statement::ContinueStatement(_) => {
             let span = statement.span();
             (false, span.start <= at.start && at.end <= span.end)
         }
-        Statement::ForStatement(_) | Statement::ForInStatement(_) | Statement::ForOfStatement(_)
-            | Statement::WhileStatement(_) | Statement::DoWhileStatement(_) =>
-                (discovery.opaque_loop_completes(statement), false),
+        Statement::ForStatement(_)
+        | Statement::ForInStatement(_)
+        | Statement::ForOfStatement(_)
+        | Statement::WhileStatement(_)
+        | Statement::DoWhileStatement(_) => (discovery.opaque_loop_completes(statement), false),
         _ => (true, replacement_activation_supported(statement, at)),
     }
 }
 
 fn replacement_control_supported(statement: &Statement<'_>, at: Span) -> bool {
-    if statement.span().start > at.start { return true; }
+    if statement.span().start > at.start {
+        return true;
+    }
     match statement {
         Statement::BlockStatement(b) => b.body.iter().all(|s| replacement_control_supported(s, at)),
-        Statement::IfStatement(b) => replacement_control_supported(&b.consequent, at)
-            && b.alternate.as_ref().is_none_or(|s| replacement_control_supported(s, at)),
-        Statement::TryStatement(t) if t.finalizer.is_none() =>
-            t.block.body.iter().all(|s| replacement_control_supported(s, at))
-                && t.handler.as_ref().is_none_or(|h| h.body.body.iter().all(|s| replacement_control_supported(s, at))),
-        Statement::ExpressionStatement(_) | Statement::VariableDeclaration(_) | Statement::ReturnStatement(_)
-        | Statement::ThrowStatement(_) | Statement::FunctionDeclaration(_) | Statement::ClassDeclaration(_)
+        Statement::IfStatement(b) => {
+            replacement_control_supported(&b.consequent, at)
+                && b.alternate
+                    .as_ref()
+                    .is_none_or(|s| replacement_control_supported(s, at))
+        }
+        Statement::TryStatement(t) if t.finalizer.is_none() => {
+            t.block
+                .body
+                .iter()
+                .all(|s| replacement_control_supported(s, at))
+                && t.handler.as_ref().is_none_or(|h| {
+                    h.body
+                        .body
+                        .iter()
+                        .all(|s| replacement_control_supported(s, at))
+                })
+        }
+        Statement::ExpressionStatement(_)
+        | Statement::VariableDeclaration(_)
+        | Statement::ReturnStatement(_)
+        | Statement::ThrowStatement(_)
+        | Statement::FunctionDeclaration(_)
+        | Statement::ClassDeclaration(_)
         | Statement::EmptyStatement(_)
-        | Statement::DebuggerStatement(_) | Statement::ForStatement(_) | Statement::ForInStatement(_)
-        | Statement::ForOfStatement(_) | Statement::WhileStatement(_) | Statement::DoWhileStatement(_) => true,
+        | Statement::DebuggerStatement(_)
+        | Statement::ForStatement(_)
+        | Statement::ForInStatement(_)
+        | Statement::ForOfStatement(_)
+        | Statement::WhileStatement(_)
+        | Statement::DoWhileStatement(_) => true,
         _ => false,
     }
 }

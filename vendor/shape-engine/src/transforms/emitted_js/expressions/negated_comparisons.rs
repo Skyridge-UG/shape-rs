@@ -27,7 +27,9 @@ use oxc_ast::AstKind;
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::GetSpan;
-use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator};
+use oxc_syntax::operator::{
+    AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator, UpdateOperator,
+};
 
 use crate::analysis;
 
@@ -35,7 +37,12 @@ pub(crate) fn flip_negated_comparisons(source: &str) -> Result<(String, usize), 
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new() };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+    };
     scan.visit_program(&program);
     if scan.edits.is_empty() {
         return Ok((source.into(), 0));
@@ -67,9 +74,18 @@ impl<'a> Visit<'a> for Scan<'_, 'a> {
                     if nots <= 1 {
                         let held = matches!(
                             parent,
-                            Some(AstKind::BinaryExpression(_) | AstKind::LogicalExpression(_) | AstKind::UnaryExpression(_) | AstKind::StaticMemberExpression(_) | AstKind::ComputedMemberExpression(_))
+                            Some(
+                                AstKind::BinaryExpression(_)
+                                    | AstKind::LogicalExpression(_)
+                                    | AstKind::UnaryExpression(_)
+                                    | AstKind::StaticMemberExpression(_)
+                                    | AstKind::ComputedMemberExpression(_)
+                            )
                         );
-                        self.edits.push(analysis::Edit::replace(unary.span, if held { format!("({text})") } else { text }));
+                        self.edits.push(analysis::Edit::replace(
+                            unary.span,
+                            if held { format!("({text})") } else { text },
+                        ));
                         return;
                     }
                 }
@@ -78,11 +94,17 @@ impl<'a> Visit<'a> for Scan<'_, 'a> {
                 if let Some(operator) = self.flipped(binary) {
                     let text = format!(
                         "{} {} {}",
-                        &self.source[binary.left.span().start as usize..binary.left.span().end as usize],
+                        &self.source
+                            [binary.left.span().start as usize..binary.left.span().end as usize],
                         operator.as_str(),
-                        &self.source[binary.right.span().start as usize..binary.right.span().end as usize]
+                        &self.source
+                            [binary.right.span().start as usize..binary.right.span().end as usize]
                     );
-                    let text = if self.held_by_operator(unary.span) { format!("({text})") } else { text };
+                    let text = if self.held_by_operator(unary.span) {
+                        format!("({text})")
+                    } else {
+                        text
+                    };
                     self.edits.push(analysis::Edit::replace(unary.span, text));
                     // The operands are copied as written: nothing inside
                     // them is rewritten too.
@@ -117,7 +139,9 @@ impl Scan<'_, '_> {
     }
 
     fn parent_of(&self, span: oxc_span::Span) -> Option<AstKind<'_>> {
-        let node = self.nodes.iter().find(|node| matches!(node.kind(), AstKind::UnaryExpression(unary) if unary.span == span))?;
+        let node = self.nodes.iter().find(
+            |node| matches!(node.kind(), AstKind::UnaryExpression(unary) if unary.span == span),
+        )?;
         Some(self.nodes.parent_kind(node.id()))
     }
 
@@ -130,7 +154,15 @@ impl Scan<'_, '_> {
         match expression.without_parentheses() {
             Expression::BinaryExpression(binary) => {
                 let operator = self.flipped(binary)?;
-                Some((format!("{} {} {}", self.text(binary.left.span()), operator.as_str(), self.text(binary.right.span())), 0))
+                Some((
+                    format!(
+                        "{} {} {}",
+                        self.text(binary.left.span()),
+                        operator.as_str(),
+                        self.text(binary.right.span())
+                    ),
+                    0,
+                ))
             }
             Expression::LogicalExpression(logical) => {
                 let operator = match logical.operator {
@@ -149,7 +181,8 @@ impl Scan<'_, '_> {
                 Some((format!("{left} {operator} {right}"), left_nots + right_nots))
             }
             Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
-                (test || boolean(&unary.argument)).then(|| (self.text(unary.argument.span()).to_string(), 0))
+                (test || boolean(&unary.argument))
+                    .then(|| (self.text(unary.argument.span()).to_string(), 0))
             }
             leaf @ (Expression::Identifier(_)
             | Expression::StaticMemberExpression(_)
@@ -163,12 +196,17 @@ impl Scan<'_, '_> {
     /// The `!` sits directly in an operator (unary, binary, `in`, …), not in
     /// a test, an argument, a statement or a logical operand.
     fn held_by_operator(&self, span: oxc_span::Span) -> bool {
-        let Some(node) = self.nodes.iter().find(|node| matches!(node.kind(), AstKind::UnaryExpression(unary) if unary.span == span)) else {
+        let Some(node) = self.nodes.iter().find(
+            |node| matches!(node.kind(), AstKind::UnaryExpression(unary) if unary.span == span),
+        ) else {
             return true;
         };
         matches!(
             self.nodes.parent_kind(node.id()),
-            AstKind::BinaryExpression(_) | AstKind::UnaryExpression(_) | AstKind::StaticMemberExpression(_) | AstKind::ComputedMemberExpression(_)
+            AstKind::BinaryExpression(_)
+                | AstKind::UnaryExpression(_)
+                | AstKind::StaticMemberExpression(_)
+                | AstKind::ComputedMemberExpression(_)
         )
     }
 
@@ -177,7 +215,9 @@ impl Scan<'_, '_> {
             Expression::NumericLiteral(_) => true,
             Expression::UnaryExpression(unary) => match unary.operator {
                 UnaryOperator::BitwiseNot => true,
-                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus => self.never_nan(&unary.argument),
+                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus => {
+                    self.never_nan(&unary.argument)
+                }
                 _ => false,
             },
             Expression::BinaryExpression(binary) => matches!(
@@ -189,9 +229,12 @@ impl Scan<'_, '_> {
                     | BinaryOperator::ShiftRight
                     | BinaryOperator::ShiftRightZeroFill
             ),
-            Expression::StaticMemberExpression(member) => !member.optional && member.property.name == "length",
+            Expression::StaticMemberExpression(member) => {
+                !member.optional && member.property.name == "length"
+            }
             Expression::ComputedMemberExpression(member) => {
-                !member.optional && matches!(&member.expression, Expression::StringLiteral(key) if key.value == "length")
+                !member.optional
+                    && matches!(&member.expression, Expression::StringLiteral(key) if key.value == "length")
             }
             Expression::Identifier(name) => self
                 .scoping
@@ -205,34 +248,49 @@ impl Scan<'_, '_> {
     /// A `let`/`const` that starts never NaN and is only stepped or set to
     /// a value that is never NaN.
     fn counter(&self, symbol: SymbolId) -> bool {
-        let AstKind::VariableDeclarator(declarator) = self.nodes.kind(self.scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            self.nodes.kind(self.scoping.symbol_declaration(symbol))
+        else {
             return false;
         };
-        if declarator.kind == VariableDeclarationKind::Var || !declarator.init.as_ref().is_some_and(|init| self.constant(init)) {
+        if declarator.kind == VariableDeclarationKind::Var
+            || !declarator
+                .init
+                .as_ref()
+                .is_some_and(|init| self.constant(init))
+        {
             return false;
         }
-        self.scoping.get_resolved_references(symbol).all(|reference| {
-            if !reference.is_write() {
-                return true;
-            }
-            match self.nodes.parent_kind(reference.node_id()) {
-                AstKind::UpdateExpression(update) => matches!(update.operator, UpdateOperator::Increment | UpdateOperator::Decrement),
-                AstKind::AssignmentExpression(assignment) => match assignment.operator {
-                    AssignmentOperator::Assign => self.constant(&assignment.right),
-                    AssignmentOperator::Addition | AssignmentOperator::Subtraction => {
-                        matches!(assignment.right.without_parentheses(), Expression::NumericLiteral(_))
-                    }
-                    AssignmentOperator::BitwiseOR
-                    | AssignmentOperator::BitwiseAnd
-                    | AssignmentOperator::BitwiseXOR
-                    | AssignmentOperator::ShiftLeft
-                    | AssignmentOperator::ShiftRight
-                    | AssignmentOperator::ShiftRightZeroFill => true,
+        self.scoping
+            .get_resolved_references(symbol)
+            .all(|reference| {
+                if !reference.is_write() {
+                    return true;
+                }
+                match self.nodes.parent_kind(reference.node_id()) {
+                    AstKind::UpdateExpression(update) => matches!(
+                        update.operator,
+                        UpdateOperator::Increment | UpdateOperator::Decrement
+                    ),
+                    AstKind::AssignmentExpression(assignment) => match assignment.operator {
+                        AssignmentOperator::Assign => self.constant(&assignment.right),
+                        AssignmentOperator::Addition | AssignmentOperator::Subtraction => {
+                            matches!(
+                                assignment.right.without_parentheses(),
+                                Expression::NumericLiteral(_)
+                            )
+                        }
+                        AssignmentOperator::BitwiseOR
+                        | AssignmentOperator::BitwiseAnd
+                        | AssignmentOperator::BitwiseXOR
+                        | AssignmentOperator::ShiftLeft
+                        | AssignmentOperator::ShiftRight
+                        | AssignmentOperator::ShiftRightZeroFill => true,
+                        _ => false,
+                    },
                     _ => false,
-                },
-                _ => false,
-            }
-        })
+                }
+            })
     }
 
     /// Never NaN without reading any binding: a literal or a bitwise result.
@@ -241,7 +299,9 @@ impl Scan<'_, '_> {
             Expression::NumericLiteral(_) => true,
             Expression::UnaryExpression(unary) => match unary.operator {
                 UnaryOperator::BitwiseNot => true,
-                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus => self.constant(&unary.argument),
+                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus => {
+                    self.constant(&unary.argument)
+                }
                 _ => false,
             },
             expression @ Expression::BinaryExpression(_) => self.never_nan(expression),
@@ -267,7 +327,11 @@ fn boolean(expression: &Expression<'_>) -> bool {
                 | BinaryOperator::Instanceof
         ),
         Expression::UnaryExpression(unary) => unary.operator == UnaryOperator::LogicalNot,
-        Expression::LogicalExpression(logical) => logical.operator != LogicalOperator::Coalesce && boolean(&logical.left) && boolean(&logical.right),
+        Expression::LogicalExpression(logical) => {
+            logical.operator != LogicalOperator::Coalesce
+                && boolean(&logical.left)
+                && boolean(&logical.right)
+        }
         _ => false,
     }
 }
@@ -282,7 +346,10 @@ mod tests {
 
     #[test]
     fn flips_equality_always() {
-        assert_eq!(flip("if (!(a === b)) f();\nif (!(a != b)) f();\n"), "if (a !== b) f();\nif (a == b) f();\n");
+        assert_eq!(
+            flip("if (!(a === b)) f();\nif (!(a != b)) f();\n"),
+            "if (a !== b) f();\nif (a == b) f();\n"
+        );
     }
 
     #[test]
@@ -320,6 +387,9 @@ mod tests {
 
     #[test]
     fn parenthesizes_inside_an_operator() {
-        assert_eq!(flip("let c = 0;\ny = c < !(1 < 2);\nz = !(a === b) && q;\n"), "let c = 0;\ny = c < (1 >= 2);\nz = a !== b && q;\n");
+        assert_eq!(
+            flip("let c = 0;\ny = c < !(1 < 2);\nz = !(a === b) && q;\n"),
+            "let c = 0;\ny = c < (1 >= 2);\nz = a !== b && q;\n"
+        );
     }
 }

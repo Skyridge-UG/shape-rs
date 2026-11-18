@@ -1,18 +1,21 @@
 //! `ParseIntHexConstant`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::extract::contracts::SourceClass;
 use crate::signals::analysis::leaf_checks::*;
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `ParseIntHexConstant`. Card: [`CARD`].
 pub(crate) fn recognize_parse_int_hex_constant(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let leaf = single_number(view)?;
-    (leaf.transforms == ["parseInt"] && leaf.classes == [SourceClass::Literal] && leaf.apis.is_empty())
-        .then(|| claim(&["parseInt of literals only"]))
-        .flatten()
+    (leaf.transforms == ["parseInt"]
+        && leaf.classes == [SourceClass::Literal]
+        && leaf.apis.is_empty())
+    .then(|| claim(&["parseInt of literals only"]))
+    .flatten()
 }
 
 pub(crate) fn bind_parse_int_hex_constant(

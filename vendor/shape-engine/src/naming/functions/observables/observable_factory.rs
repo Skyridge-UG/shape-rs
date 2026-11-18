@@ -3463,10 +3463,21 @@ fn closed_class_definition(class: &Class<'_>) -> Option<()> {
         return None;
     }
     for element in &class.body.body {
-        let ClassElement::MethodDefinition(method) = element else { return None; };
-        if method.computed || !method.decorators.is_empty()
-            || !matches!(method.kind, MethodDefinitionKind::Constructor | MethodDefinitionKind::Method)
-            || method.value.params.items.iter().any(|p| p.initializer.is_some() || !p.decorators.is_empty())
+        let ClassElement::MethodDefinition(method) = element else {
+            return None;
+        };
+        if method.computed
+            || !method.decorators.is_empty()
+            || !matches!(
+                method.kind,
+                MethodDefinitionKind::Constructor | MethodDefinitionKind::Method
+            )
+            || method
+                .value
+                .params
+                .items
+                .iter()
+                .any(|p| p.initializer.is_some() || !p.decorators.is_empty())
         {
             return None;
         }
@@ -3920,16 +3931,27 @@ pub(in crate::naming) fn proven_native_class(
 /// APIs, consumes each direct declaration's sole exact installation on this
 /// owned class alias. No arbitrary nested/sibling declaration contributes.
 pub(in crate::naming) fn proven_deferred_api_bodies(
-    model: &Model<'_, '_>, site: FunctionSite,
+    model: &Model<'_, '_>,
+    site: FunctionSite,
 ) -> Option<Vec<Span>> {
     let (class_span, class_symbol) = proven_native_class(model, site)?;
-    let AstKind::Function(factory) = model.nodes.kind(site.node_id) else { return None; };
-    let [Statement::ClassDeclaration(class), alias_statement, tail @ ..] = body_of(factory)?.statements.as_slice() else { return None; };
-    if class.span != class_span || class.id.as_ref()?.symbol_id.get()? != class_symbol { return None; }
+    let AstKind::Function(factory) = model.nodes.kind(site.node_id) else {
+        return None;
+    };
+    let [Statement::ClassDeclaration(class), alias_statement, tail @ ..] =
+        body_of(factory)?.statements.as_slice()
+    else {
+        return None;
+    };
+    if class.span != class_span || class.id.as_ref()?.symbol_id.get()? != class_symbol {
+        return None;
+    }
     closed_class_definition(class)?;
     let mut spans = Vec::new();
     for element in &class.body.body {
-        let ClassElement::MethodDefinition(method) = element else { return None; };
+        let ClassElement::MethodDefinition(method) = element else {
+            return None;
+        };
         spans.push(body_of(&method.value)?.span);
     }
     // Inline and source-class witnesses end with the alias return. Installed
@@ -3937,19 +3959,43 @@ pub(in crate::naming) fn proven_deferred_api_bodies(
     if tail.len() != 1 {
         let alias = local(model, one_variable(alias_statement)?)?;
         let mut remaining = tail;
-        for (key, prototype) in [("from", false), ("subscribe", true), ("pipe", true), ("map", true), ("unorderedFlatMap", true)] {
-            let [Statement::FunctionDeclaration(member), install, rest @ ..] = remaining else { return None; };
-            let Expression::AssignmentExpression(a) = expression_statement(install)?.without_parentheses() else { return None; };
-            let AssignmentTarget::StaticMemberExpression(target) = &a.left else { return None; };
-            let receiver = if prototype { receiver_of(&target.object, "prototype")? } else { &target.object };
-            if a.operator.as_str() != "=" || target.optional || target.property.name != key
+        for (key, prototype) in [
+            ("from", false),
+            ("subscribe", true),
+            ("pipe", true),
+            ("map", true),
+            ("unorderedFlatMap", true),
+        ] {
+            let [Statement::FunctionDeclaration(member), install, rest @ ..] = remaining else {
+                return None;
+            };
+            let Expression::AssignmentExpression(a) =
+                expression_statement(install)?.without_parentheses()
+            else {
+                return None;
+            };
+            let AssignmentTarget::StaticMemberExpression(target) = &a.left else {
+                return None;
+            };
+            let receiver = if prototype {
+                receiver_of(&target.object, "prototype")?
+            } else {
+                &target.object
+            };
+            if a.operator.as_str() != "="
+                || target.optional
+                || target.property.name != key
                 || identifier(model, receiver) != Some(alias)
                 || identifier(model, &a.right) != member.id.as_ref()?.symbol_id.get()
-            { return None; }
+            {
+                return None;
+            }
             spans.push(body_of(member)?.span);
             remaining = rest;
         }
-        if remaining.len() != 1 { return None; }
+        if remaining.len() != 1 {
+            return None;
+        }
     }
     Some(spans)
 }
@@ -4006,13 +4052,8 @@ fn ordinary_factory(
         return None;
     }
     let body = body_of(function)?;
-    let [Statement::FunctionDeclaration(from), Statement::FunctionDeclaration(constructor), alias_statement,
-        Statement::FunctionDeclaration(of), install_of,
-        Statement::FunctionDeclaration(empty), install_empty, install_from,
-        Statement::FunctionDeclaration(subscribe), install_subscribe,
-        Statement::FunctionDeclaration(pipe), install_pipe,
-        Statement::FunctionDeclaration(map), install_map,
-        Statement::FunctionDeclaration(flat_map), install_flat_map, finish] = body.statements.as_slice()
+    let [Statement::FunctionDeclaration(from), Statement::FunctionDeclaration(constructor), alias_statement, Statement::FunctionDeclaration(of), install_of, Statement::FunctionDeclaration(empty), install_empty, install_from, Statement::FunctionDeclaration(subscribe), install_subscribe, Statement::FunctionDeclaration(pipe), install_pipe, Statement::FunctionDeclaration(map), install_map, Statement::FunctionDeclaration(flat_map), install_flat_map, finish] =
+        body.statements.as_slice()
     else {
         return None;
     };
@@ -4045,7 +4086,9 @@ fn ordinary_factory(
     operator_method(model, site, map)?;
     operator_method(model, site, flat_map)?;
     let operator_capture = |member: &Function<'_>| {
-        let [finish] = body_of(member)?.statements.as_slice() else { return None; };
+        let [finish] = body_of(member)?.statements.as_slice() else {
+            return None;
+        };
         let pipe = method_call(return_value(finish)?, "pipe")?;
         let call = plain_call(exact_arguments(pipe, 1)?[0])?;
         captured_callable(model, site, &call.callee)
@@ -4056,55 +4099,132 @@ fn ordinary_factory(
 
     let mut names = Vec::new();
     for (member, install, receiver, key, prototype, name) in [
-        (&**of, install_of, constructor_symbol, "of", false, "createSubscriberStreamOf"),
-        (&**empty, install_empty, alias, "empty", false, "createEmptySubscriberStream"),
-        (&**from, install_from, alias, "from", false, "convertToSubscriberStream"),
-        (&**subscribe, install_subscribe, alias, "subscribe", true, "subscribeToSubscriberStream"),
-        (&**pipe, install_pipe, alias, "pipe", true, "pipeSubscriberStream"),
-        (&**map, install_map, alias, "map", true, "pipeSubscriberStreamMapSlot"),
-        (&**flat_map, install_flat_map, alias, "unorderedFlatMap", true, "pipeSubscriberStreamFlatMapSlot"),
+        (
+            &**of,
+            install_of,
+            constructor_symbol,
+            "of",
+            false,
+            "createSubscriberStreamOf",
+        ),
+        (
+            &**empty,
+            install_empty,
+            alias,
+            "empty",
+            false,
+            "createEmptySubscriberStream",
+        ),
+        (
+            &**from,
+            install_from,
+            alias,
+            "from",
+            false,
+            "convertToSubscriberStream",
+        ),
+        (
+            &**subscribe,
+            install_subscribe,
+            alias,
+            "subscribe",
+            true,
+            "subscribeToSubscriberStream",
+        ),
+        (
+            &**pipe,
+            install_pipe,
+            alias,
+            "pipe",
+            true,
+            "pipeSubscriberStream",
+        ),
+        (
+            &**map,
+            install_map,
+            alias,
+            "map",
+            true,
+            "pipeSubscriberStreamMapSlot",
+        ),
+        (
+            &**flat_map,
+            install_flat_map,
+            alias,
+            "unorderedFlatMap",
+            true,
+            "pipeSubscriberStreamFlatMapSlot",
+        ),
     ] {
         let member_symbol = member.id.as_ref()?.symbol_id.get()?;
         if !immutable(model, member_symbol) {
             return None;
         }
-        let Expression::AssignmentExpression(assignment) = expression_statement(install)?.without_parentheses() else {
+        let Expression::AssignmentExpression(assignment) =
+            expression_statement(install)?.without_parentheses()
+        else {
             return None;
         };
         let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else {
             return None;
         };
-        let object = if prototype { receiver_of(&target.object, "prototype")? } else { &target.object };
-        if assignment.operator.as_str() != "=" || target.optional
-            || target.property.name != key || identifier(model, object) != Some(receiver)
+        let object = if prototype {
+            receiver_of(&target.object, "prototype")?
+        } else {
+            &target.object
+        };
+        if assignment.operator.as_str() != "="
+            || target.optional
+            || target.property.name != key
+            || identifier(model, object) != Some(receiver)
             || identifier(model, &assignment.right) != Some(member_symbol)
         {
             return None;
         }
-        let references: Vec<_> = model.scoping.get_resolved_references(member_symbol).collect();
-        if references.len() != 1 || model.nodes.kind(references[0].node_id()).span() != assignment.right.span() {
+        let references: Vec<_> = model
+            .scoping
+            .get_resolved_references(member_symbol)
+            .collect();
+        if references.len() != 1
+            || model.nodes.kind(references[0].node_id()).span() != assignment.right.span()
+        {
             return None;
         }
         names.push((member.span, name));
     }
     // The constructor itself has only its alias initializer and static `of`
     // installation as reads. No call or extra publication can precede setup.
-    let constructor_reads: Vec<_> = model.scoping.get_resolved_references(constructor_symbol).collect();
-    if constructor_reads.len() != 2 || constructor_reads.iter().any(|reference| {
-        let span = model.nodes.kind(reference.node_id()).span();
-        span != alias_variable.init.as_ref().unwrap().span() && !install_of.span().contains_inclusive(span)
-    }) {
+    let constructor_reads: Vec<_> = model
+        .scoping
+        .get_resolved_references(constructor_symbol)
+        .collect();
+    if constructor_reads.len() != 2
+        || constructor_reads.iter().any(|reference| {
+            let span = model.nodes.kind(reference.node_id()).span();
+            span != alias_variable.init.as_ref().unwrap().span()
+                && !install_of.span().contains_inclusive(span)
+        })
+    {
         return None;
     }
     let factory_symbol = function.id.as_ref()?.symbol_id.get()?;
     if !immutable(model, factory_symbol) {
         return None;
     }
-    let uses: Vec<_> = model.scoping.get_resolved_references(factory_symbol).map(|r| r.node_id()).collect();
+    let uses: Vec<_> = model
+        .scoping
+        .get_resolved_references(factory_symbol)
+        .map(|r| r.node_id())
+        .collect();
     if uses.is_empty() {
         return None;
     }
-    let mut origins = CapturedOrigins { model, site, uses, valid: true };
+    let mut origins = CapturedOrigins {
+        model,
+        site,
+        uses,
+        valid: true,
+    };
     origins.visit_function_body(body);
     let mut callbacks = SynchronousCallbacks(true);
     callbacks.visit_function_body(body);
@@ -4117,19 +4237,30 @@ fn ordinary_factory(
 
 /// Complete ordinary strict constructor API, deliberately separate from native class identity.
 pub(in crate::naming) fn proven_ordinary_constructor(
-    model: &Model<'_, '_>, site: FunctionSite,
+    model: &Model<'_, '_>,
+    site: FunctionSite,
 ) -> Option<()> {
-    let AstKind::Function(function) = model.nodes.kind(site.node_id) else { return None; };
+    let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+        return None;
+    };
     ordinary_factory(model, site, function).map(|_| ())
 }
 
-fn ordinary_name(model: &Model<'_, '_>, site: FunctionSite, function: &Function<'_>) -> Option<&'static str> {
+fn ordinary_name(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    function: &Function<'_>,
+) -> Option<&'static str> {
     if ordinary_factory(model, site, function).is_some() {
         return Some("createSubscriberStreamConstructor");
     }
     let parent = model.enclosing_function(site.node_id)?;
-    let AstKind::Function(factory) = model.nodes.kind(parent.node_id) else { return None; };
-    ordinary_factory(model, parent, factory)?.into_iter().find_map(|(span, name)| (span == site.span).then_some(name))
+    let AstKind::Function(factory) = model.nodes.kind(parent.node_id) else {
+        return None;
+    };
+    ordinary_factory(model, parent, factory)?
+        .into_iter()
+        .find_map(|(span, name)| (span == site.span).then_some(name))
 }
 
 pub(in crate::naming) fn evaluate(

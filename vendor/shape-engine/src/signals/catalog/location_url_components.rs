@@ -1,10 +1,12 @@
 //! `LocationUrlComponents`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView, ValueSlice};
-use crate::signals::analysis::{leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout,
+    SlotView, ValueSlice,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `LocationUrlComponents` evidence: location protocol/hostname strings.
 pub(crate) fn is_location_url(leaves: &[&LeafView]) -> bool {
@@ -17,10 +19,14 @@ pub(crate) fn is_location_url(leaves: &[&LeafView]) -> bool {
     };
     // One component's provenance can be lost through a shared register; the
     // protocol plus two of the other components suffice.
-    let others = ["location.hostname", "location.port", "location.href.substring()"]
-        .iter()
-        .filter(|api| string_reads(api))
-        .count();
+    let others = [
+        "location.hostname",
+        "location.port",
+        "location.href.substring()",
+    ]
+    .iter()
+    .filter(|api| string_reads(api))
+    .count();
     string_reads("location.protocol") && others >= 2 && !any_api(leaves, "document.referrer")
 }
 
@@ -63,7 +69,12 @@ pub(crate) fn bind_location_url_components(
         layout,
         ctx,
         2,
-        &[("hostname", &hostname), ("href", &href), ("protocol", &protocol), ("port", &port)],
+        &[
+            ("hostname", &hostname),
+            ("href", &href),
+            ("protocol", &protocol),
+            ("port", &port),
+        ],
     )
 }
 

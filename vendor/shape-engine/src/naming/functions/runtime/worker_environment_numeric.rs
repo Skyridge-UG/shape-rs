@@ -627,48 +627,86 @@ fn whole(
     ports: BTreeMap<SymbolId, Port>,
     arity: usize,
 ) -> Option<(Tree, BTreeMap<Port, SymbolId>)> {
-    if f.r#type != FunctionType::FunctionDeclaration || f.r#async || f.generator
-        || f.params.rest.is_some() || f.params.items.len() != arity
-        || f.type_parameters.is_some() || f.return_type.is_some()
-    { return None; }
+    if f.r#type != FunctionType::FunctionDeclaration
+        || f.r#async
+        || f.generator
+        || f.params.rest.is_some()
+        || f.params.items.len() != arity
+        || f.type_parameters.is_some()
+        || f.return_type.is_some()
+    {
+        return None;
+    }
     let body = f.body.as_ref()?;
-    if !body.directives.is_empty() { return None; }
+    if !body.directives.is_empty() {
+        return None;
+    }
     let mut proof = Body {
-        scoping, locals: BTreeMap::new(), ports, seen: BTreeMap::new(),
-        self_binding: f.id.as_ref()?.symbol_id.get()?, depth: 0, budget: 20048,
+        scoping,
+        locals: BTreeMap::new(),
+        ports,
+        seen: BTreeMap::new(),
+        self_binding: f.id.as_ref()?.symbol_id.get()?,
+        depth: 0,
+        budget: 20048,
     };
     for p in &f.params.items {
-        if p.initializer.is_some() || !p.decorators.is_empty() { return None; }
+        if p.initializer.is_some() || !p.decorators.is_empty() {
+            return None;
+        }
         proof.bind(&p.pattern)?;
     }
     Some((proof.statements(&body.statements)?, proof.seen))
 }
 fn complete_references() -> &'static Vec<Tree> {
     static REFS: OnceLock<Vec<Tree>> = OnceLock::new();
-    REFS.get_or_init(|| variants::FORMS.iter().map(|body| {
-        let src = format!("function ports(){{let floatScratch,byteConstructor,nanData;{body}}}");
-        let allocator = Allocator::default();
-        let parsed = Parser::new(&allocator, &src, SourceType::default()).parse();
-        assert!(!parsed.panicked && parsed.errors.is_empty());
-        let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
-        let Statement::FunctionDeclaration(scope) = &parsed.program.body[0] else { unreachable!() };
-        let statements = &scope.body.as_ref().unwrap().statements;
-        let Statement::VariableDeclaration(ports) = &statements[0] else { unreachable!() };
-        let ports = ports.declarations.iter()
-            .zip([Port::FloatScratch, Port::ByteConstructor, Port::NanData])
-            .map(|(d, p)| {
-                let BindingPattern::BindingIdentifier(id) = &d.id else { unreachable!() };
-                (id.symbol_id.get().unwrap(), p)
-            }).collect();
-        let Statement::FunctionDeclaration(f) = &statements[1] else { unreachable!() };
-        whole(semantic.scoping(), f, ports, 4).expect("complete numeric grammar").0
-    }).collect())
+    REFS.get_or_init(|| {
+        variants::FORMS
+            .iter()
+            .map(|body| {
+                let src =
+                    format!("function ports(){{let floatScratch,byteConstructor,nanData;{body}}}");
+                let allocator = Allocator::default();
+                let parsed = Parser::new(&allocator, &src, SourceType::default()).parse();
+                assert!(!parsed.panicked && parsed.errors.is_empty());
+                let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+                let Statement::FunctionDeclaration(scope) = &parsed.program.body[0] else {
+                    unreachable!()
+                };
+                let statements = &scope.body.as_ref().unwrap().statements;
+                let Statement::VariableDeclaration(ports) = &statements[0] else {
+                    unreachable!()
+                };
+                let ports = ports
+                    .declarations
+                    .iter()
+                    .zip([Port::FloatScratch, Port::ByteConstructor, Port::NanData])
+                    .map(|(d, p)| {
+                        let BindingPattern::BindingIdentifier(id) = &d.id else {
+                            unreachable!()
+                        };
+                        (id.symbol_id.get().unwrap(), p)
+                    })
+                    .collect();
+                let Statement::FunctionDeclaration(f) = &statements[1] else {
+                    unreachable!()
+                };
+                whole(semantic.scoping(), f, ports, 4)
+                    .expect("complete numeric grammar")
+                    .0
+            })
+            .collect()
+    })
 }
 fn complete_proof(
-    model: &Model<'_, '_>, f: &Function<'_>, ports: BTreeMap<SymbolId, Port>,
+    model: &Model<'_, '_>,
+    f: &Function<'_>,
+    ports: BTreeMap<SymbolId, Port>,
 ) -> Option<NumericPorts> {
     let (tree, seen) = whole(model.scoping, f, ports, 4)?;
-    if !complete_references().contains(&tree) { return None; }
+    if !complete_references().contains(&tree) {
+        return None;
+    }
     Some(NumericPorts {
         scratch: *seen.get(&Port::FloatScratch)?,
         byte_constructor: *seen.get(&Port::ByteConstructor)?,
@@ -676,7 +714,6 @@ fn complete_proof(
     })
 }
 pub(super) struct NumericPorts {
-
     pub(super) scratch: SymbolId,
     pub(super) byte_constructor: SymbolId,
     pub(super) nan_data: SymbolId,
@@ -716,37 +753,73 @@ pub(super) fn prove(
 }
 
 pub(super) fn prove_writer(
-    model: &Model<'_, '_>, factory: FunctionSite, setup: &WrapperSetup,
-    number: FunctionSite, proposals: &BTreeMap<u32, Vec<Proposal>>,
+    model: &Model<'_, '_>,
+    factory: FunctionSite,
+    setup: &WrapperSetup,
+    number: FunctionSite,
+    proposals: &BTreeMap<u32, Vec<Proposal>>,
 ) -> Option<()> {
-    let AstKind::Function(f) = model.nodes.kind(factory.node_id) else { return None; };
+    let AstKind::Function(f) = model.nodes.kind(factory.node_id) else {
+        return None;
+    };
     let children = direct_children(model, factory);
-    let [writer] = children.as_slice() else { return None; };
-    if role_at(proposals, writer.span.start) != Some("writeInternedString") { return None; }
-    let ports = setup.kinds.iter().filter_map(|(&b, kind)| match kind {
-        SetupValue::CharacterCode => Some((b, Port::CharacterCode)),
-        SetupValue::Callable(start) if *start == number.span.start => Some((b, Port::NumberWriter)),
-        _ => None,
-    }).collect();
+    let [writer] = children.as_slice() else {
+        return None;
+    };
+    if role_at(proposals, writer.span.start) != Some("writeInternedString") {
+        return None;
+    }
+    let ports = setup
+        .kinds
+        .iter()
+        .filter_map(|(&b, kind)| match kind {
+            SetupValue::CharacterCode => Some((b, Port::CharacterCode)),
+            SetupValue::Callable(start) if *start == number.span.start => {
+                Some((b, Port::NumberWriter))
+            }
+            _ => None,
+        })
+        .collect();
     let (tree, seen) = whole(model.scoping, f, ports, 1)?;
-    if seen.len() != 2 { return None; }
+    if seen.len() != 2 {
+        return None;
+    }
     static REFS: OnceLock<Vec<Tree>> = OnceLock::new();
-    let refs = REFS.get_or_init(|| writer_variants::FORMS.iter().map(|body| {
-        let src = format!("function ports(){{let characterCode,numberWriter;{body}}}");
-        let allocator = Allocator::default();
-        let parsed = Parser::new(&allocator, &src, SourceType::default()).parse();
-        assert!(!parsed.panicked && parsed.errors.is_empty());
-        let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
-        let Statement::FunctionDeclaration(scope) = &parsed.program.body[0] else { unreachable!() };
-        let statements = &scope.body.as_ref().unwrap().statements;
-        let Statement::VariableDeclaration(ports) = &statements[0] else { unreachable!() };
-        let ports = ports.declarations.iter().zip([Port::CharacterCode, Port::NumberWriter])
-            .map(|(d, p)| {
-                let BindingPattern::BindingIdentifier(id) = &d.id else { unreachable!() };
-                (id.symbol_id.get().unwrap(), p)
-            }).collect();
-        let Statement::FunctionDeclaration(f) = &statements[1] else { unreachable!() };
-        whole(semantic.scoping(), f, ports, 1).expect("complete string writer grammar").0
-    }).collect());
+    let refs = REFS.get_or_init(|| {
+        writer_variants::FORMS
+            .iter()
+            .map(|body| {
+                let src = format!("function ports(){{let characterCode,numberWriter;{body}}}");
+                let allocator = Allocator::default();
+                let parsed = Parser::new(&allocator, &src, SourceType::default()).parse();
+                assert!(!parsed.panicked && parsed.errors.is_empty());
+                let semantic = SemanticBuilder::new().build(&parsed.program).semantic;
+                let Statement::FunctionDeclaration(scope) = &parsed.program.body[0] else {
+                    unreachable!()
+                };
+                let statements = &scope.body.as_ref().unwrap().statements;
+                let Statement::VariableDeclaration(ports) = &statements[0] else {
+                    unreachable!()
+                };
+                let ports = ports
+                    .declarations
+                    .iter()
+                    .zip([Port::CharacterCode, Port::NumberWriter])
+                    .map(|(d, p)| {
+                        let BindingPattern::BindingIdentifier(id) = &d.id else {
+                            unreachable!()
+                        };
+                        (id.symbol_id.get().unwrap(), p)
+                    })
+                    .collect();
+                let Statement::FunctionDeclaration(f) = &statements[1] else {
+                    unreachable!()
+                };
+                whole(semantic.scoping(), f, ports, 1)
+                    .expect("complete string writer grammar")
+                    .0
+            })
+            .collect()
+    });
     refs.contains(&tree).then_some(())
 }

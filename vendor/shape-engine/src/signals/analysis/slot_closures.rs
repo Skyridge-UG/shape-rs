@@ -132,7 +132,6 @@ const MAX_ROOT_REFERENCES: usize = 60;
 #[derive(Hash, PartialEq, Eq)]
 struct IndexKey;
 
-
 fn callee_name(callee: &Expression<'_>) -> Option<String> {
     match callee.without_parentheses() {
         Expression::Identifier(identifier) if !generated(&identifier.name) => {
@@ -192,11 +191,20 @@ fn build(ctx: &FinderCtx) -> Index {
         let function_span = match kind {
             AstKind::Function(function) => {
                 if let Some(symbol) = function.id.as_ref().and_then(|id| id.symbol_id.get()) {
-                    symbol_function.insert(symbol.index() as u32, (function.span.start, function.span.end));
+                    symbol_function.insert(
+                        symbol.index() as u32,
+                        (function.span.start, function.span.end),
+                    );
                 }
-                Some((function.span.start, function.span.end, function.is_expression()))
+                Some((
+                    function.span.start,
+                    function.span.end,
+                    function.is_expression(),
+                ))
             }
-            AstKind::ArrowFunctionExpression(arrow) => Some((arrow.span.start, arrow.span.end, true)),
+            AstKind::ArrowFunctionExpression(arrow) => {
+                Some((arrow.span.start, arrow.span.end, true))
+            }
             _ => None,
         };
         if let Some((start, end, _)) = function_span {
@@ -204,16 +212,22 @@ fn build(ctx: &FinderCtx) -> Index {
         }
         if let AstKind::VariableDeclarator(declarator) = kind {
             let symbol = match &declarator.id {
-                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => identifier.symbol_id.get(),
+                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => {
+                    identifier.symbol_id.get()
+                }
                 _ => None,
             };
             if let (Some(symbol), Some(init)) = (symbol, &declarator.init) {
                 match init.without_parentheses() {
                     Expression::FunctionExpression(function) => {
-                        symbol_function.insert(symbol.index() as u32, (function.span.start, function.span.end));
+                        symbol_function.insert(
+                            symbol.index() as u32,
+                            (function.span.start, function.span.end),
+                        );
                     }
                     Expression::ArrowFunctionExpression(arrow) => {
-                        symbol_function.insert(symbol.index() as u32, (arrow.span.start, arrow.span.end));
+                        symbol_function
+                            .insert(symbol.index() as u32, (arrow.span.start, arrow.span.end));
                     }
                     Expression::Identifier(identifier) => {
                         if let Some(target) = identifier
@@ -229,7 +243,9 @@ fn build(ctx: &FinderCtx) -> Index {
             }
         }
         if let AstKind::UpdateExpression(update) = kind {
-            if let oxc_ast::ast::SimpleAssignmentTarget::AssignmentTargetIdentifier(target) = &update.argument {
+            if let oxc_ast::ast::SimpleAssignmentTarget::AssignmentTargetIdentifier(target) =
+                &update.argument
+            {
                 if let Some(symbol) = target
                     .reference_id
                     .get()
@@ -248,10 +264,13 @@ fn build(ctx: &FinderCtx) -> Index {
                 let resolve = |reference: Option<oxc_syntax::reference::ReferenceId>| {
                     reference.and_then(|reference| scoping.get_reference(reference).symbol_id())
                 };
-                if let (Some(target), Some(value)) =
-                    (resolve(target.reference_id.get()), resolve(value.reference_id.get()))
-                {
-                    symbol_alias.entry(target.index() as u32).or_insert(value.index() as u32);
+                if let (Some(target), Some(value)) = (
+                    resolve(target.reference_id.get()),
+                    resolve(value.reference_id.get()),
+                ) {
+                    symbol_alias
+                        .entry(target.index() as u32)
+                        .or_insert(value.index() as u32);
                 }
             }
         }
@@ -260,21 +279,33 @@ fn build(ctx: &FinderCtx) -> Index {
         }
         let entry = || StmtFacts::default();
         if let Some((start, end, true)) = function_span {
-            facts.entry(own).or_insert_with(entry).nested.push((start, end));
+            facts
+                .entry(own)
+                .or_insert_with(entry)
+                .nested
+                .push((start, end));
         }
         if let AstKind::CallExpression(call) = kind {
             // `observer.next([[], buffer])`: an emission site.
             if let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() {
-                let payload = call.arguments.first().and_then(|argument| argument.as_expression());
+                let payload = call
+                    .arguments
+                    .first()
+                    .and_then(|argument| argument.as_expression());
                 if member.property.name == "next"
-                    && matches!(payload.map(|e| e.without_parentheses()), Some(Expression::ArrayExpression(_)))
+                    && matches!(
+                        payload.map(|e| e.without_parentheses()),
+                        Some(Expression::ArrayExpression(_))
+                    )
                 {
                     emissions.push(call.span.start);
                 }
             }
             let mut roots = Vec::new();
             for argument in &call.arguments {
-                let Some(mut expression) = argument.as_expression() else { continue };
+                let Some(mut expression) = argument.as_expression() else {
+                    continue;
+                };
                 let mut through_member = false;
                 loop {
                     match expression.without_parentheses() {
@@ -303,7 +334,10 @@ fn build(ctx: &FinderCtx) -> Index {
                 }
             }
             if !roots.is_empty() {
-                call_roots.entry(call.span.start).or_insert_with(Vec::new).extend(roots);
+                call_roots
+                    .entry(call.span.start)
+                    .or_insert_with(Vec::new)
+                    .extend(roots);
             }
             if let Expression::Identifier(identifier) = call.callee.without_parentheses() {
                 if let Some(symbol) = identifier
@@ -311,35 +345,47 @@ fn build(ctx: &FinderCtx) -> Index {
                     .get()
                     .and_then(|reference| scoping.get_reference(reference).symbol_id())
                 {
-                    facts.entry(own).or_insert_with(entry).callees.push(symbol.index() as u32);
+                    facts
+                        .entry(own)
+                        .or_insert_with(entry)
+                        .callees
+                        .push(symbol.index() as u32);
                 }
             }
         }
         match kind {
             AstKind::StaticMemberExpression(member) if !generated(&member.property.name) => {
-                facts.entry(own).or_insert_with(entry).members.push(member.property.name.to_string());
+                facts
+                    .entry(own)
+                    .or_insert_with(entry)
+                    .members
+                    .push(member.property.name.to_string());
             }
             AstKind::ComputedMemberExpression(member) => {
                 if let Expression::StringLiteral(literal) = &member.expression {
-                    facts.entry(own).or_insert_with(entry).members.push(literal.value.to_string());
+                    facts
+                        .entry(own)
+                        .or_insert_with(entry)
+                        .members
+                        .push(literal.value.to_string());
                 }
             }
             AstKind::CallExpression(call) => {
                 if let Some(method) = callee_name(&call.callee) {
-                    facts
-                        .entry(own)
-                        .or_insert_with(entry)
-                        .calls
-                        .push((method, string_args(&call.arguments), false));
+                    facts.entry(own).or_insert_with(entry).calls.push((
+                        method,
+                        string_args(&call.arguments),
+                        false,
+                    ));
                 }
             }
             AstKind::NewExpression(new) => {
                 if let Some(method) = callee_name(&new.callee) {
-                    facts
-                        .entry(own)
-                        .or_insert_with(entry)
-                        .calls
-                        .push((method, string_args(&new.arguments), true));
+                    facts.entry(own).or_insert_with(entry).calls.push((
+                        method,
+                        string_args(&new.arguments),
+                        true,
+                    ));
                 }
             }
             AstKind::IdentifierReference(identifier) => {
@@ -348,12 +394,20 @@ fn build(ctx: &FinderCtx) -> Index {
                     .get()
                     .and_then(|reference| scoping.get_reference(reference).symbol_id());
                 if let Some(symbol) = symbol {
-                    facts.entry(own).or_insert_with(entry).symbols.push(symbol.index() as u32);
+                    facts
+                        .entry(own)
+                        .or_insert_with(entry)
+                        .symbols
+                        .push(symbol.index() as u32);
                 }
             }
             AstKind::BindingIdentifier(identifier) => {
                 if let Some(symbol) = identifier.symbol_id.get() {
-                    facts.entry(own).or_insert_with(entry).symbols.push(symbol.index() as u32);
+                    facts
+                        .entry(own)
+                        .or_insert_with(entry)
+                        .symbols
+                        .push(symbol.index() as u32);
                 }
             }
             _ => {}
@@ -366,7 +420,10 @@ fn build(ctx: &FinderCtx) -> Index {
         own.symbols.sort_unstable();
         own.symbols.dedup();
         for symbol in &own.symbols {
-            symbol_statements.entry(*symbol).or_default().push(*statement);
+            symbol_statements
+                .entry(*symbol)
+                .or_default()
+                .push(*statement);
         }
     }
     let mut function_symbols: HashMap<(u32, u32), Vec<u32>> = HashMap::new();
@@ -446,7 +503,9 @@ fn closure(index: &Index, seeds: Vec<(u32, usize)>, stop: &BTreeSet<u32>, out: &
     }
     let mut followed = BTreeSet::new();
     while let Some((statement, depth)) = queue.pop_front() {
-        let Some(own) = index.facts.get(&statement) else { continue };
+        let Some(own) = index.facts.get(&statement) else {
+            continue;
+        };
         out.absorb(own, depth);
         if depth >= HOPS || stop.contains(&statement) {
             continue;
@@ -467,7 +526,9 @@ fn closure(index: &Index, seeds: Vec<(u32, usize)>, stop: &BTreeSet<u32>, out: &
             if !followed.insert(*symbol) || index.counters.contains(symbol) {
                 continue;
             }
-            let Some(statements) = index.symbol_statements.get(symbol) else { continue };
+            let Some(statements) = index.symbol_statements.get(symbol) else {
+                continue;
+            };
             if statements.len() > MAX_REFERENCES {
                 continue;
             }
@@ -502,12 +563,16 @@ pub(crate) fn facts(view: &SlotView, ctx: &FinderCtx) -> Rc<Local> {
     let mut out = Local::default();
     // Own functions.
     let spans = view.spans();
-    let functions: Vec<(u32, u32, u32)> = index.functions.iter().map(|(s, e)| (*s, *e, 0)).collect();
+    let functions: Vec<(u32, u32, u32)> =
+        index.functions.iter().map(|(s, e)| (*s, *e, 0)).collect();
     let mut own_functions = BTreeSet::new();
     for anchor in &anchors {
-        let Some((start, end, _)) = innermost(&functions, *anchor) else { continue };
+        let Some((start, end, _)) = innermost(&functions, *anchor) else {
+            continue;
+        };
         let registered = spans.iter().any(|span| {
-            let nested = (span.start <= start && end <= span.end) || (start <= span.start && span.end <= end);
+            let nested = (span.start <= start && end <= span.end)
+                || (start <= span.start && span.end <= end);
             let (short, long) = {
                 let a = end - start;
                 let b = span.end - span.start;
@@ -524,7 +589,9 @@ pub(crate) fn facts(view: &SlotView, ctx: &FinderCtx) -> Rc<Local> {
     // hand an own function on by name (`{ next: f }`, `.then(f)`).
     let mut seeds: Vec<(u32, usize)> = anchors
         .iter()
-        .filter_map(|anchor| innermost(&index.statements, *anchor).map(|(_, _, statement)| (statement, 0)))
+        .filter_map(|anchor| {
+            innermost(&index.statements, *anchor).map(|(_, _, statement)| (statement, 0))
+        })
         .collect();
     for span in &own_functions {
         for symbol in index.function_symbols.get(span).into_iter().flatten() {
@@ -543,7 +610,12 @@ pub(crate) fn facts(view: &SlotView, ctx: &FinderCtx) -> Rc<Local> {
         if index.function_symbols.contains_key(&(start, end)) {
             if let Some((block_start, block_end, _)) = innermost(&index.statements, start) {
                 if block_end - block_start <= MAX_CALLBACK_BYTES {
-                    index.absorb_function(&mut out.anchor, block_start, block_end, OWN_FUNCTION_DEPTH + 1);
+                    index.absorb_function(
+                        &mut out.anchor,
+                        block_start,
+                        block_end,
+                        OWN_FUNCTION_DEPTH + 1,
+                    );
                 }
             }
         }
@@ -561,7 +633,10 @@ pub(crate) fn facts(view: &SlotView, ctx: &FinderCtx) -> Rc<Local> {
             return true;
         }
         let next = index.emissions.partition_point(|start| *start < anchor);
-        index.emissions.get(next).is_some_and(|start| own_emissions.contains(start))
+        index
+            .emissions
+            .get(next)
+            .is_some_and(|start| own_emissions.contains(start))
     };
     let mut roots = BTreeSet::new();
     // The writer statements name the buffer and stream too; they are
@@ -624,7 +699,11 @@ pub(crate) fn value_slices(view: &SlotView, ctx: &FinderCtx) -> LocalFacts {
 pub(crate) const FED_DEPTH: usize = MAX_EVIDENCE_DEPTH + 2;
 
 /// [`value_slices`] followed `max_depth` hops.
-pub(crate) fn value_slices_within(view: &SlotView, ctx: &FinderCtx, max_depth: usize) -> LocalFacts {
+pub(crate) fn value_slices_within(
+    view: &SlotView,
+    ctx: &FinderCtx,
+    max_depth: usize,
+) -> LocalFacts {
     use oxc_ast::ast::{AssignmentTarget, Expression};
     use oxc_ast::AstKind;
     use oxc_span::GetSpan;
@@ -639,7 +718,10 @@ pub(crate) fn value_slices_within(view: &SlotView, ctx: &FinderCtx, max_depth: u
     let mut filled = std::collections::BTreeSet::new();
     while let Some((slice, offset)) = work.pop() {
         for (member, depth) in &slice.members {
-            let entry = facts.members.entry(member.clone()).or_insert(depth + offset);
+            let entry = facts
+                .members
+                .entry(member.clone())
+                .or_insert(depth + offset);
             *entry = (*entry).min(depth + offset);
         }
         for (call, depth) in &slice.calls {
@@ -658,10 +740,13 @@ pub(crate) fn value_slices_within(view: &SlotView, ctx: &FinderCtx, max_depth: u
                 let stored: Vec<oxc_span::Span> = match nodes.kind(member) {
                     AstKind::StaticMemberExpression(push) if push.property.name == "push" => {
                         match nodes.kind(nodes.parent_id(member)) {
-                            AstKind::CallExpression(call)
-                                if matches!(call.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == push.span) =>
-                            {
-                                call.arguments.iter().filter_map(|argument| argument.as_expression().map(|e| e.span())).collect()
+                            AstKind::CallExpression(call) if matches!(call.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == push.span) => {
+                                call.arguments
+                                    .iter()
+                                    .filter_map(|argument| {
+                                        argument.as_expression().map(|e| e.span())
+                                    })
+                                    .collect()
                             }
                             // The push method taken out of the list (`p =
                             // list.push; p.call(list, v)` or the tracer's
@@ -692,7 +777,9 @@ pub(crate) fn value_slices_within(view: &SlotView, ctx: &FinderCtx, max_depth: u
                     _ => Vec::new(),
                 };
                 for span in stored {
-                    let Some(node) = ctx.node_with_span(span) else { continue };
+                    let Some(node) = ctx.node_with_span(span) else {
+                        continue;
+                    };
                     work.push((ctx.slice_of(node, max_depth - reached - 1), reached + 1));
                 }
             }
@@ -706,7 +793,11 @@ pub(crate) fn value_slices_within(view: &SlotView, ctx: &FinderCtx, max_depth: u
 /// tracer's form of `c = r === "" ? 0 : …`). Every write of `c` before the
 /// store in the same loop body is under those tests; their spans count as
 /// the stored value's.
-fn choosing_tests(ctx: &FinderCtx, store: oxc_semantic::NodeId, value: &oxc_ast::ast::Expression<'_>) -> Vec<oxc_span::Span> {
+fn choosing_tests(
+    ctx: &FinderCtx,
+    store: oxc_semantic::NodeId,
+    value: &oxc_ast::ast::Expression<'_>,
+) -> Vec<oxc_span::Span> {
     use oxc_ast::ast::Expression;
     use oxc_ast::AstKind;
     use oxc_span::GetSpan;
@@ -721,14 +812,30 @@ fn choosing_tests(ctx: &FinderCtx, store: oxc_semantic::NodeId, value: &oxc_ast:
     let is_loop = |id: oxc_semantic::NodeId| {
         matches!(
             nodes.kind(id),
-            AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_) | AstKind::ForStatement(_) | AstKind::ForInStatement(_) | AstKind::ForOfStatement(_)
+            AstKind::WhileStatement(_)
+                | AstKind::DoWhileStatement(_)
+                | AstKind::ForStatement(_)
+                | AstKind::ForInStatement(_)
+                | AstKind::ForOfStatement(_)
         )
     };
-    let is_function = |id: oxc_semantic::NodeId| matches!(nodes.kind(id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_));
-    let Some(body) = nodes.ancestor_ids(store).take_while(|id| !is_function(*id)).find(|id| is_loop(*id)) else {
+    let is_function = |id: oxc_semantic::NodeId| {
+        matches!(
+            nodes.kind(id),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+        )
+    };
+    let Some(body) = nodes
+        .ancestor_ids(store)
+        .take_while(|id| !is_function(*id))
+        .find(|id| is_loop(*id))
+    else {
         return Vec::new();
     };
-    let (start, end) = (nodes.kind(body).span().start, nodes.kind(store).span().start);
+    let (start, end) = (
+        nodes.kind(body).span().start,
+        nodes.kind(store).span().start,
+    );
     let mut tests = Vec::new();
     for reference in scoping.get_resolved_references(symbol) {
         if !reference.is_write() {
@@ -768,11 +875,10 @@ fn tuple_element_stores(ctx: &FinderCtx, reference: oxc_semantic::NodeId) -> Vec
         return Vec::new();
     };
     let span = nodes.kind(reference).span();
-    let Some(index) = array
-        .elements
-        .iter()
-        .position(|item| item.as_expression().is_some_and(|expression| expression.span() == span))
-    else {
+    let Some(index) = array.elements.iter().position(|item| {
+        item.as_expression()
+            .is_some_and(|expression| expression.span() == span)
+    }) else {
         return Vec::new();
     };
     let AstKind::VariableDeclarator(declarator) = nodes.kind(nodes.parent_id(array_id)) else {
@@ -791,14 +897,20 @@ fn tuple_element_stores(ctx: &FinderCtx, reference: oxc_semantic::NodeId) -> Vec
     for read in scoping.get_resolved_references(tuple) {
         // `t[i]`, the list ...
         let element = nodes.parent_id(read.node_id());
-        let AstKind::ComputedMemberExpression(element_member) = nodes.kind(element) else { continue };
-        if !matches!(element_member.expression.without_parentheses(), Expression::NumericLiteral(n) if n.value == index as f64) {
+        let AstKind::ComputedMemberExpression(element_member) = nodes.kind(element) else {
+            continue;
+        };
+        if !matches!(element_member.expression.without_parentheses(), Expression::NumericLiteral(n) if n.value == index as f64)
+        {
             continue;
         }
         // ... indexed and assigned: `t[i][…] = v`.
         let mut store = nodes.parent_id(element);
-        let AstKind::ComputedMemberExpression(store_member) = nodes.kind(store) else { continue };
-        if !matches!(store_member.object.without_parentheses(), Expression::ComputedMemberExpression(object) if object.span == element_member.span) {
+        let AstKind::ComputedMemberExpression(store_member) = nodes.kind(store) else {
+            continue;
+        };
+        if !matches!(store_member.object.without_parentheses(), Expression::ComputedMemberExpression(object) if object.span == element_member.span)
+        {
             continue;
         }
         let store_span = store_member.span;
@@ -823,7 +935,10 @@ fn tuple_element_stores(ctx: &FinderCtx, reference: oxc_semantic::NodeId) -> Vec
 /// `member` (`list.push`): bound to `p` (`p.call(_, v…)`) or held as element
 /// 1 of a tuple `t = [list, list.push]` (`t[1].call(t[0], v…)`). Only a
 /// binding declared once from that value is followed.
-pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeId) -> Vec<oxc_span::Span> {
+pub(crate) fn extracted_push_values(
+    ctx: &FinderCtx,
+    member: oxc_semantic::NodeId,
+) -> Vec<oxc_span::Span> {
     use oxc_ast::ast::{BindingPattern, Expression};
     use oxc_ast::AstKind;
     use oxc_span::GetSpan;
@@ -833,10 +948,10 @@ pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeI
     let mut element: Option<usize> = None;
     if let AstKind::ArrayExpression(array) = nodes.kind(holder) {
         let span = nodes.kind(member).span();
-        element = array
-            .elements
-            .iter()
-            .position(|item| item.as_expression().is_some_and(|expression| expression.span() == span));
+        element = array.elements.iter().position(|item| {
+            item.as_expression()
+                .is_some_and(|expression| expression.span() == span)
+        });
         if element.is_none() {
             return Vec::new();
         }
@@ -858,17 +973,26 @@ pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeI
             binding
         }
         AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => {
-            let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+            let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(target) =
+                &assignment.left
+            else {
                 return Vec::new();
             };
-            let Some(binding) = target.reference_id.get().and_then(|id| scoping.get_reference(id).symbol_id()) else {
+            let Some(binding) = target
+                .reference_id
+                .get()
+                .and_then(|id| scoping.get_reference(id).symbol_id())
+            else {
                 return Vec::new();
             };
             let declared_bare = matches!(
                 nodes.kind(scoping.symbol_declaration(binding)),
                 AstKind::VariableDeclarator(declarator) if declarator.init.is_none()
             );
-            let writes = scoping.get_resolved_references(binding).filter(|reference| reference.is_write()).count();
+            let writes = scoping
+                .get_resolved_references(binding)
+                .filter(|reference| reference.is_write())
+                .count();
             if !declared_bare || writes != 1 {
                 return Vec::new();
             }
@@ -882,8 +1006,7 @@ pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeI
         if let Some(index) = element {
             let read = nodes.parent_id(method);
             match nodes.kind(read) {
-                AstKind::ComputedMemberExpression(read_member)
-                    if matches!(read_member.expression.without_parentheses(), Expression::NumericLiteral(n) if n.value == index as f64) =>
+                AstKind::ComputedMemberExpression(read_member) if matches!(read_member.expression.without_parentheses(), Expression::NumericLiteral(n) if n.value == index as f64) =>
                 {
                     method = read;
                 }
@@ -897,15 +1020,26 @@ pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeI
             continue;
         }
         let call_member = nodes.parent_id(method);
-        let AstKind::StaticMemberExpression(call_member_expression) = nodes.kind(call_member) else { continue };
+        let AstKind::StaticMemberExpression(call_member_expression) = nodes.kind(call_member)
+        else {
+            continue;
+        };
         if call_member_expression.property.name != "call" {
             continue;
         }
-        let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(call_member)) else { continue };
-        if !matches!(call.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == call_member_expression.span) {
+        let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(call_member)) else {
+            continue;
+        };
+        if !matches!(call.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == call_member_expression.span)
+        {
             continue;
         }
-        out.extend(call.arguments.iter().skip(1).filter_map(|argument| argument.as_expression().map(|e| e.span())));
+        out.extend(
+            call.arguments
+                .iter()
+                .skip(1)
+                .filter_map(|argument| argument.as_expression().map(|e| e.span())),
+        );
     }
     out
 }
@@ -916,7 +1050,10 @@ pub(crate) fn extracted_push_values(ctx: &FinderCtx, member: oxc_semantic::NodeI
 /// pushed value stands for the caller arguments of the formals it reads
 /// (`data`, `c`), or for itself when it reads none. `None` when `method` is
 /// not such an argument.
-fn inline_helper_push_values(ctx: &FinderCtx, method: oxc_semantic::NodeId) -> Option<Vec<oxc_span::Span>> {
+fn inline_helper_push_values(
+    ctx: &FinderCtx,
+    method: oxc_semantic::NodeId,
+) -> Option<Vec<oxc_span::Span>> {
     use oxc_ast::ast::{BindingPattern, Expression};
     use oxc_ast::AstKind;
     use oxc_span::GetSpan;
@@ -933,9 +1070,12 @@ fn inline_helper_push_values(ctx: &FinderCtx, method: oxc_semantic::NodeId) -> O
             _ => return None,
         }
     }
-    let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(argument)) else { return None };
+    let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(argument)) else {
+        return None;
+    };
     let position = call.arguments.iter().position(|item| {
-        item.as_expression().is_some_and(|expression| expression.without_parentheses().span() == span)
+        item.as_expression()
+            .is_some_and(|expression| expression.without_parentheses().span() == span)
     })?;
     let params = match call.callee.without_parentheses() {
         Expression::ArrowFunctionExpression(arrow) => &arrow.params,
@@ -954,15 +1094,25 @@ fn inline_helper_push_values(ctx: &FinderCtx, method: oxc_semantic::NodeId) -> O
     let mut out = Vec::new();
     for reference in scoping.get_resolved_references(pusher) {
         let call_member = nodes.parent_id(reference.node_id());
-        let AstKind::StaticMemberExpression(member) = nodes.kind(call_member) else { continue };
+        let AstKind::StaticMemberExpression(member) = nodes.kind(call_member) else {
+            continue;
+        };
         if member.property.name != "call" {
             continue;
         }
-        let AstKind::CallExpression(push) = nodes.kind(nodes.parent_id(call_member)) else { continue };
-        if !matches!(push.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == member.span) {
+        let AstKind::CallExpression(push) = nodes.kind(nodes.parent_id(call_member)) else {
+            continue;
+        };
+        if !matches!(push.callee.without_parentheses(), Expression::StaticMemberExpression(callee) if callee.span == member.span)
+        {
             continue;
         }
-        for value in push.arguments.iter().skip(1).filter_map(|item| item.as_expression()) {
+        for value in push
+            .arguments
+            .iter()
+            .skip(1)
+            .filter_map(|item| item.as_expression())
+        {
             let value_span = value.span();
             let mut read_formals = Vec::new();
             for (index, symbol) in formals.iter().enumerate() {
@@ -977,11 +1127,9 @@ fn inline_helper_push_values(ctx: &FinderCtx, method: oxc_semantic::NodeId) -> O
             if read_formals.is_empty() {
                 out.push(value_span);
             } else {
-                out.extend(
-                    read_formals
-                        .into_iter()
-                        .filter_map(|index| call.arguments.get(index)?.as_expression().map(|e| e.span())),
-                );
+                out.extend(read_formals.into_iter().filter_map(|index| {
+                    call.arguments.get(index)?.as_expression().map(|e| e.span())
+                }));
             }
         }
     }
@@ -1000,7 +1148,9 @@ pub(crate) fn guard_slices(view: &SlotView, ctx: &FinderCtx) -> LocalFacts {
     let mut tests = std::collections::BTreeSet::new();
     for leaf in view.leaves() {
         // The `if` tests around the write's own site, up to its function.
-        let Some(mut id) = ctx.node_with_span(leaf.write.site()) else { continue };
+        let Some(mut id) = ctx.node_with_span(leaf.write.site()) else {
+            continue;
+        };
         loop {
             let parent = nodes.parent_id(id);
             if parent == id {

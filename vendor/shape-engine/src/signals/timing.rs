@@ -24,7 +24,11 @@ pub(crate) fn span(name: &'static str) -> Span {
 impl Drop for Span {
     fn drop(&mut self) {
         if let Some(start) = self.start {
-            eprintln!("TIME {:>9.1} ms  {}", start.elapsed().as_secs_f64() * 1e3, self.name);
+            eprintln!(
+                "TIME {:>9.1} ms  {}",
+                start.elapsed().as_secs_f64() * 1e3,
+                self.name
+            );
         }
     }
 }

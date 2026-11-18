@@ -1,11 +1,12 @@
 //! `HostEnvironment`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `HostEnvironment`. Card: [`CARD`].
 /// A value returned by `getHostEnvironmentValue()`: a transform of the
@@ -23,7 +24,10 @@ fn host_environment_value(leaf: &LeafView) -> bool {
 pub(crate) fn recognize_host_environment(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     // The host value is written as a string; a number whose provenance
     // merely passes through the call (a shared producer's checksum) is not it.
-    let strings: Vec<&LeafView> = leaves_of(view).into_iter().filter(|leaf| leaf.op == LeafOp::String).collect();
+    let strings: Vec<&LeafView> = leaves_of(view)
+        .into_iter()
+        .filter(|leaf| leaf.op == LeafOp::String)
+        .collect();
     if strings.iter().any(|leaf| host_environment_value(leaf)) && top_count_is(&view.shapes(), 2) {
         return claim(&["value is external.getHostEnvironmentValue()", "two fields"]);
     }
@@ -40,7 +44,9 @@ pub(crate) fn bind_host_environment(
     let mut binding = FieldBinding::new();
     for message in 0..layout.messages.len() {
         let fields = message_fields(view, layout, message)?;
-        let success = fields.iter().any(|f| f.leaves.iter().any(host_environment_value));
+        let success = fields
+            .iter()
+            .any(|f| f.leaves.iter().any(host_environment_value));
         let failure = fields.iter().any(|f| f.class(SourceClass::CaughtError));
         if success == failure {
             return Err(BindRefusal::new(format!(

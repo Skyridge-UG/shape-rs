@@ -3,10 +3,7 @@ use oxc_span::GetSpan;
 
 pub(in crate::naming) type Symbol = oxc_semantic::SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<Symbol> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<Symbol> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -26,18 +23,14 @@ pub(in crate::naming) fn member<'a>(
     }
 }
 
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     match e {
         Expression::CallExpression(c) if !c.optional => Some(c),
         _ => None,
     }
 }
 
-pub(in crate::naming) fn expression<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a Expression<'a>> {
+pub(in crate::naming) fn expression<'a>(s: &'a Statement<'a>) -> Option<&'a Expression<'a>> {
     match s {
         Statement::ExpressionStatement(s) => Some(&s.expression),
         _ => None,
@@ -75,10 +68,7 @@ pub(in crate::naming) fn plain_params(
 // destructuring loop heads and redeclarations never become API or callable
 // proof. DATA receivers may be mutated; CALLABLE proof also requires
 // unchanged().
-pub(in crate::naming) fn plain_origin(
-    model: &Model<'_, '_>,
-    s: Symbol,
-) -> bool {
+pub(in crate::naming) fn plain_origin(model: &Model<'_, '_>, s: Symbol) -> bool {
     if !model.scoping.symbol_redeclarations(s).is_empty() {
         return false;
     }
@@ -198,10 +188,7 @@ pub(in crate::naming) fn callable_capture(
 
 // An unshadowed global namespace path. A bound identifier is never treated as a
 // host global by spelling; only unresolved roots are terminal.
-pub(in crate::naming) fn global_path(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Vec<String> {
+pub(in crate::naming) fn global_path(model: &Model<'_, '_>, e: &Expression<'_>) -> Vec<String> {
     match e {
         Expression::Identifier(i) => {
             if crate::analysis::identifier_symbol(i, model.scoping).is_some() {

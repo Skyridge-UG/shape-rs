@@ -48,7 +48,13 @@ pub(super) struct Sites<'s, 'a> {
 }
 
 impl Sites<'_, '_> {
-    pub(super) fn plan(&mut self, call: &CallExpression<'_>, statement: Option<Span>, context: Context, callee: bool) {
+    pub(super) fn plan(
+        &mut self,
+        call: &CallExpression<'_>,
+        statement: Option<Span>,
+        context: Context,
+        callee: bool,
+    ) {
         let Expression::Identifier(identifier) = &call.callee else {
             return;
         };
@@ -64,7 +70,8 @@ impl Sites<'_, '_> {
                 .iter()
                 .any(|site| site.call == call.span || statement == Some(site.span))
             || (helper.shape == Shape::Statements && context == Context::Expression)
-            || (helper.declaration.start <= call.span.start && call.span.end <= helper.declaration.end)
+            || (helper.declaration.start <= call.span.start
+                && call.span.end <= helper.declaration.end)
         {
             return;
         }
@@ -76,7 +83,11 @@ impl Sites<'_, '_> {
             arguments.push(expression);
         }
         // Extra arguments still run; only pure ones may be dropped.
-        if arguments.iter().skip(helper.parameters).any(|a| !expression_is_pure(a)) {
+        if arguments
+            .iter()
+            .skip(helper.parameters)
+            .any(|a| !expression_is_pure(a))
+        {
             return;
         }
         let stable = self.stable_arguments(helper, &arguments);
@@ -101,10 +112,15 @@ impl Sites<'_, '_> {
             return;
         }
         let temps: Vec<Option<String>> = (0..helper.parameters)
-            .map(|index| ((!in_order && !stable[index]) || helper.written[index]).then(|| self.names.fresh()))
+            .map(|index| {
+                ((!in_order && !stable[index]) || helper.written[index]).then(|| self.names.fresh())
+            })
             .collect();
         let lazy = (0..helper.parameters)
-            .map(|index| temps[index].is_some() && arguments.get(index).is_some_and(|a| expression_is_pure(a)))
+            .map(|index| {
+                temps[index].is_some()
+                    && arguments.get(index).is_some_and(|a| expression_is_pure(a))
+            })
             .collect();
         self.planned.push(Site {
             span: statement.unwrap_or(call.span),
@@ -115,7 +131,9 @@ impl Sites<'_, '_> {
                 .collect(),
             temps,
             lazy,
-            locals: (0..helper.local_count).map(|_| self.names.fresh()).collect(),
+            locals: (0..helper.local_count)
+                .map(|_| self.names.fresh())
+                .collect(),
             callee,
             context,
         });
@@ -125,7 +143,9 @@ impl Sites<'_, '_> {
     /// it instead of being held in a temporary.
     fn stable_arguments(&self, helper: &Helper, arguments: &[&Expression<'_>]) -> Vec<bool> {
         let mut stable: Vec<bool> = (0..helper.parameters)
-            .map(|index| !helper.written[index] && arguments.get(index).is_none_or(|a| self.stable(a)))
+            .map(|index| {
+                !helper.written[index] && arguments.get(index).is_none_or(|a| self.stable(a))
+            })
             .collect();
         // A plain name may also be read where the body uses it when no code
         // can run between the call's arguments and those uses: no later
@@ -141,7 +161,13 @@ impl Sites<'_, '_> {
             if !read_only(argument) {
                 continue;
             }
-            if stable[index] || helper.written[index] || arguments.iter().skip(index + 1).any(|later| self.runs_code(later)) {
+            if stable[index]
+                || helper.written[index]
+                || arguments
+                    .iter()
+                    .skip(index + 1)
+                    .any(|later| self.runs_code(later))
+            {
                 continue;
             }
             let last_use = helper
@@ -151,7 +177,10 @@ impl Sites<'_, '_> {
                 .map(|(span, _)| span.start)
                 .max();
             if last_use.is_some_and(|last| {
-                helper.code.iter().all(|(start, end)| !(*start < last && !(*start <= last && last < *end)))
+                helper
+                    .code
+                    .iter()
+                    .all(|(start, end)| !(*start < last && !(*start <= last && last < *end)))
             }) {
                 stable[index] = true;
             }
@@ -162,11 +191,11 @@ impl Sites<'_, '_> {
     /// Whether every name the helper reads from outside resolves to the same
     /// binding at the call.
     fn free_names_resolve(&self, identifier: &IdentifierReference<'_>, helper: &Helper) -> bool {
-        let Some(scope) = identifier
-            .reference_id
-            .get()
-            .map(|reference| self.nodes.get_node(self.scoping.get_reference(reference).node_id()).scope_id())
-        else {
+        let Some(scope) = identifier.reference_id.get().map(|reference| {
+            self.nodes
+                .get_node(self.scoping.get_reference(reference).node_id())
+                .scope_id()
+        }) else {
             return false;
         };
         !helper
@@ -189,7 +218,7 @@ impl Sites<'_, '_> {
         scan.code.iter().any(|span| !calls.spans.contains(span))
     }
 
-/// A literal, or a never-written local that is not a VM slot or carry.
+    /// A literal, or a never-written local that is not a VM slot or carry.
     pub(super) fn stable(&self, argument: &Expression<'_>) -> bool {
         match argument {
             Expression::StringLiteral(_)
@@ -197,8 +226,10 @@ impl Sites<'_, '_> {
             | Expression::BooleanLiteral(_)
             | Expression::NullLiteral(_) => true,
             Expression::UnaryExpression(unary) => {
-                matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::Void)
-                    && matches!(unary.argument, Expression::NumericLiteral(_))
+                matches!(
+                    unary.operator,
+                    UnaryOperator::UnaryNegation | UnaryOperator::Void
+                ) && matches!(unary.argument, Expression::NumericLiteral(_))
             }
             Expression::Identifier(identifier) => {
                 let name = identifier.name.as_str();
@@ -277,9 +308,12 @@ impl Sites<'_, '_> {
                         self.plan(call, Some(statement.span()), Context::Statement, false);
                     }
                     Expression::AssignmentExpression(assignment)
-                        if assignment.operator == oxc_syntax::operator::AssignmentOperator::Assign
-                            && (matches!(assignment.left, AssignmentTarget::AssignmentTargetIdentifier(_))
-                                || self.stable_member_target(&assignment.left)) =>
+                        if assignment.operator
+                            == oxc_syntax::operator::AssignmentOperator::Assign
+                            && (matches!(
+                                assignment.left,
+                                AssignmentTarget::AssignmentTargetIdentifier(_)
+                            ) || self.stable_member_target(&assignment.left)) =>
                     {
                         if let Expression::CallExpression(call) = &assignment.right {
                             self.plan(call, Some(statement.span()), Context::Value, false);
@@ -287,8 +321,12 @@ impl Sites<'_, '_> {
                     }
                     _ => {}
                 },
-                Statement::VariableDeclaration(declaration) if declaration.declarations.len() == 1 => {
-                    if let Some(Expression::CallExpression(call)) = &declaration.declarations[0].init {
+                Statement::VariableDeclaration(declaration)
+                    if declaration.declarations.len() == 1 =>
+                {
+                    if let Some(Expression::CallExpression(call)) =
+                        &declaration.declarations[0].init
+                    {
                         self.plan(call, Some(statement.span()), Context::Value, false);
                     }
                 }
@@ -381,7 +419,12 @@ impl<'a> Visit<'a> for PropertyOnlyCalls<'_> {
     }
 }
 
-pub(super) fn render_site(source: &str, helpers: &BTreeMap<SymbolId, Helper>, planned: &[Site], index: usize) -> String {
+pub(super) fn render_site(
+    source: &str,
+    helpers: &BTreeMap<SymbolId, Helper>,
+    planned: &[Site],
+    index: usize,
+) -> String {
     let site = &planned[index];
     let helper = &helpers[&site.helper];
     let rendered: Vec<String> = site
@@ -401,7 +444,12 @@ pub(super) fn render_site(source: &str, helpers: &BTreeMap<SymbolId, Helper>, pl
         .uses
         .iter()
         .map(|(span, parameter)| (*span, argument_text[*parameter].as_str()))
-        .chain(helper.locals.iter().map(|(span, local)| (*span, site.locals[*local].as_str())))
+        .chain(
+            helper
+                .locals
+                .iter()
+                .map(|(span, local)| (*span, site.locals[*local].as_str())),
+        )
         .collect();
     names.sort_by_key(|(span, _)| span.start);
     let piece = |span: Span| -> String {
@@ -443,12 +491,15 @@ pub(super) fn render_site(source: &str, helpers: &BTreeMap<SymbolId, Helper>, pl
     }
     let declare_for = |span: Span, lines: &mut Vec<String>, waiting: &mut Vec<usize>| {
         waiting.retain(|index| {
-            let used = helper
-                .uses
-                .iter()
-                .any(|(use_span, parameter)| parameter == index && span.start <= use_span.start && use_span.end <= span.end);
+            let used = helper.uses.iter().any(|(use_span, parameter)| {
+                parameter == index && span.start <= use_span.start && use_span.end <= span.end
+            });
             if used {
-                lines.push(format!("let {} = {};", site.temps[*index].as_ref().unwrap(), rendered[*index]));
+                lines.push(format!(
+                    "let {} = {};",
+                    site.temps[*index].as_ref().unwrap(),
+                    rendered[*index]
+                ));
             }
             !used
         });
@@ -463,17 +514,23 @@ pub(super) fn render_site(source: &str, helpers: &BTreeMap<SymbolId, Helper>, pl
             if let Some(span) = helper.value {
                 declare_for(span, &mut lines, &mut waiting);
             }
-            helper.value.map_or_else(|| "(void 0)".to_string(), |span| format!("({})", piece(span)))
+            helper.value.map_or_else(
+                || "(void 0)".to_string(),
+                |span| format!("({})", piece(span)),
+            )
         }
     };
     match site.context {
         Context::Statement => {
             // A returned parameter or empty literal does nothing; any other
             // returned value still runs.
-            let quiet = helper.reads_only || helper.value.is_none_or(|span| {
-                let text = &source[span.start as usize..span.end as usize];
-                text == "[]" || text == "{}" || helper.uses.iter().any(|(use_span, _)| *use_span == span)
-            });
+            let quiet = helper.reads_only
+                || helper.value.is_none_or(|span| {
+                    let text = &source[span.start as usize..span.end as usize];
+                    text == "[]"
+                        || text == "{}"
+                        || helper.uses.iter().any(|(use_span, _)| *use_span == span)
+                });
             if helper.shape == Shape::Expression || !quiet {
                 lines.push(format!("{value};"));
             }
@@ -488,11 +545,21 @@ pub(super) fn render_site(source: &str, helpers: &BTreeMap<SymbolId, Helper>, pl
 }
 
 /// Source text of `span` with the planned sites nested inside it rendered.
-pub(super) fn render_span(source: &str, helpers: &BTreeMap<SymbolId, Helper>, planned: &[Site], span: Span, owner: usize) -> String {
+pub(super) fn render_span(
+    source: &str,
+    helpers: &BTreeMap<SymbolId, Helper>,
+    planned: &[Site],
+    span: Span,
+    owner: usize,
+) -> String {
     let mut out = String::new();
     let mut at = span.start;
     for (index, site) in planned.iter().enumerate() {
-        if index == owner || site.span.start < at || site.span.end > span.end || site.span.start < span.start {
+        if index == owner
+            || site.span.start < at
+            || site.span.end > span.end
+            || site.span.start < span.start
+        {
             continue;
         }
         out.push_str(&source[at as usize..site.span.start as usize]);
@@ -502,4 +569,3 @@ pub(super) fn render_span(source: &str, helpers: &BTreeMap<SymbolId, Helper>, pl
     out.push_str(&source[at as usize..span.end as usize]);
     out
 }
-

@@ -49,8 +49,8 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolFlags, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::AssignmentOperator;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 mod merger;
 mod statements;
@@ -78,7 +78,10 @@ pub(crate) fn merge_derived_values(source: &str) -> Result<MergeDerivedResult, S
         source,
         scoping: &scoping,
         nodes: &nodes,
-        arguments_at: source.match_indices("arguments").map(|(at, _)| at as u32).collect(),
+        arguments_at: source
+            .match_indices("arguments")
+            .map(|(at, _)| at as u32)
+            .collect(),
     };
     let mut selected: BTreeSet<SymbolId> = BTreeSet::new();
     let mut edits = Vec::new();
@@ -102,7 +105,9 @@ pub(crate) fn merge_derived_values(source: &str) -> Result<MergeDerivedResult, S
             if proposal.iter().any(|edit| {
                 edits.iter().any(|other: &analysis::Edit| {
                     edit.start < other.end && other.start < edit.end
-                        || (edit.start == edit.end && other.start < edit.start && edit.start < other.end)
+                        || (edit.start == edit.end
+                            && other.start < edit.start
+                            && edit.start < other.end)
                 })
             }) {
                 break;
@@ -147,7 +152,10 @@ pub(crate) fn split_single_reads(source: &str) -> Result<MergeDerivedResult, Str
         source,
         scoping: &scoping,
         nodes: &nodes,
-        arguments_at: source.match_indices("arguments").map(|(at, _)| at as u32).collect(),
+        arguments_at: source
+            .match_indices("arguments")
+            .map(|(at, _)| at as u32)
+            .collect(),
     };
     let mut fresh = 0usize;
     let taken = super::super::inline_tuple_helpers::taken_numbers(source, "$SSA_s");
@@ -172,7 +180,9 @@ pub(crate) fn split_single_reads(source: &str) -> Result<MergeDerivedResult, Str
         let mut references: Vec<(u32, NodeId, bool)> = Vec::new();
         let mut local = true;
         for reference in scoping.get_resolved_references(symbol) {
-            if merger.function_of(reference.node_id()) != home || (reference.is_read() && reference.is_write()) {
+            if merger.function_of(reference.node_id()) != home
+                || (reference.is_read() && reference.is_write())
+            {
                 local = false;
                 break;
             }
@@ -223,7 +233,10 @@ pub(crate) fn split_single_reads(source: &str) -> Result<MergeDerivedResult, Str
             let temp = name();
             let text = &source[value.start as usize..value.end as usize];
             let _ = name_text;
-            edits.push(analysis::Edit::replace(store.span, format!("let {temp} = {text};")));
+            edits.push(analysis::Edit::replace(
+                store.span,
+                format!("let {temp} = {text};"),
+            ));
             edits.push(analysis::Edit::replace(read_span, temp));
             split += 1;
         }
@@ -236,7 +249,8 @@ pub(crate) fn split_single_reads(source: &str) -> Result<MergeDerivedResult, Str
         return Err("single-read splits overlap".into());
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("single-read split output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("single-read split output: {error}"))?;
     Ok(MergeDerivedResult {
         code: applied.output,
         merged: split,

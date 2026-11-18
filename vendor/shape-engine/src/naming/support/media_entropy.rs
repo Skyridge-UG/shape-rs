@@ -2,10 +2,7 @@ use super::*;
 
 pub(in crate::naming) type Symbol = oxc_semantic::SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<Symbol> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<Symbol> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -28,18 +25,14 @@ pub(in crate::naming) fn indexed<'a>(
     (!m.optional).then_some((&m.object, &m.expression))
 }
 
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     let Expression::CallExpression(c) = e.without_parentheses() else {
         return None;
     };
     (!c.optional).then_some(c)
 }
 
-pub(in crate::naming) fn returned<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a Expression<'a>> {
+pub(in crate::naming) fn returned<'a>(s: &'a Statement<'a>) -> Option<&'a Expression<'a>> {
     let Statement::ReturnStatement(r) = s else {
         return None;
     };
@@ -55,9 +48,7 @@ pub(in crate::naming) fn expression_statement<'a>(
     Some(&e.expression)
 }
 
-pub(in crate::naming) fn block<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a [Statement<'a>]> {
+pub(in crate::naming) fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(b) = s else {
         return None;
     };
@@ -277,10 +268,7 @@ pub(in crate::naming) fn update_target(
                             if crate::analysis::identifier_symbol(id, model.scoping) == Some(target))))
 }
 
-pub(in crate::naming) fn random_expression(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> bool {
+pub(in crate::naming) fn random_expression(model: &Model<'_, '_>, e: &Expression<'_>) -> bool {
     if let Some((left, right)) = binary(e, "|") {
         return number(right, 0.0) && random_expression(model, left);
     }

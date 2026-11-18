@@ -1,13 +1,13 @@
-﻿//! Pin: raw kernel JS + session -> [`SeedLayout`].
+//! Pin: raw kernel JS + session -> [`SeedLayout`].
 //!
 //! With the `engine` feature, delegates the AST/VM analysis to the vendored
 //! reference engine and validates its `PinnedSeed.layout` as our layout.
 //! Without it, artifact validation only (the server consumes pre-pinned
 //! layouts; only the `shapepin` tool needs the engine).
 
-use crate::error::Result;
 #[cfg(feature = "engine")]
 use crate::error::Error;
+use crate::error::Result;
 use crate::layout::SeedLayout;
 use crate::session::Session;
 
@@ -147,8 +147,7 @@ mod tests {
     fn pins_minimal_session_shape() {
         let session = Session {
             transaction_token: "ab".into(),
-            alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-                .into(),
+            alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".into(),
             shuffle_key: vec![],
             keys: [0; 8],
         };

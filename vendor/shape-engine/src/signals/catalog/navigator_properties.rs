@@ -1,10 +1,12 @@
 //! `NavigatorProperties`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView, ValueSlice};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView,
+    ValueSlice,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// Members read by the branch-joined value a guard tests: `let v; if (…)
 /// { v = o.p; } else { v = null; } if (v == null) …`. The tested local is
@@ -24,7 +26,9 @@ fn joined_guard_slice(ctx: &FinderCtx, test: oxc_semantic::NodeId, hops: usize) 
         if *depth != 0 {
             continue;
         }
-        let AstKind::VariableDeclarator(declarator) = nodes.kind(scoping.symbol_declaration(*symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            nodes.kind(scoping.symbol_declaration(*symbol))
+        else {
             continue;
         };
         if declarator.init.is_some() {
@@ -69,7 +73,9 @@ fn joined_guard_slice(ctx: &FinderCtx, test: oxc_semantic::NodeId, hops: usize) 
             if !reference.is_write() || nodes.kind(reference.node_id()).span().start > test_start {
                 continue;
             }
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(nodes.parent_id(reference.node_id())) else {
+            let AstKind::AssignmentExpression(assignment) =
+                nodes.kind(nodes.parent_id(reference.node_id()))
+            else {
                 plain = false;
                 break;
             };
@@ -83,7 +89,9 @@ fn joined_guard_slice(ctx: &FinderCtx, test: oxc_semantic::NodeId, hops: usize) 
             }
             if !matches!(
                 assignment.right.without_parentheses(),
-                Expression::NullLiteral(_) | Expression::NumericLiteral(_) | Expression::BooleanLiteral(_)
+                Expression::NullLiteral(_)
+                    | Expression::NumericLiteral(_)
+                    | Expression::BooleanLiteral(_)
             ) {
                 values.push(assignment.right.span());
             }
@@ -125,7 +133,10 @@ pub(crate) fn recognize_navigator_properties(view: &SlotView, ctx: &FinderCtx) -
         .count();
     let wide = max_top_count(&view.shapes()) >= 25;
     if named >= 5 && wide {
-        return claim(&["25+ fields", "values read 5+ navigator/screen census properties"]);
+        return claim(&[
+            "25+ fields",
+            "values read 5+ navigator/screen census properties",
+        ]);
     }
     // Values passed through program helpers lose their provenance; the
     // write sites' slices still read the census properties.
@@ -141,7 +152,10 @@ pub(crate) fn recognize_navigator_properties(view: &SlotView, ctx: &FinderCtx) -
             }
         }
         if read.len() >= 5 {
-            return claim(&["25+ fields", "write sites read 5+ navigator/screen census properties"]);
+            return claim(&[
+                "25+ fields",
+                "write sites read 5+ navigator/screen census properties",
+            ]);
         }
     }
     None
@@ -195,7 +209,12 @@ pub(crate) fn bind_navigator_properties(
     fn mapped<'n>(names: impl IntoIterator<Item = &'n str>) -> Vec<&'static str> {
         let mut out: Vec<&'static str> = names
             .into_iter()
-            .filter_map(|name| PROPERTIES.iter().find(|(property, _)| *property == name).map(|(_, card)| *card))
+            .filter_map(|name| {
+                PROPERTIES
+                    .iter()
+                    .find(|(property, _)| *property == name)
+                    .map(|(_, card)| *card)
+            })
             .collect();
         out.sort_unstable();
         out.dedup();
@@ -216,7 +235,11 @@ pub(crate) fn bind_navigator_properties(
                     own = mapped(slice.nearest_members());
                     if own.is_empty() {
                         own = mapped(
-                            slice.strings.iter().filter(|(_, depth)| **depth == 0).map(|(name, _)| name.as_str()),
+                            slice
+                                .strings
+                                .iter()
+                                .filter(|(_, depth)| **depth == 0)
+                                .map(|(name, _)| name.as_str()),
                         );
                     }
                     if own.is_empty() {
@@ -283,7 +306,9 @@ pub(crate) fn bind_navigator_properties(
                         }
                         _ => {}
                     },
-                    nested @ LayoutNode::Choice { .. } => two_byte_markers(nested, message, binding),
+                    nested @ LayoutNode::Choice { .. } => {
+                        two_byte_markers(nested, message, binding)
+                    }
                     _ => {}
                 }
             }

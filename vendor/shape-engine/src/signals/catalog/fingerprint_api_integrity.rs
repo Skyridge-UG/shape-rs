@@ -1,15 +1,22 @@
 //! `FingerprintApiIntegrity`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, native_checks::*, flag_bytes::*};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use buffer_writes::slot_info;
 
 /// `FingerprintApiIntegrity`. Card: [`CARD`].
-pub(crate) fn recognize_fingerprint_api_integrity(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
-    if view.leaves().any(|leaf| leaf.op == LeafOp::String || leaf.repeat_depth > 0) {
+pub(crate) fn recognize_fingerprint_api_integrity(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
+    if view
+        .leaves()
+        .any(|leaf| leaf.op == LeafOp::String || leaf.repeat_depth > 0)
+    {
         return None;
     }
     let info = slot_info(view, ctx);
@@ -23,8 +30,14 @@ pub(crate) fn recognize_fingerprint_api_integrity(view: &SlotView, ctx: &FinderC
         .filter(|(_, emission)| !emission.leaves.is_empty())
         .map(|(count, _)| count)
         .collect();
-    (integrity_kind(&counts, hash_slots(view), &info.facts) == Some(IntegrityKind::WithSourceHashes))
-    .then(|| claim(&["eleven flag bytes of native checks", "source hashes of descriptor getters"]))
+    (integrity_kind(&counts, hash_slots(view), &info.facts)
+        == Some(IntegrityKind::WithSourceHashes))
+    .then(|| {
+        claim(&[
+            "eleven flag bytes of native checks",
+            "source hashes of descriptor getters",
+        ])
+    })
     .flatten()
 }
 
@@ -57,9 +70,12 @@ pub(crate) fn bind_fingerprint_api_integrity(
     // buf[i] = m ^ 144`): the contract's logical value is the literal.
     let literal_value = |leaf: &crate::signals::analysis::LeafView| {
         leaf.op == LeafOp::Byte
-            && ctx
-                .caller_value_node(leaf)
-                .is_some_and(|node| matches!(ctx.parse.nodes.kind(node), oxc_ast::AstKind::NumericLiteral(_)))
+            && ctx.caller_value_node(leaf).is_some_and(|node| {
+                matches!(
+                    ctx.parse.nodes.kind(node),
+                    oxc_ast::AstKind::NumericLiteral(_)
+                )
+            })
     };
     let hints = emission_hints(&info, view, |write, leaf| {
         if write.literal || literal_value(leaf) {
@@ -97,7 +113,11 @@ pub(crate) fn bind_fingerprint_api_integrity(
         });
         match donor {
             Some(donor) => resolved.push(donor.clone()),
-            None => return Err(BindRefusal::new("hash-slot positions have no hashed message to name them")),
+            None => {
+                return Err(BindRefusal::new(
+                    "hash-slot positions have no hashed message to name them",
+                ))
+            }
         }
     }
     let mut binding = FieldBinding::new();

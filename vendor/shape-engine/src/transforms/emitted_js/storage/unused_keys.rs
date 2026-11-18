@@ -20,16 +20,25 @@ use oxc_semantic::{Scoping, SymbolId};
 use oxc_span::Span;
 
 use super::super::purity::expression_is_pure;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn remove_unused_keys(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, _) = analysis::analyze(&program);
-    let mut stores = Stores { scoping: &scoping, stores: HashMap::new() };
+    let mut stores = Stores {
+        scoping: &scoping,
+        stores: HashMap::new(),
+    };
     super::super::support::for_each_list(&program, |list| stores.list(list));
-    let mut scan = Scan { source, scoping: &scoping, stores: stores.stores, edits: Vec::new(), removed: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        stores: stores.stores,
+        edits: Vec::new(),
+        removed: 0,
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.removed == 0 {
         return Ok((source.into(), 0));
@@ -57,17 +66,25 @@ impl Stores<'_> {
             let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
                 continue;
             };
-            if assignment.operator != AssignmentOperator::Assign || !target.name.starts_with("$KEY_") {
+            if assignment.operator != AssignmentOperator::Assign
+                || !target.name.starts_with("$KEY_")
+            {
                 continue;
             }
-            if let Some(symbol) = self.scoping.get_reference(target.reference_id()).symbol_id() {
+            if let Some(symbol) = self
+                .scoping
+                .get_reference(target.reference_id())
+                .symbol_id()
+            {
                 let quiet = quiet(self.scoping, &assignment.right);
-                self.stores.entry(symbol).or_default().push((statement.span, quiet));
+                self.stores
+                    .entry(symbol)
+                    .or_default()
+                    .push((statement.span, quiet));
             }
         }
     }
 }
-
 
 struct Scan<'s> {
     source: &'s str,
@@ -81,7 +98,9 @@ fn regexp(callee: &Expression<'_>, arguments: &[Argument<'_>]) -> bool {
     matches!(callee, Expression::Identifier(name) if name.name == "RegExp")
         && !arguments.is_empty()
         && arguments.len() <= 2
-        && arguments.iter().all(|argument| matches!(argument, Argument::StringLiteral(_)))
+        && arguments
+            .iter()
+            .all(|argument| matches!(argument, Argument::StringLiteral(_)))
 }
 
 fn global(scoping: &Scoping, expression: &Expression<'_>, name: &str) -> bool {
@@ -96,14 +115,22 @@ fn quiet(scoping: &Scoping, init: &Expression<'_>) -> bool {
     match init.get_inner_expression() {
         Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_) => true,
         Expression::CallExpression(call) => {
-            (regexp(&call.callee, &call.arguments) && global(scoping, &call.callee, "RegExp")) || random_text(scoping, init)
+            (regexp(&call.callee, &call.arguments) && global(scoping, &call.callee, "RegExp"))
+                || random_text(scoping, init)
         }
-        Expression::NewExpression(new) => regexp(&new.callee, &new.arguments) && global(scoping, &new.callee, "RegExp"),
+        Expression::NewExpression(new) => {
+            regexp(&new.callee, &new.arguments) && global(scoping, &new.callee, "RegExp")
+        }
         Expression::Identifier(name) => scoping
             .get_reference(name.reference_id())
             .symbol_id()
-            .is_some_and(|symbol| scoping.symbol_span(symbol).end <= name.span.start || scoping.symbol_flags(symbol).is_function()),
-        Expression::LogicalExpression(logical) => quiet(scoping, &logical.left) && quiet(scoping, &logical.right),
+            .is_some_and(|symbol| {
+                scoping.symbol_span(symbol).end <= name.span.start
+                    || scoping.symbol_flags(symbol).is_function()
+            }),
+        Expression::LogicalExpression(logical) => {
+            quiet(scoping, &logical.left) && quiet(scoping, &logical.right)
+        }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
             random_text(scoping, init) || expression_is_pure(init)
         }
@@ -116,11 +143,17 @@ fn quiet(scoping: &Scoping, init: &Expression<'_>) -> bool {
 /// sliced with literal bounds, and joined to string literals. None of it
 /// can throw, and the only effect is a draw nothing can observe.
 fn random_text(scoping: &Scoping, expression: &Expression<'_>) -> bool {
-    let literal_numbers = |arguments: &[Argument<'_>]| arguments.iter().all(|argument| matches!(argument, Argument::NumericLiteral(_)));
+    let literal_numbers = |arguments: &[Argument<'_>]| {
+        arguments
+            .iter()
+            .all(|argument| matches!(argument, Argument::NumericLiteral(_)))
+    };
     match expression.get_inner_expression() {
         Expression::StringLiteral(_) => true,
         Expression::BinaryExpression(binary) => {
-            binary.operator == BinaryOperator::Addition && random_text(scoping, &binary.left) && random_text(scoping, &binary.right)
+            binary.operator == BinaryOperator::Addition
+                && random_text(scoping, &binary.left)
+                && random_text(scoping, &binary.right)
         }
         Expression::CallExpression(call) if !call.optional => {
             // `o.m(…)` or, before property names are dotted, `o["m"](…)`.
@@ -132,12 +165,16 @@ fn random_text(scoping: &Scoping, expression: &Expression<'_>) -> bool {
             }
             match member.static_property_name().unwrap_or_default() {
                 "slice" | "substring" | "substr" => {
-                    call.arguments.len() <= 2 && literal_numbers(&call.arguments) && random_text(scoping, member.object())
+                    call.arguments.len() <= 2
+                        && literal_numbers(&call.arguments)
+                        && random_text(scoping, member.object())
                 }
                 "toString" => {
                     let radix_ok = match call.arguments.as_slice() {
                         [] => true,
-                        [Argument::NumericLiteral(radix)] => (2.0..=36.0).contains(&radix.value) && radix.value.fract() == 0.0,
+                        [Argument::NumericLiteral(radix)] => {
+                            (2.0..=36.0).contains(&radix.value) && radix.value.fract() == 0.0
+                        }
                         _ => false,
                     };
                     radix_ok && random_number(scoping, member.object())
@@ -168,7 +205,12 @@ impl Scan<'_> {
         let BindingPattern::BindingIdentifier(id) = &declarator.id else {
             return false;
         };
-        if !id.name.starts_with("$KEY_") || !declarator.init.as_ref().is_none_or(|init| quiet(self.scoping, init)) {
+        if !id.name.starts_with("$KEY_")
+            || !declarator
+                .init
+                .as_ref()
+                .is_none_or(|init| quiet(self.scoping, init))
+        {
             return false;
         }
         let symbol = id.symbol_id();
@@ -193,7 +235,10 @@ impl Scan<'_> {
     }
 
     fn declaration(&mut self, declaration: &VariableDeclaration<'_>) {
-        let (gone, kept): (Vec<_>, Vec<_>) = declaration.declarations.iter().partition(|declarator| self.unused(declarator));
+        let (gone, kept): (Vec<_>, Vec<_>) = declaration
+            .declarations
+            .iter()
+            .partition(|declarator| self.unused(declarator));
         if gone.is_empty() {
             return;
         }
@@ -203,18 +248,29 @@ impl Scan<'_> {
                 continue;
             };
             for &(span, _) in self.stores.get(&id.symbol_id()).into_iter().flatten() {
-                self.edits.push(analysis::Edit::delete(whole_line(self.source, span)));
+                self.edits
+                    .push(analysis::Edit::delete(whole_line(self.source, span)));
             }
         }
         if kept.is_empty() {
-            self.edits.push(analysis::Edit::delete(whole_line(self.source, declaration.span)));
+            self.edits.push(analysis::Edit::delete(whole_line(
+                self.source,
+                declaration.span,
+            )));
         } else {
-            let kept: Vec<&str> = kept.iter().map(|declarator| &self.source[declarator.span.start as usize..declarator.span.end as usize]).collect();
-            self.edits.push(analysis::Edit::replace(declaration.span, format!("{} {};", declaration.kind.as_str(), kept.join(", "))));
+            let kept: Vec<&str> = kept
+                .iter()
+                .map(|declarator| {
+                    &self.source[declarator.span.start as usize..declarator.span.end as usize]
+                })
+                .collect();
+            self.edits.push(analysis::Edit::replace(
+                declaration.span,
+                format!("{} {};", declaration.kind.as_str(), kept.join(", ")),
+            ));
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

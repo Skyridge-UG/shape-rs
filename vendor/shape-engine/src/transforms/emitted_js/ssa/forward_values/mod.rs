@@ -116,21 +116,21 @@ use oxc_syntax::scope::ScopeFlags;
 
 use super::super::dead_ssa::readonly_arguments;
 use super::super::primitives::{self, Types};
+use super::super::support::whole_line;
 use super::super::tuple_unpack::fresh_tuple_helper;
 use crate::analysis;
-use super::super::support::whole_line;
 
-mod scan;
 mod decide;
-mod stability;
-mod slots;
 mod edits;
 mod holders;
+mod scan;
+mod slots;
+mod stability;
 #[cfg(test)]
 mod tests;
 
-use holders::{FixedArguments, Holders};
 use crate::transforms::emitted_js::support::is_loop;
+use holders::{FixedArguments, Holders};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ForwardValuesResult {
@@ -151,7 +151,9 @@ pub(crate) fn forward_values_once(source: &str) -> Result<ForwardValuesResult, S
 /// Forwarding with rule 12 on. Copying property reads hides the plain names
 /// resugaring folds (`o.m.call(o, …)`, `c ? c : b`), so it runs once those
 /// folds are done.
-pub(crate) fn forward_values_and_property_reads(source: &str) -> Result<ForwardValuesResult, String> {
+pub(crate) fn forward_values_and_property_reads(
+    source: &str,
+) -> Result<ForwardValuesResult, String> {
     forward(source, true)
 }
 
@@ -198,7 +200,11 @@ fn forward_once(source: &str, property_reads: bool) -> Result<ForwardValuesResul
         duplicate_helpers,
         passthrough,
         fresh_helpers,
-        comments: program.comments.iter().map(|comment| comment.span.start).collect(),
+        comments: program
+            .comments
+            .iter()
+            .map(|comment| comment.span.start)
+            .collect(),
         fixed_arguments: fixed.owners,
         types: Some(&types),
         ..Scan::default()
@@ -446,22 +452,31 @@ struct Lookups {
 
 impl Lookups {
     fn hold(&self, plan: &Plan<'_, '_>) -> bool {
-        self.forwarded.iter().all(|(symbol, seen)| plan.forwarded.get(symbol) == seen.as_ref())
-            && self.vanishing.iter().all(|(start, seen)| plan.vanishing.contains(start) == *seen)
-            && self.moved.iter().all(|(start, seen)| plan.moved.get(start) == seen.as_ref())
+        self.forwarded
+            .iter()
+            .all(|(symbol, seen)| plan.forwarded.get(symbol) == seen.as_ref())
+            && self
+                .vanishing
+                .iter()
+                .all(|(start, seen)| plan.vanishing.contains(start) == *seen)
+            && self
+                .moved
+                .iter()
+                .all(|(start, seen)| plan.moved.get(start) == seen.as_ref())
     }
 }
-
 
 /// Non-writable, non-configurable globals: read unshadowed, they are constants.
 /// `r` or `!r` as a test: the name's reference and whether it is negated.
 fn tested_name(test: &Expression<'_>) -> Option<(ReferenceId, bool)> {
     match test {
         Expression::Identifier(identifier) => Some((identifier.reference_id.get()?, false)),
-        Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => match &unary.argument {
-            Expression::Identifier(identifier) => Some((identifier.reference_id.get()?, true)),
-            _ => None,
-        },
+        Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
+            match &unary.argument {
+                Expression::Identifier(identifier) => Some((identifier.reference_id.get()?, true)),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -527,15 +542,21 @@ fn property_read(expression: &Expression<'_>, types: &Types<'_>) -> bool {
 /// allocations).
 fn property_tree(expression: &Expression<'_>, types: &Types<'_>) -> bool {
     match expression.without_parentheses() {
-        Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_) => member_read(expression, types),
+        Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_) => {
+            member_read(expression, types)
+        }
         Expression::BinaryExpression(binary) => {
             !matches!(binary.operator, BinaryOperator::Instanceof)
                 && property_tree(&binary.left, types)
                 && property_tree(&binary.right, types)
         }
-        Expression::LogicalExpression(logical) => property_tree(&logical.left, types) && property_tree(&logical.right, types),
+        Expression::LogicalExpression(logical) => {
+            property_tree(&logical.left, types) && property_tree(&logical.right, types)
+        }
         Expression::ConditionalExpression(choice) => {
-            property_tree(&choice.test, types) && property_tree(&choice.consequent, types) && property_tree(&choice.alternate, types)
+            property_tree(&choice.test, types)
+                && property_tree(&choice.consequent, types)
+                && property_tree(&choice.alternate, types)
         }
         Expression::UnaryExpression(unary) => {
             unary.operator != UnaryOperator::Delete && property_tree(&unary.argument, types)
@@ -564,7 +585,10 @@ fn reads_a_property(expression: &Expression<'_>) -> bool {
 
 fn member_read(expression: &Expression<'_>, types: &Types<'_>) -> bool {
     let base = |object: &Expression<'_>| {
-        matches!(object, Expression::Identifier(_) | Expression::ThisExpression(_)) || member_read(object, types)
+        matches!(
+            object,
+            Expression::Identifier(_) | Expression::ThisExpression(_)
+        ) || member_read(object, types)
     };
     match expression {
         Expression::StaticMemberExpression(member) => !member.optional && base(&member.object),
@@ -607,8 +631,13 @@ fn keeps_name(expression: &Expression<'_>) -> bool {
                     | BinaryOperator::Subtraction
                     | BinaryOperator::Multiplication
                     | BinaryOperator::Division
-            ) && (matches!(binary.right.without_parentheses(), Expression::NumericLiteral(_))
-                || matches!(binary.left.without_parentheses(), Expression::NumericLiteral(_)))
+            ) && (matches!(
+                binary.right.without_parentheses(),
+                Expression::NumericLiteral(_)
+            ) || matches!(
+                binary.left.without_parentheses(),
+                Expression::NumericLiteral(_)
+            ))
         }
         _ => false,
     }
@@ -620,15 +649,27 @@ fn property_path(expression: &Expression<'_>) -> bool {
         Expression::ChainExpression(chain) => match &chain.expression {
             ChainElement::StaticMemberExpression(member) => property_path(&member.object),
             ChainElement::ComputedMemberExpression(member) => {
-                matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
-                    && property_path(&member.object)
+                matches!(
+                    member.expression,
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                ) && property_path(&member.object)
             }
             _ => false,
         },
-        Expression::StaticMemberExpression(member) => matches!(member.object.without_parentheses(), Expression::Identifier(_)) || property_path(&member.object),
+        Expression::StaticMemberExpression(member) => {
+            matches!(
+                member.object.without_parentheses(),
+                Expression::Identifier(_)
+            ) || property_path(&member.object)
+        }
         Expression::ComputedMemberExpression(member) => {
-            matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_))
-                && (matches!(member.object.without_parentheses(), Expression::Identifier(_)) || property_path(&member.object))
+            matches!(
+                member.expression,
+                Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+            ) && (matches!(
+                member.object.without_parentheses(),
+                Expression::Identifier(_)
+            ) || property_path(&member.object))
         }
         _ => false,
     }

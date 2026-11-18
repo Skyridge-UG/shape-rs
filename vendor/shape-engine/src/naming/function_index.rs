@@ -55,7 +55,9 @@ use oxc_span::{GetSpan, Span};
 use serde::{Deserialize, Serialize};
 
 use crate::signals::extract::bindings::literal_value;
-use crate::signals::schema::{BindingKind, BindingRole, ProgramProperties, ProgramPropertiesLimits, SourceSpan};
+use crate::signals::schema::{
+    BindingKind, BindingRole, ProgramProperties, ProgramPropertiesLimits, SourceSpan,
+};
 
 /// Version of the serialized [`FunctionIndex`] contract.
 ///
@@ -110,7 +112,8 @@ impl FunctionIndexLimits {
             max_ast_nodes: self.max_ast_nodes,
             max_functions: self.max_functions,
             max_bindings: self.max_bindings,
-            max_array_elements: crate::signals::schema::ProgramPropertiesLimits::default().max_array_elements,
+            max_array_elements: crate::signals::schema::ProgramPropertiesLimits::default()
+                .max_array_elements,
             max_emissions: crate::signals::schema::ProgramPropertiesLimits::default().max_emissions,
             max_retained_source_bytes: crate::signals::schema::ProgramPropertiesLimits::default()
                 .max_retained_source_bytes,
@@ -803,7 +806,8 @@ struct Builder<'s, 'a> {
     /// symbols at every depth up to `max_alias_depth`: exponential in the
     /// write fan-out. Cleared at depth 0, so a result never outlives the
     /// builder state it was computed from.
-    value_memo: std::cell::RefCell<HashMap<(SymbolId, usize, ValueTarget), SymbolFunctionResolution>>,
+    value_memo:
+        std::cell::RefCell<HashMap<(SymbolId, usize, ValueTarget), SymbolFunctionResolution>>,
 }
 
 impl<'s, 'a> Builder<'s, 'a> {
@@ -3903,13 +3907,14 @@ pub fn extract_function_index_with_limits(
         ));
     }
     let (scoping, nodes) = crate::analysis::analyze(&parsed.program);
-    let properties =
-        crate::signals::extract::scanner::extract_program_properties_with_limits(source, limits.program_properties_limits())
-            .ok();
+    let properties = crate::signals::extract::scanner::extract_program_properties_with_limits(
+        source,
+        limits.program_properties_limits(),
+    )
+    .ok();
     let builder = Builder::new(source, &scoping, &nodes, limits, properties)?;
     builder.finish()
 }
-
 
 #[cfg(test)]
 mod alias_cycle_tests {
@@ -3935,7 +3940,11 @@ mod alias_cycle_tests {
         source.push_str("v0();\n");
         let start = std::time::Instant::now();
         let index = extract_function_index(&source).expect("index");
-        assert!(start.elapsed() < std::time::Duration::from_secs(5), "took {:?}", start.elapsed());
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(5),
+            "took {:?}",
+            start.elapsed()
+        );
         assert!(!index.functions.is_empty());
     }
 }

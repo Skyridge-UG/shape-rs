@@ -1,4 +1,4 @@
-﻿//! `bandai` header generator: the `p8komysnbc-*` family the bandai edge
+//! `bandai` header generator: the `p8komysnbc-*` family the bandai edge
 //! (CloudFront + F5 Volterra) validates on POST /login.
 //!
 //! Structure derived from the golden capture (POWHTTP entry
@@ -64,7 +64,11 @@ pub const STAMP_CONSTANT_TAIL: &[u8] = &[0xA1, 0x01, 0x00, 0x00];
 
 /// Derive the stamp lead from the seed (observed D2/D7 = seed-bit echo).
 pub fn stamp_from_seed(seed: &[u8]) -> [u8; 5] {
-    let lead = if seed.is_empty() { 0xD2 } else { 0xD2 | ((seed[0] >> 5) & 0x05) };
+    let lead = if seed.is_empty() {
+        0xD2
+    } else {
+        0xD2 | ((seed[0] >> 5) & 0x05)
+    };
     [lead, 0xA1, 0x01, 0x00, 0x00]
 }
 

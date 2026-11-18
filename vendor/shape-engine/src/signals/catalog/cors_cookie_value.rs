@@ -1,10 +1,11 @@
 //! `CorsCookieValue`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_by_object_key, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::leaf_checks::*;
+use crate::signals::analysis::{
+    bind_by_object_key, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
 
 /// `CorsCookieValue`. Card: [`CARD`].
 pub(crate) fn recognize_cors_cookie_value(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {

@@ -45,7 +45,12 @@ pub(crate) fn split_block_key_webs(source: &str) -> Result<(String, usize), Stri
     }
     let mut chosen: BTreeMap<SymbolId, Vec<Span>> = BTreeMap::new();
     for _ in 0..16 {
-        let mut scan = Scan { slots: &slots, chosen: &chosen, loops: Vec::new(), found: Vec::new() };
+        let mut scan = Scan {
+            slots: &slots,
+            chosen: &chosen,
+            loops: Vec::new(),
+            found: Vec::new(),
+        };
         scan.visit_program(&program);
         if scan.found.is_empty() {
             break;
@@ -62,7 +67,10 @@ pub(crate) fn split_block_key_webs(source: &str) -> Result<(String, usize), Stri
     let mut count = 0;
     for (symbol, blocks) in &chosen {
         for block in blocks {
-            by_block.entry(block.start).or_default().push(scoping.symbol_name(*symbol));
+            by_block
+                .entry(block.start)
+                .or_default()
+                .push(scoping.symbol_name(*symbol));
             count += 1;
         }
     }
@@ -77,10 +85,14 @@ pub(crate) fn split_block_key_webs(source: &str) -> Result<(String, usize), Stri
         .collect();
     let applied = analysis::apply_edits(source, edits);
     if !applied.rejected.is_empty() {
-        return Err(format!("key web edits overlap: {}", analysis::describe_rejected_edits(&applied.rejected)));
+        return Err(format!(
+            "key web edits overlap: {}",
+            analysis::describe_rejected_edits(&applied.rejected)
+        ));
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("key web output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("key web output: {error}"))?;
     Ok((applied.output, count))
 }
 
@@ -106,7 +118,10 @@ fn slots(scoping: &Scoping, nodes: &AstNodes<'_>) -> BTreeMap<SymbolId, Slot> {
                 if scope == owner {
                     break;
                 }
-                if scoping.scope_flags(scope).intersects(ScopeFlags::Function | ScopeFlags::Arrow) {
+                if scoping
+                    .scope_flags(scope)
+                    .intersects(ScopeFlags::Function | ScopeFlags::Arrow)
+                {
                     continue 'symbols;
                 }
             }
@@ -140,7 +155,10 @@ impl Scan<'_> {
         for (&symbol, slot) in self.slots {
             let chosen = self.chosen.get(&symbol).map(Vec::as_slice).unwrap_or(&[]);
             if chosen.iter().any(|outer| inside(*outer, span))
-                || self.found.iter().any(|(s, outer)| *s == symbol && inside(*outer, span))
+                || self
+                    .found
+                    .iter()
+                    .any(|(s, outer)| *s == symbol && inside(*outer, span))
             {
                 continue;
             }
@@ -164,11 +182,19 @@ impl Scan<'_> {
             if outside.iter().any(|use_| use_.start >= span.start) {
                 continue;
             }
-            if self.loops.iter().any(|loop_| outside.iter().any(|use_| inside(*loop_, *use_))) {
+            if self
+                .loops
+                .iter()
+                .any(|loop_| outside.iter().any(|use_| inside(*loop_, *use_)))
+            {
                 continue;
             }
-            let uses: Vec<(Span, bool)> =
-                slot.uses.iter().copied().filter(|(use_, _)| inside(span, *use_)).collect();
+            let uses: Vec<(Span, bool)> = slot
+                .uses
+                .iter()
+                .copied()
+                .filter(|(use_, _)| inside(span, *use_))
+                .collect();
             let first = WritesFirst { symbol_uses: &uses };
             if first.statements(&block.body, true).is_some() {
                 self.found.push((symbol, span));

@@ -29,11 +29,9 @@ pub(crate) fn plain_ops(view: &SlotView, ops: &[LeafOp]) -> bool {
     !view.emissions().is_empty()
         && view.emissions().iter().all(|emission| {
             emission.leaves.len() == ops.len()
-                && emission
-                    .leaves
-                    .iter()
-                    .zip(ops)
-                    .all(|(leaf, op)| leaf.op == *op && leaf.repeat_depth == 0 && leaf.choice_depth == 0)
+                && emission.leaves.iter().zip(ops).all(|(leaf, op)| {
+                    leaf.op == *op && leaf.repeat_depth == 0 && leaf.choice_depth == 0
+                })
         })
 }
 
@@ -59,7 +57,11 @@ pub(crate) fn has_class(leaf: &LeafView, class: SourceClass) -> bool {
 
 /// A literal written by the producer with no host or loop source.
 pub(crate) fn literal_only(leaf: &LeafView) -> bool {
-    !leaf.classes.is_empty() && leaf.classes.iter().all(|class| *class == SourceClass::Literal)
+    !leaf.classes.is_empty()
+        && leaf
+            .classes
+            .iter()
+            .all(|class| *class == SourceClass::Literal)
 }
 
 /// Every leaf of every emission, in order.
@@ -77,7 +79,8 @@ pub(crate) fn first_emission_leaves<'v>(view: &'v SlotView) -> Vec<&'v LeafView>
 
 /// Some written leaf's provenance applies transform `name` (`.oldValue`).
 pub(crate) fn leaf_transform(view: &SlotView, name: &str) -> bool {
-    view.leaves().any(|leaf| leaf.transforms.iter().any(|t| t == name))
+    view.leaves()
+        .any(|leaf| leaf.transforms.iter().any(|t| t == name))
 }
 
 /// Every emission writes only bytes (any count, choices allowed).
@@ -87,7 +90,9 @@ pub(crate) fn only_bytes(view: &SlotView) -> bool {
 
 /// The leaf of a slot whose every emission writes exactly one plain number.
 pub(crate) fn single_number(view: &SlotView) -> Option<&LeafView> {
-    plain_ops(view, &[LeafOp::Number]).then(|| view.leaves().next()).flatten()
+    plain_ops(view, &[LeafOp::Number])
+        .then(|| view.leaves().next())
+        .flatten()
 }
 
 /// Every emission writes exactly one plain number.
@@ -111,9 +116,12 @@ pub(crate) fn count_then_bit_bytes(view: &SlotView) -> bool {
     !view.emissions().is_empty()
         && view.emissions().iter().all(|emission| {
             let first = emission.leaves.first();
-            first.is_some_and(|leaf| leaf.op == LeafOp::Number && leaf.repeat_depth == 0 && leaf.choice_depth == 0)
-                && emission.leaves.len() >= 2
-                && emission.leaves[1..].iter().all(|leaf| leaf.op == LeafOp::Byte)
+            first.is_some_and(|leaf| {
+                leaf.op == LeafOp::Number && leaf.repeat_depth == 0 && leaf.choice_depth == 0
+            }) && emission.leaves.len() >= 2
+                && emission.leaves[1..]
+                    .iter()
+                    .all(|leaf| leaf.op == LeafOp::Byte)
         })
 }
 
@@ -133,16 +141,19 @@ pub(crate) fn all_numbers(view: &SlotView, n: usize) -> bool {
     !view.emissions().is_empty()
         && view.emissions().iter().all(|emission| {
             emission.leaves.len() == n
-                && emission
-                    .leaves
-                    .iter()
-                    .all(|leaf| leaf.op == LeafOp::Number && leaf.repeat_depth == 0 && leaf.choice_depth == 0)
+                && emission.leaves.iter().all(|leaf| {
+                    leaf.op == LeafOp::Number && leaf.repeat_depth == 0 && leaf.choice_depth == 0
+                })
         })
 }
 
 /// Every emission writes `strings` strings and `numbers` numbers (any
 /// nesting).
-pub(crate) fn per_emission_counts(view: &SlotView, strings: usize, numbers: std::ops::RangeInclusive<usize>) -> bool {
+pub(crate) fn per_emission_counts(
+    view: &SlotView,
+    strings: usize,
+    numbers: std::ops::RangeInclusive<usize>,
+) -> bool {
     !view.emissions().is_empty()
         && view.emissions().iter().all(|emission| {
             let count = |op: LeafOp| emission.leaves.iter().filter(|leaf| leaf.op == op).count();
@@ -152,12 +163,17 @@ pub(crate) fn per_emission_counts(view: &SlotView, strings: usize, numbers: std:
 
 /// The deepest repeat nesting of any leaf (0 without repeats).
 pub(crate) fn max_repeat_depth(view: &SlotView) -> usize {
-    view.leaves().map(|leaf| leaf.repeat_depth).max().unwrap_or(0)
+    view.leaves()
+        .map(|leaf| leaf.repeat_depth)
+        .max()
+        .unwrap_or(0)
 }
 
 /// The local rendering of a fixed date: `new Date(K).toString()`.
 pub(crate) fn date_to_string(leaf: &LeafView) -> bool {
-    leaf.op == LeafOp::String && has_transform(leaf, ".toString()") && has_transform(leaf, "new Date")
+    leaf.op == LeafOp::String
+        && has_transform(leaf, ".toString()")
+        && has_transform(leaf, "new Date")
 }
 
 /// A string whose characters were shuffled (`Array.from(s)` ... `.join()`).

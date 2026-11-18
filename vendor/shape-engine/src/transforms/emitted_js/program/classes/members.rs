@@ -5,7 +5,10 @@ use super::*;
 impl<'s, 'a> Scan<'s, 'a> {
     pub(super) fn symbol(&self, expression: &Expression<'_>) -> Option<SymbolId> {
         match expression.get_inner_expression() {
-            Expression::Identifier(identifier) => self.scoping.get_reference(identifier.reference_id()).symbol_id(),
+            Expression::Identifier(identifier) => self
+                .scoping
+                .get_reference(identifier.reference_id())
+                .symbol_id(),
             _ => None,
         }
     }
@@ -24,9 +27,19 @@ impl<'s, 'a> Scan<'s, 'a> {
         let value = self.symbol(&assignment.right)?;
         if let Some(prototype) = object.get_inner_expression().as_member_expression() {
             let (holder, name) = member_key(prototype)?;
-            return (name == "prototype").then_some(Store { holder: self.symbol(holder)?, instance: true, key, value });
+            return (name == "prototype").then_some(Store {
+                holder: self.symbol(holder)?,
+                instance: true,
+                key,
+                value,
+            });
         }
-        Some(Store { holder: self.symbol(object)?, instance: false, key, value })
+        Some(Store {
+            holder: self.symbol(object)?,
+            instance: false,
+            key,
+            value,
+        })
     }
 
     /// Strict, or sloppy in no way strict mode would change.
@@ -36,19 +49,36 @@ impl<'s, 'a> Scan<'s, 'a> {
         }
         let mut sloppy = SloppyOnly::default();
         sloppy.visit_function(function, oxc_syntax::scope::ScopeFlags::Function);
-        sloppy.clean() && sloppy.unresolved_writes.iter().all(|&reference| self.scoping.get_reference(reference).symbol_id().is_some())
+        sloppy.clean()
+            && sloppy
+                .unresolved_writes
+                .iter()
+                .all(|&reference| self.scoping.get_reference(reference).symbol_id().is_some())
     }
 
     /// The single-use thread `value` declared in `from..to`, strict or
     /// safe to make strict.
-    pub(super) fn method(&self, statements: &[Statement<'a>], from: usize, to: usize, value: SymbolId) -> Option<usize> {
+    pub(super) fn method(
+        &self,
+        statements: &[Statement<'a>],
+        from: usize,
+        to: usize,
+        value: SymbolId,
+    ) -> Option<usize> {
         let offset = statements[from..to].iter().position(|candidate| {
-            thread(candidate).is_some_and(|function| function.id.as_ref().is_some_and(|id| id.symbol_id() == value))
+            thread(candidate).is_some_and(|function| {
+                function
+                    .id
+                    .as_ref()
+                    .is_some_and(|id| id.symbol_id() == value)
+            })
         })?;
         let single = self.scoping.get_resolved_references(value).count() == 1;
-        (single && thread(&statements[from + offset]).is_some_and(|function| self.strict_safe(function))).then_some(from + offset)
+        (single
+            && thread(&statements[from + offset])
+                .is_some_and(|function| self.strict_safe(function)))
+        .then_some(from + offset)
     }
-
 
     /// Babel's `_createClass(C, [{ key, get }])` inlined:
     ///
@@ -64,7 +94,13 @@ impl<'s, 'a> Scan<'s, 'a> {
     /// The loop marks each property non-enumerable and configurable (and a
     /// value writable), as class elements are. Returns the block's last
     /// statement and its elements.
-    pub(super) fn descriptors(&self, statements: &[Statement<'a>], class_at: usize, at: usize, holders: &[SymbolId]) -> Option<(usize, Vec<Member>)> {
+    pub(super) fn descriptors(
+        &self,
+        statements: &[Statement<'a>],
+        class_at: usize,
+        at: usize,
+        holders: &[SymbolId],
+    ) -> Option<(usize, Vec<Member>)> {
         let Statement::VariableDeclaration(declaration) = &statements[at] else {
             return None;
         };
@@ -75,7 +111,11 @@ impl<'s, 'a> Scan<'s, 'a> {
             return None;
         };
         let descriptor = descriptor.symbol_id();
-        let Some(Expression::ObjectExpression(object)) = declarator.init.as_ref().map(|init| init.get_inner_expression()) else {
+        let Some(Expression::ObjectExpression(object)) = declarator
+            .init
+            .as_ref()
+            .map(|init| init.get_inner_expression())
+        else {
             return None;
         };
         let [ObjectPropertyKind::ObjectProperty(property)] = object.properties.as_slice() else {
@@ -126,7 +166,10 @@ impl<'s, 'a> Scan<'s, 'a> {
             };
             let single = matches!(array.elements.as_slice(), [element] if element.as_expression().and_then(|e| self.symbol(e)) == Some(descriptor));
             let target = match &assignment.left {
-                AssignmentTarget::AssignmentTargetIdentifier(target) => self.scoping.get_reference(target.reference_id()).symbol_id(),
+                AssignmentTarget::AssignmentTargetIdentifier(target) => self
+                    .scoping
+                    .get_reference(target.reference_id())
+                    .symbol_id(),
                 _ => None,
             };
             if !single || target != Some(descriptor) {
@@ -141,7 +184,9 @@ impl<'s, 'a> Scan<'s, 'a> {
         let loop_text = text(self.source, define.span);
         let (target, instance) = holders.iter().find_map(|&holder| {
             let name = self.scoping.symbol_name(holder);
-            if loop_text.contains(&format!("Object[\"defineProperty\"]({name}[\"prototype\"], ")) {
+            if loop_text.contains(&format!(
+                "Object[\"defineProperty\"]({name}[\"prototype\"], "
+            )) {
                 Some((holder, true))
             } else if loop_text.contains(&format!("Object[\"defineProperty\"]({name}, ")) {
                 Some((holder, false))
@@ -150,7 +195,14 @@ impl<'s, 'a> Scan<'s, 'a> {
             }
         })?;
         let _ = target;
-        if !["[\"enumerable\"] = ", "[\"configurable\"] = true", "@@toPrimitive must return a primitive value."].iter().all(|needle| loop_text.contains(needle)) {
+        if ![
+            "[\"enumerable\"] = ",
+            "[\"configurable\"] = true",
+            "@@toPrimitive must return a primitive value.",
+        ]
+        .iter()
+        .all(|needle| loop_text.contains(needle))
+        {
             return None;
         }
         let mut last = cursor;
@@ -172,7 +224,12 @@ impl<'s, 'a> Scan<'s, 'a> {
         let mut members = Vec::new();
         for (kind, value) in fields {
             let function = self.method(statements, class_at + 1, cursor, value)?;
-            members.push(Member { function, key: key.value.to_string(), instance, kind });
+            members.push(Member {
+                function,
+                key: key.value.to_string(),
+                instance,
+                kind,
+            });
         }
         Some((last, members))
     }
@@ -180,14 +237,23 @@ impl<'s, 'a> Scan<'s, 'a> {
     /// `let a = b;` / `a = b;`: `b`.
     pub(super) fn copy(&self, statement: &Statement<'a>) -> Option<SymbolId> {
         match statement {
-            Statement::VariableDeclaration(declaration) => match declaration.declarations.as_slice() {
-                [declarator] if matches!(declarator.id, BindingPattern::BindingIdentifier(_)) => self.symbol(declarator.init.as_ref()?),
-                _ => None,
-            },
+            Statement::VariableDeclaration(declaration) => {
+                match declaration.declarations.as_slice() {
+                    [declarator]
+                        if matches!(declarator.id, BindingPattern::BindingIdentifier(_)) =>
+                    {
+                        self.symbol(declarator.init.as_ref()?)
+                    }
+                    _ => None,
+                }
+            }
             Statement::ExpressionStatement(expression) => match &expression.expression {
                 Expression::AssignmentExpression(assignment)
                     if assignment.operator == oxc_syntax::operator::AssignmentOperator::Assign
-                        && matches!(assignment.left, AssignmentTarget::AssignmentTargetIdentifier(_)) =>
+                        && matches!(
+                            assignment.left,
+                            AssignmentTarget::AssignmentTargetIdentifier(_)
+                        ) =>
                 {
                     self.symbol(&assignment.right)
                 }
@@ -198,7 +264,10 @@ impl<'s, 'a> Scan<'s, 'a> {
     }
 
     pub(super) fn references(&self, symbol: SymbolId) -> Vec<NodeId> {
-        self.scoping.get_resolved_references(symbol).map(|reference| reference.node_id()).collect()
+        self.scoping
+            .get_resolved_references(symbol)
+            .map(|reference| reference.node_id())
+            .collect()
     }
 
     pub(super) fn span(&self, node: NodeId) -> Span {
@@ -255,42 +324,74 @@ impl<'s, 'a> Scan<'s, 'a> {
             }
             let (parent, kind) = self.parent(node);
             match kind {
-                AstKind::NewExpression(new) if new.callee.get_inner_expression().span() == span => {}
+                AstKind::NewExpression(new) if new.callee.get_inner_expression().span() == span => {
+                }
                 AstKind::BinaryExpression(binary)
                     if binary.operator == oxc_syntax::operator::BinaryOperator::Instanceof
                         && binary.right.get_inner_expression().span() == span => {}
-                AstKind::Class(heritage) if heritage.super_class.as_ref().is_some_and(|base| base.get_inner_expression().span() == span) => {}
+                AstKind::Class(heritage)
+                    if heritage
+                        .super_class
+                        .as_ref()
+                        .is_some_and(|base| base.get_inner_expression().span() == span) => {}
                 // Object["defineProperty"](C, "prototype", { ["writable"]: false }): a
                 // class's prototype already is.
                 AstKind::CallExpression(call)
                     if text(self.source, call.span).starts_with("Object[\"defineProperty\"](")
-                        && text(self.source, call.span).ends_with(", \"prototype\", { [\"writable\"]: false })")
-                        && call.arguments.first().is_some_and(|argument| argument.span() == span) => {}
+                        && text(self.source, call.span)
+                            .ends_with(", \"prototype\", { [\"writable\"]: false })")
+                        && call
+                            .arguments
+                            .first()
+                            .is_some_and(|argument| argument.span() == span) => {}
                 // extendStatics(C, S): the subclass link.
                 AstKind::CallExpression(call)
                     if self.extend_statics(&call.callee)
                         && call.arguments.len() == 2
-                        && call.arguments.iter().any(|argument| argument.span() == span) => {}
+                        && call
+                            .arguments
+                            .iter()
+                            .any(|argument| argument.span() == span) => {}
                 // Handed to a thread: its `arguments[n]` reads hold it.
-                AstKind::CallExpression(call) if call.callee.get_inner_expression().span() != span => {
-                    let index = call.arguments.iter().position(|argument| argument.span() == span)?;
-                    if call.arguments[..index].iter().any(|argument| matches!(argument, Argument::SpreadElement(_))) {
+                AstKind::CallExpression(call)
+                    if call.callee.get_inner_expression().span() != span =>
+                {
+                    let index = call
+                        .arguments
+                        .iter()
+                        .position(|argument| argument.span() == span)?;
+                    if call.arguments[..index]
+                        .iter()
+                        .any(|argument| matches!(argument, Argument::SpreadElement(_)))
+                    {
                         return None;
                     }
                     let callee = self.symbol(&call.callee)?;
-                    uses.extend(self.argument_reads(callee, index)?.into_iter().map(|(node, span)| (node, span, holder)));
+                    uses.extend(
+                        self.argument_reads(callee, index)?
+                            .into_iter()
+                            .map(|(node, span)| (node, span, holder)),
+                    );
                 }
-                AstKind::StaticMemberExpression(member) if member.object.get_inner_expression().span() == span => {
+                AstKind::StaticMemberExpression(member)
+                    if member.object.get_inner_expression().span() == span =>
+                {
                     // Calling the function itself: a class cannot be.
                     if matches!(member.property.name.as_str(), "apply" | "call" | "bind") {
                         return self.refuse(holder, span, "apply/call/bind");
                     }
                 }
-                AstKind::ComputedMemberExpression(member) if member.object.get_inner_expression().span() == span => {
-                    if matches!(&member.expression, Expression::StringLiteral(key) if matches!(key.value.as_str(), "apply" | "call" | "bind")) {
+                AstKind::ComputedMemberExpression(member)
+                    if member.object.get_inner_expression().span() == span =>
+                {
+                    if matches!(&member.expression, Expression::StringLiteral(key) if matches!(key.value.as_str(), "apply" | "call" | "bind"))
+                    {
                         return self.refuse(holder, span, "apply/call/bind");
                     }
-                    if !matches!(member.expression, Expression::StringLiteral(_) | Expression::NumericLiteral(_)) {
+                    if !matches!(
+                        member.expression,
+                        Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                    ) {
                         return self.refuse(holder, span, "computed member");
                     }
                 }
@@ -300,28 +401,48 @@ impl<'s, 'a> Scan<'s, 'a> {
                     };
                     add(id.symbol_id(), &mut work, &mut holders);
                 }
-                AstKind::AssignmentExpression(assignment) if assignment.right.get_inner_expression().span() == span => {
+                AstKind::AssignmentExpression(assignment)
+                    if assignment.right.get_inner_expression().span() == span =>
+                {
                     // C.prototype.constructor = C, a subclass link.
-                    let constructor_link = assignment.left.as_member_expression().and_then(member_key).is_some_and(|(object, key)| {
-                        key == "constructor"
-                            && object.get_inner_expression().as_member_expression().and_then(member_key).is_some_and(|(of, prototype)| {
-                                prototype == "prototype" && self.symbol(of) == Some(holder)
-                            })
-                    });
+                    let constructor_link = assignment
+                        .left
+                        .as_member_expression()
+                        .and_then(member_key)
+                        .is_some_and(|(object, key)| {
+                            key == "constructor"
+                                && object
+                                    .get_inner_expression()
+                                    .as_member_expression()
+                                    .and_then(member_key)
+                                    .is_some_and(|(of, prototype)| {
+                                        prototype == "prototype" && self.symbol(of) == Some(holder)
+                                    })
+                        });
                     if constructor_link {
                         continue;
                     }
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
                         return self.refuse(holder, span, "stored on an object");
                     };
-                    add(self.scoping.get_reference(target.reference_id()).symbol_id()?, &mut work, &mut holders);
+                    add(
+                        self.scoping
+                            .get_reference(target.reference_id())
+                            .symbol_id()?,
+                        &mut work,
+                        &mut holders,
+                    );
                 }
                 AstKind::ReturnStatement(_) => {
                     // A factory: each call's result holds the class.
-                    let function = self.nodes.ancestor_ids(parent).find_map(|ancestor| match self.nodes.kind(ancestor) {
-                        AstKind::Function(function) => Some(function),
-                        _ => None,
-                    })?;
+                    let function =
+                        self.nodes.ancestor_ids(parent).find_map(|ancestor| {
+                            match self.nodes.kind(ancestor) {
+                                AstKind::Function(function) => Some(function),
+                                _ => None,
+                            }
+                        })?;
                     let factory = function.id.as_ref()?.symbol_id();
                     for call in self.references(factory) {
                         let call_span = self.span(call);
@@ -339,18 +460,37 @@ impl<'s, 'a> Scan<'s, 'a> {
                                 add(id.symbol_id(), &mut work, &mut holders);
                             }
                             AstKind::AssignmentExpression(assignment) => {
-                                let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                                let AssignmentTarget::AssignmentTargetIdentifier(target) =
+                                    &assignment.left
+                                else {
                                     return None;
                                 };
-                                add(self.scoping.get_reference(target.reference_id()).symbol_id()?, &mut work, &mut holders);
+                                add(
+                                    self.scoping
+                                        .get_reference(target.reference_id())
+                                        .symbol_id()?,
+                                    &mut work,
+                                    &mut holders,
+                                );
                             }
                             // new (F())(…)
-                            AstKind::NewExpression(new) if new.callee.get_inner_expression().span() == called.span => {}
+                            AstKind::NewExpression(new)
+                                if new.callee.get_inner_expression().span() == called.span => {}
                             // F()["encode"]: a static member read.
-                            AstKind::StaticMemberExpression(member) if !matches!(member.property.name.as_str(), "apply" | "call" | "bind") => {}
-                            AstKind::ComputedMemberExpression(member)
-                                if matches!(&member.expression, Expression::StringLiteral(key) if !matches!(key.value.as_str(), "apply" | "call" | "bind")) => {}
-                            kind => return self.refuse(holder, call_span, &format!("factory result in {}", kind.debug_name())),
+                            AstKind::StaticMemberExpression(member)
+                                if !matches!(
+                                    member.property.name.as_str(),
+                                    "apply" | "call" | "bind"
+                                ) => {}
+                            AstKind::ComputedMemberExpression(member) if matches!(&member.expression, Expression::StringLiteral(key) if !matches!(key.value.as_str(), "apply" | "call" | "bind")) =>
+                                {}
+                            kind => {
+                                return self.refuse(
+                                    holder,
+                                    call_span,
+                                    &format!("factory result in {}", kind.debug_name()),
+                                )
+                            }
                         }
                     }
                 }
@@ -367,7 +507,11 @@ impl<'s, 'a> Scan<'s, 'a> {
 
     /// The `arguments[index]` reads of the thread `callee`, when it reads
     /// its arguments only by literal index.
-    pub(super) fn argument_reads(&self, callee: SymbolId, index: usize) -> Option<Vec<(NodeId, Span)>> {
+    pub(super) fn argument_reads(
+        &self,
+        callee: SymbolId,
+        index: usize,
+    ) -> Option<Vec<(NodeId, Span)>> {
         let declaration = self.scoping.symbol_declaration(callee);
         let AstKind::Function(function) = self.nodes.kind(declaration) else {
             return None;
@@ -380,18 +524,22 @@ impl<'s, 'a> Scan<'s, 'a> {
             let AstKind::IdentifierReference(identifier) = node.kind() else {
                 continue;
             };
-            if identifier.name != "arguments" || !function.span.contains_inclusive(identifier.span) {
+            if identifier.name != "arguments" || !function.span.contains_inclusive(identifier.span)
+            {
                 continue;
             }
             // Its own `arguments`, not a nested function's.
-            let own = self.nodes.ancestor_ids(node.id()).find_map(|ancestor| match self.nodes.kind(ancestor) {
-                AstKind::Function(inner) => Some(inner.span == function.span),
-                _ => None,
+            let own = self.nodes.ancestor_ids(node.id()).find_map(|ancestor| {
+                match self.nodes.kind(ancestor) {
+                    AstKind::Function(inner) => Some(inner.span == function.span),
+                    _ => None,
+                }
             })?;
             if !own {
                 continue;
             }
-            let (member_node, AstKind::ComputedMemberExpression(member)) = self.parent(node.id()) else {
+            let (member_node, AstKind::ComputedMemberExpression(member)) = self.parent(node.id())
+            else {
                 return None;
             };
             let Expression::NumericLiteral(at) = &member.expression else {
@@ -419,13 +567,17 @@ impl<'s, 'a> Scan<'s, 'a> {
                 AstKind::AssignmentExpression(assignment) => self.symbol(&assignment.right),
                 _ => None,
             })
-            .filter_map(|value| match self.nodes.kind(self.scoping.symbol_declaration(value)) {
-                AstKind::Function(function) => {
-                    let body = text(self.source, function.span);
-                    (body.contains("Object[\"setPrototypeOf\"]") && body.contains("[\"__proto__\"] = arguments[1]")).then_some(function.span)
-                }
-                _ => None,
-            })
+            .filter_map(
+                |value| match self.nodes.kind(self.scoping.symbol_declaration(value)) {
+                    AstKind::Function(function) => {
+                        let body = text(self.source, function.span);
+                        (body.contains("Object[\"setPrototypeOf\"]")
+                            && body.contains("[\"__proto__\"] = arguments[1]"))
+                        .then_some(function.span)
+                    }
+                    _ => None,
+                },
+            )
             .collect();
         !helpers.is_empty()
             && self.scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).all(|reference| {
@@ -452,7 +604,11 @@ impl<'s, 'a> Scan<'s, 'a> {
                     }
                     if function.is_declaration() {
                         let Some(id) = &function.id else { return false };
-                        return depth > 0 && self.references(id.symbol_id()).into_iter().all(|use_| self.runs_after(use_, at, depth - 1));
+                        return depth > 0
+                            && self
+                                .references(id.symbol_id())
+                                .into_iter()
+                                .all(|use_| self.runs_after(use_, at, depth - 1));
                     }
                     return true;
                 }

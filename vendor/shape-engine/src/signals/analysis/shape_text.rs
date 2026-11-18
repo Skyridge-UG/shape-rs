@@ -44,7 +44,9 @@ pub(crate) fn compact(shape: &str) -> String {
                 }
                 out.push_str(symbol);
             }
-            let Some(delimiter) = tail.chars().next() else { break };
+            let Some(delimiter) = tail.chars().next() else {
+                break;
+            };
             out.push(delimiter);
             rest = &tail[1..];
         }
@@ -83,7 +85,10 @@ pub(crate) fn hoist_choice_tails(shape: &str) -> String {
             continue;
         };
         let (head, body) = (&item[..open], &item[open + 1..item.len() - 1]);
-        let arms: Vec<String> = split_arms(body).into_iter().map(hoist_choice_tails).collect();
+        let arms: Vec<String> = split_arms(body)
+            .into_iter()
+            .map(hoist_choice_tails)
+            .collect();
         if head != "C" || arms.len() < 2 {
             out.push(format!("{head}{{{}}}", arms.join("|")));
             continue;
@@ -93,14 +98,24 @@ pub(crate) fn hoist_choice_tails(shape: &str) -> String {
         let mut shared = 0;
         while shared + 1 < shortest {
             let candidate = lists[0][lists[0].len() - 1 - shared];
-            if !lists.iter().all(|list| list[list.len() - 1 - shared] == candidate) {
+            if !lists
+                .iter()
+                .all(|list| list[list.len() - 1 - shared] == candidate)
+            {
                 break;
             }
             shared += 1;
         }
-        let heads: Vec<String> = lists.iter().map(|list| list[..list.len() - shared].join(" ")).collect();
+        let heads: Vec<String> = lists
+            .iter()
+            .map(|list| list[..list.len() - shared].join(" "))
+            .collect();
         out.push(format!("C{{{}}}", heads.join("|")));
-        out.extend(lists[0][lists[0].len() - shared..].iter().map(|item| item.to_string()));
+        out.extend(
+            lists[0][lists[0].len() - shared..]
+                .iter()
+                .map(|item| item.to_string()),
+        );
     }
     out.join(" ")
 }
@@ -214,7 +229,11 @@ pub(crate) fn top_count_is(shapes: &[&str], count: usize) -> bool {
 
 /// The largest top-level item count over the emissions.
 pub(crate) fn max_top_count(shapes: &[&str]) -> usize {
-    shapes.iter().map(|shape| shape_items(shape).len()).max().unwrap_or(0)
+    shapes
+        .iter()
+        .map(|shape| shape_items(shape).len())
+        .max()
+        .unwrap_or(0)
 }
 
 /// Number of distinct top-level repeats across the first emission.
@@ -240,9 +259,18 @@ mod tests {
             unwrap("RAW4 NUMBER REPEAT:While/asc{NUMBER REPEAT:DoWhile/desc{CHOICE:logical{NUMBER|}}} NUMBER"),
             "RAW4 NUMBER REPEAT:While/asc{NUMBER REPEAT:DoWhile/desc{NUMBER}} NUMBER"
         );
-        assert_eq!(unwrap("REPEAT:DoWhile/desc{CHOICE:if{NUMBER|}}"), "REPEAT:DoWhile/desc{CHOICE:if{NUMBER|}}");
-        assert_eq!(unwrap("REPEAT:DoWhile/desc{CHOICE:logical{NUMBER|} NUMBER}"), "REPEAT:DoWhile/desc{CHOICE:logical{NUMBER|} NUMBER}");
-        assert_eq!(unwrap("REPEAT:For/desc{CHOICE:logical{NUMBER|}}"), "REPEAT:For/desc{CHOICE:logical{NUMBER|}}");
+        assert_eq!(
+            unwrap("REPEAT:DoWhile/desc{CHOICE:if{NUMBER|}}"),
+            "REPEAT:DoWhile/desc{CHOICE:if{NUMBER|}}"
+        );
+        assert_eq!(
+            unwrap("REPEAT:DoWhile/desc{CHOICE:logical{NUMBER|} NUMBER}"),
+            "REPEAT:DoWhile/desc{CHOICE:logical{NUMBER|} NUMBER}"
+        );
+        assert_eq!(
+            unwrap("REPEAT:For/desc{CHOICE:logical{NUMBER|}}"),
+            "REPEAT:For/desc{CHOICE:logical{NUMBER|}}"
+        );
     }
 
     #[test]
@@ -260,7 +288,10 @@ mod tests {
     #[test]
     fn compact_shapes() {
         assert_eq!(compact("RAW4 NUMBER REPEAT:For/desc{NUMBER}"), "N R{N}");
-        assert_eq!(compact("RAW4 CHOICE:cond{|BYTE} STRING BYTE! NUMBER"), "C{|B} S B N");
+        assert_eq!(
+            compact("RAW4 CHOICE:cond{|BYTE} STRING BYTE! NUMBER"),
+            "C{|B} S B N"
+        );
         assert_eq!(
             compact("RAW4 NUMBER REPEAT:While/asc{CHOICE:if{BYTE|NUMBER} NUMBER REPEAT:For/desc{NUMBER NUMBER NUMBER NUMBER}} NUMBER"),
             "N R{C{B|N} N R{N N N N}} N"
@@ -274,7 +305,11 @@ mod tests {
     fn shape_items_split_top_level() {
         assert_eq!(
             shape_items("RAW4 NUMBER REPEAT:For/desc{STRING NUMBER} CHOICE:if{BYTE|STRING}"),
-            vec!["NUMBER", "REPEAT:For/desc{STRING NUMBER}", "CHOICE:if{BYTE|STRING}"]
+            vec![
+                "NUMBER",
+                "REPEAT:For/desc{STRING NUMBER}",
+                "CHOICE:if{BYTE|STRING}"
+            ]
         );
         assert_eq!(shape_items("NUMBER NUMBER"), vec!["NUMBER", "NUMBER"]);
     }

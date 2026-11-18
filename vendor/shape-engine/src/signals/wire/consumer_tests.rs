@@ -1670,8 +1670,10 @@ fn packed_counter_recurrence_proves_flush_and_partial_tail() {
         let body = format!(
             "p=integerWriter(m,size,b,p);{loop_body}if(0!==pack){{b[++p]=6^m();}}b[++p]=9^m();"
         );
-        let (_, document, pin) =
-            synthetic_with_setup(&body, "let items=[];let size=items.length;let pack=0;let scratch=0;");
+        let (_, document, pin) = synthetic_with_setup(
+            &body,
+            "let items=[];let size=items.length;let pack=0;let scratch=0;",
+        );
         let plan = &document.wire.as_ref().unwrap().slots[0].source_plan[0];
         assert_eq!(plan.counts.len(), 1, "{plan:?}");
         assert_eq!(plan.counter_choices.len(), 2, "{plan:?}");
@@ -2315,12 +2317,21 @@ fn no_data_descriptive_entry_keeps_its_routing_and_round_trips() {
     });
     let parsed: DescriptiveSignal = serde_json::from_value(entry.clone()).unwrap();
     assert!(parsed.no_data);
-    assert_eq!(parsed.routing, WireRoute::Name { name: json!("qsnbepcestpp") });
+    assert_eq!(
+        parsed.routing,
+        WireRoute::Name {
+            name: json!("qsnbepcestpp")
+        }
+    );
     assert_eq!(serde_json::to_value(&parsed).unwrap(), entry);
-    let positional = json!({"address": "wave:1:2", "type": "no_data", "positional": 4, "fields": {}});
+    let positional =
+        json!({"address": "wave:1:2", "type": "no_data", "positional": 4, "fields": {}});
     let parsed: DescriptiveSignal = serde_json::from_value(positional.clone()).unwrap();
     assert_eq!(parsed.routing, WireRoute::Positional { positional: 4 });
     assert_eq!(serde_json::to_value(&parsed).unwrap(), positional);
     // Without its routing member a no-data entry is still refused.
-    assert!(serde_json::from_value::<DescriptiveSignal>(json!({"address": "direct:1", "type": "no_data"})).is_err());
+    assert!(serde_json::from_value::<DescriptiveSignal>(
+        json!({"address": "direct:1", "type": "no_data"})
+    )
+    .is_err());
 }

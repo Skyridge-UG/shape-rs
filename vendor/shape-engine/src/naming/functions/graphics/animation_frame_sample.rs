@@ -37,9 +37,17 @@ fn record_animation_frame_sample(
     }
     let flag = if let Some(flag) = flag {
         let flag_assignment = assignment(expression_statement(flag)?)?;
-        if !boolean(&flag_assignment.right, true) { return None; }
-        Some(captured_symbol(model, site, target_symbol(model, &flag_assignment.left)?)?)
-    } else { None };
+        if !boolean(&flag_assignment.right, true) {
+            return None;
+        }
+        Some(captured_symbol(
+            model,
+            site,
+            target_symbol(model, &flag_assignment.left)?,
+        )?)
+    } else {
+        None
+    };
     let Statement::IfStatement(guard) = guard else {
         return None;
     };

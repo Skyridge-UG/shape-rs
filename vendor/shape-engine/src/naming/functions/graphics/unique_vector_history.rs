@@ -99,23 +99,55 @@ fn array_comparison_guard<'a>(
 // A lowering materializes the complete null-or-length rejection in one flag.
 // Consume both arms, the flag's entire write inventory and its sole test.
 fn merged_rejection_flag<'a>(
-    model: &Model<'_, '_>, callback: &'a FunctionBody<'a>, copy: SymbolId, stored: SymbolId,
+    model: &Model<'_, '_>,
+    callback: &'a FunctionBody<'a>,
+    copy: SymbolId,
+    stored: SymbolId,
 ) -> Option<&'a IfStatement<'a>> {
-    let [Statement::VariableDeclaration(d), Statement::IfStatement(nulls), Statement::IfStatement(guard)] = callback.statements.as_slice() else { return None; };
-    if !plain_variable_kind(d.kind) { return None; }
-    let [d] = d.declarations.as_slice() else { return None; };
-    let BindingPattern::BindingIdentifier(id) = &d.id else { return None; };
+    let [Statement::VariableDeclaration(d), Statement::IfStatement(nulls), Statement::IfStatement(guard)] =
+        callback.statements.as_slice()
+    else {
+        return None;
+    };
+    if !plain_variable_kind(d.kind) {
+        return None;
+    }
+    let [d] = d.declarations.as_slice() else {
+        return None;
+    };
+    let BindingPattern::BindingIdentifier(id) = &d.id else {
+        return None;
+    };
     let flag = id.symbol_id.get()?;
-    if d.init.is_some() || model.binding_writes(flag)!=2 || model.binding_references(flag)!=3
-        || !model.scoping.symbol_redeclarations(flag).is_empty() || symbol(model,&guard.test)!=Some(flag) { return None; }
-    let (a,b)=logical_or(&nulls.test)?;
-    if !null_equals(model,a,copy) || !null_equals(model,b,stored) { return None; }
-    let [Statement::ExpressionStatement(yes)] = block(&nulls.consequent)? else { return None; };
-    let [Statement::ExpressionStatement(no)] = block(nulls.alternate.as_ref()?)? else { return None; };
-    let (ys,yv)=assignment(yes,model)?; let (ns,nv)=assignment(no,model)?;
-    if ys!=flag || ns!=flag || !matches!(yv,Expression::BooleanLiteral(b) if b.value) { return None; }
-    let (a,b)=binary(nv,"!==")?;
-    if symbol(model,member(a,"length")?)!=Some(copy) || symbol(model,member(b,"length")?)!=Some(stored) { return None; }
+    if d.init.is_some()
+        || model.binding_writes(flag) != 2
+        || model.binding_references(flag) != 3
+        || !model.scoping.symbol_redeclarations(flag).is_empty()
+        || symbol(model, &guard.test) != Some(flag)
+    {
+        return None;
+    }
+    let (a, b) = logical_or(&nulls.test)?;
+    if !null_equals(model, a, copy) || !null_equals(model, b, stored) {
+        return None;
+    }
+    let [Statement::ExpressionStatement(yes)] = block(&nulls.consequent)? else {
+        return None;
+    };
+    let [Statement::ExpressionStatement(no)] = block(nulls.alternate.as_ref()?)? else {
+        return None;
+    };
+    let (ys, yv) = assignment(yes, model)?;
+    let (ns, nv) = assignment(no, model)?;
+    if ys != flag || ns != flag || !matches!(yv,Expression::BooleanLiteral(b) if b.value) {
+        return None;
+    }
+    let (a, b) = binary(nv, "!==")?;
+    if symbol(model, member(a, "length")?) != Some(copy)
+        || symbol(model, member(b, "length")?) != Some(stored)
+    {
+        return None;
+    }
     Some(guard)
 }
 
@@ -125,12 +157,19 @@ fn equal_arrays(
     copy: SymbolId,
     stored: SymbolId,
 ) -> Option<()> {
-    let guard = if let Some(guard) = merged_rejection_flag(model, callback, copy, stored) { guard } else {
+    let guard = if let Some(guard) = merged_rejection_flag(model, callback, copy, stored) {
+        guard
+    } else {
         let guard = array_comparison_guard(model, callback, copy, stored)?;
-        let Expression::LogicalExpression(or) = &guard.test else { return None; };
+        let Expression::LogicalExpression(or) = &guard.test else {
+            return None;
+        };
         let (copy_length, stored_length) = binary(&or.right, "!==")?;
         if symbol(model, member(copy_length, "length")?) != Some(copy)
-            || symbol(model, member(stored_length, "length")?) != Some(stored) { return None; }
+            || symbol(model, member(stored_length, "length")?) != Some(stored)
+        {
+            return None;
+        }
         guard
     };
     let [Statement::ReturnStatement(false_branch)] = block(&guard.consequent)? else {

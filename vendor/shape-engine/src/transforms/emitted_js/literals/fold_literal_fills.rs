@@ -46,8 +46,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiteralFillResult {
@@ -171,7 +171,11 @@ impl Scan<'_, '_> {
 
     /// A literal this statement starts: `let $X = …` or `$X = …` with a plain
     /// identifier target, followed by the stores that fill it.
-    fn array_fill(&mut self, statements: &[Statement<'_>], position: usize) -> Option<Vec<analysis::Edit>> {
+    fn array_fill(
+        &mut self,
+        statements: &[Statement<'_>],
+        position: usize,
+    ) -> Option<Vec<analysis::Edit>> {
         let fresh = self.literal_start(&statements[position])?;
         // `[]`, a pre-sized `[void 0, …]` whose placeholders the stores fill
         // in order, or `[a, b]` that the very next stores extend from its
@@ -179,13 +183,18 @@ impl Scan<'_, '_> {
         // first); `{}` and `{ k: a }` likewise.
         let (object, placeholders, mut values) = match fresh.init {
             Expression::ArrayExpression(array)
-                if array.elements.iter().all(|element| element.as_expression().is_some_and(is_void_zero)) =>
+                if array
+                    .elements
+                    .iter()
+                    .all(|element| element.as_expression().is_some_and(is_void_zero)) =>
             {
                 (false, array.elements.len(), Vec::new())
             }
             Expression::ArrayExpression(array)
                 if array.elements.iter().all(|element| {
-                    element.as_expression().is_some_and(|value| !is_void_zero(value))
+                    element
+                        .as_expression()
+                        .is_some_and(|value| !is_void_zero(value))
                 }) =>
             {
                 let texts: Vec<String> = array
@@ -195,7 +204,9 @@ impl Scan<'_, '_> {
                     .collect();
                 (false, 0, texts)
             }
-            Expression::ObjectExpression(object) if object.properties.is_empty() => (true, 0, Vec::new()),
+            Expression::ObjectExpression(object) if object.properties.is_empty() => {
+                (true, 0, Vec::new())
+            }
             // `{ k: a }` of plain data properties that the very next stores
             // extend: defining a key in the literal stores what assigning it
             // after would (no `__proto__` prototype to hold a setter).
@@ -205,7 +216,9 @@ impl Scan<'_, '_> {
                         property.kind == PropertyKind::Init
                             && !property.method
                             && !is_void_zero(&property.value)
-                            && (property.computed || property_key(&property.key, false).is_some_and(|key| key != "__proto__"))
+                            && (property.computed
+                                || property_key(&property.key, false)
+                                    .is_some_and(|key| key != "__proto__"))
                     }
                     ObjectPropertyKind::SpreadProperty(_) => false,
                 }) =>
@@ -226,25 +239,28 @@ impl Scan<'_, '_> {
         let symbol = fresh.symbol;
         // The first fill, and the first reference of `$X` that could observe
         // it before that fill. The literal's own assignment is not a read.
-        let first = statements[position + 1..]
-            .iter()
-            .position(|statement| {
-                if object {
-                    self.key_store(statement, symbol, &[]).is_some()
-                } else {
-                    self.index_store(statement, symbol, extending).is_some()
-                }
-            })?
-            + position
+        let first = statements[position + 1..].iter().position(|statement| {
+            if object {
+                self.key_store(statement, symbol, &[]).is_some()
+            } else {
+                self.index_store(statement, symbol, extending).is_some()
+            }
+        })? + position
             + 1;
         if extending > 0 && first != position + 1 {
             return None;
         }
         let first_start = statements[first].span().start;
-        if self.scoping.get_resolved_references(symbol).any(|reference| {
-            let span = self.nodes.kind(reference.node_id()).span();
-            fresh.statement.start <= span.start && span.start < first_start && Some(span) != fresh.assigned_target
-        }) {
+        if self
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| {
+                let span = self.nodes.kind(reference.node_id()).span();
+                fresh.statement.start <= span.start
+                    && span.start < first_start
+                    && Some(span) != fresh.assigned_target
+            })
+        {
             return None;
         }
         // A store to a key the literal already has stays a store.
@@ -253,7 +269,9 @@ impl Scan<'_, '_> {
                 .properties
                 .iter()
                 .filter_map(|property| match property {
-                    ObjectPropertyKind::ObjectProperty(property) => property_key(&property.key, property.computed),
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        property_key(&property.key, property.computed)
+                    }
                     ObjectPropertyKind::SpreadProperty(_) => None,
                 })
                 .map(|key| format!("\"{key}\""))
@@ -263,10 +281,11 @@ impl Scan<'_, '_> {
         let mut last = first;
         for (offset, statement) in statements[first..].iter().enumerate() {
             let fill = if object {
-                self.key_store(statement, symbol, &keys).map(|(key, value)| {
-                    keys.push(key.clone());
-                    format!("[{key}]: {value}")
-                })
+                self.key_store(statement, symbol, &keys)
+                    .map(|(key, value)| {
+                        keys.push(key.clone());
+                        format!("[{key}]: {value}")
+                    })
             } else {
                 self.index_store(statement, symbol, values.len())
             };
@@ -301,7 +320,12 @@ impl Scan<'_, '_> {
     }
 
     /// `$X[index] = value;` where `value` does not read `$X`: its text.
-    fn index_store(&self, statement: &Statement<'_>, symbol: SymbolId, index: usize) -> Option<String> {
+    fn index_store(
+        &self,
+        statement: &Statement<'_>,
+        symbol: SymbolId,
+        index: usize,
+    ) -> Option<String> {
         let Statement::ExpressionStatement(expression) = statement else {
             return None;
         };
@@ -314,7 +338,8 @@ impl Scan<'_, '_> {
         let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left else {
             return None;
         };
-        let (Expression::Identifier(object), Expression::NumericLiteral(key)) = (&member.object, &member.expression)
+        let (Expression::Identifier(object), Expression::NumericLiteral(key)) =
+            (&member.object, &member.expression)
         else {
             return None;
         };
@@ -326,17 +351,24 @@ impl Scan<'_, '_> {
             return None;
         }
         let text = self.text(assignment.right.span());
-        Some(if matches!(assignment.right, Expression::SequenceExpression(_)) {
-            format!("({text})")
-        } else {
-            text.to_owned()
-        })
+        Some(
+            if matches!(assignment.right, Expression::SequenceExpression(_)) {
+                format!("({text})")
+            } else {
+                text.to_owned()
+            },
+        )
     }
 
     /// `$X["key"] = value;` with a new string key that is not `__proto__`
     /// and a value that does not read `$X`: the key's source text and the
     /// value's text.
-    fn key_store(&self, statement: &Statement<'_>, symbol: SymbolId, seen: &[String]) -> Option<(String, String)> {
+    fn key_store(
+        &self,
+        statement: &Statement<'_>,
+        symbol: SymbolId,
+        seen: &[String],
+    ) -> Option<(String, String)> {
         let Statement::ExpressionStatement(expression) = statement else {
             return None;
         };
@@ -349,7 +381,8 @@ impl Scan<'_, '_> {
         let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left else {
             return None;
         };
-        let (Expression::Identifier(object), Expression::StringLiteral(key)) = (&member.object, &member.expression)
+        let (Expression::Identifier(object), Expression::StringLiteral(key)) =
+            (&member.object, &member.expression)
         else {
             return None;
         };
@@ -375,7 +408,9 @@ impl Scan<'_, '_> {
     fn literal_start<'a>(&self, statement: &'a Statement<'a>) -> Option<LiteralStart<'a>> {
         match statement {
             Statement::VariableDeclaration(declaration) => {
-                if declaration.declarations.len() != 1 || declaration.kind == VariableDeclarationKind::Var {
+                if declaration.declarations.len() != 1
+                    || declaration.kind == VariableDeclarationKind::Var
+                {
                     return None;
                 }
                 let declarator = &declaration.declarations[0];
@@ -400,7 +435,10 @@ impl Scan<'_, '_> {
                 let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
                     return None;
                 };
-                let symbol = self.scoping.get_reference(target.reference_id.get()?).symbol_id()?;
+                let symbol = self
+                    .scoping
+                    .get_reference(target.reference_id.get()?)
+                    .symbol_id()?;
                 Some(LiteralStart {
                     symbol,
                     init: &assignment.right,
@@ -414,7 +452,10 @@ impl Scan<'_, '_> {
     }
 
     /// `let $X = { … };` or `$X = { … };` with a plain object literal.
-    fn fresh_literal<'a>(&self, statement: &'a Statement<'a>) -> Option<(SymbolId, &'a ObjectExpression<'a>)> {
+    fn fresh_literal<'a>(
+        &self,
+        statement: &'a Statement<'a>,
+    ) -> Option<(SymbolId, &'a ObjectExpression<'a>)> {
         let start = self.literal_start(statement)?;
         let Expression::ObjectExpression(literal) = start.init else {
             return None;
@@ -700,8 +741,16 @@ mod tests {
         let source = "function f() {\n  let $O_1 = {\n    [\"a\"]: void 0\n  };\n  $O_1[\"a\"] = ((0, x[\"a\"]));\n  $O_1[\"q\\\"\\\\\"] = (0, y);\n  return $O_1;\n}";
         let result = fold_literal_fills(source).unwrap();
         assert_eq!(result.folded_stores, 2);
-        assert!(result.code.contains("[\"a\"]: (0, x[\"a\"])"), "{}", result.code);
-        assert!(result.code.contains("[\"q\\\"\\\\\"]: (0, y)"), "{}", result.code);
+        assert!(
+            result.code.contains("[\"a\"]: (0, x[\"a\"])"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("[\"q\\\"\\\\\"]: (0, y)"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -709,7 +758,13 @@ mod tests {
         let source = "function f(a, b) {\n  let $SSA_1 = [];\n  var $KEY_4 = a;\n  $SSA_1[0] = a;\n  $SSA_1[1] = (0, b);\n  return $SSA_1;\n}";
         let result = fold_literal_fills(source).unwrap();
         assert_eq!(result.folded_stores, 2, "{}", result.code);
-        assert!(result.code.contains("var $KEY_4 = a;\n  let $SSA_1 = [a, (0, b)];\n  return $SSA_1;"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("var $KEY_4 = a;\n  let $SSA_1 = [a, (0, b)];\n  return $SSA_1;"),
+            "{}",
+            result.code
+        );
         for source in [
             // read before the fills
             "function f(a) {\n  let $SSA_1 = [];\n  g($SSA_1);\n  $SSA_1[0] = a;\n}",
@@ -725,20 +780,42 @@ mod tests {
 
     #[test]
     fn extends_an_array_literal_with_the_next_stores() {
-        let folded = fold_literal_fills("function f(v, g) {\n  let a = [[]];\n  a[1] = v;\n  a[2] = 3;\n  g(a);\n}").unwrap();
-        assert!(folded.code.contains("let a = [[], v, 3];"), "{}", folded.code);
+        let folded = fold_literal_fills(
+            "function f(v, g) {\n  let a = [[]];\n  a[1] = v;\n  a[2] = 3;\n  g(a);\n}",
+        )
+        .unwrap();
+        assert!(
+            folded.code.contains("let a = [[], v, 3];"),
+            "{}",
+            folded.code
+        );
         assert_eq!(folded.folded_stores, 2);
         // a statement in between: the literal's own values must not move
-        let kept = fold_literal_fills("function f(v, g) {\n  let a = [g()];\n  g();\n  a[1] = v;\n  g(a);\n}").unwrap();
+        let kept = fold_literal_fills(
+            "function f(v, g) {\n  let a = [g()];\n  g();\n  a[1] = v;\n  g(a);\n}",
+        )
+        .unwrap();
         assert_eq!(kept.folded_stores, 0, "{}", kept.code);
     }
 
     #[test]
     fn extends_an_object_literal_with_the_next_stores() {
-        let folded = fold_literal_fills("function f(v, g) {\n  let o = { [\"a\"]: g() };\n  o[\"b\"] = v;\n  g(o);\n}").unwrap();
-        assert!(folded.code.contains("let o = { [\"a\"]: g(), [\"b\"]: v };"), "{}", folded.code);
+        let folded = fold_literal_fills(
+            "function f(v, g) {\n  let o = { [\"a\"]: g() };\n  o[\"b\"] = v;\n  g(o);\n}",
+        )
+        .unwrap();
+        assert!(
+            folded
+                .code
+                .contains("let o = { [\"a\"]: g(), [\"b\"]: v };"),
+            "{}",
+            folded.code
+        );
         // a prototype from the literal could hold a setter for the store
-        let kept = fold_literal_fills("function f(v, g) {\n  let o = { __proto__: g() };\n  o[\"b\"] = v;\n  g(o);\n}").unwrap();
+        let kept = fold_literal_fills(
+            "function f(v, g) {\n  let o = { __proto__: g() };\n  o[\"b\"] = v;\n  g(o);\n}",
+        )
+        .unwrap();
         assert_eq!(kept.folded_stores, 0, "{}", kept.code);
     }
 
@@ -746,7 +823,13 @@ mod tests {
     fn fills_a_presized_array() {
         let source = "function f(a) {\n  let $SSA_1 = [void 0, void 0];\n  $SSA_1[0] = [\"POST\"];\n  return g($SSA_1);\n}";
         let result = fold_literal_fills(source).unwrap();
-        assert!(result.code.contains("let $SSA_1 = [[\"POST\"], void 0];\n  return g($SSA_1);"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("let $SSA_1 = [[\"POST\"], void 0];\n  return g($SSA_1);"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -761,23 +844,35 @@ mod tests {
         let source = "function f() {\n  let $O_1;\n  $O_1 = {\n    [\"emoji\"]: void 0\n  };\n  $O_1[\"emoji\"] = \"x\";\n  $O_1[\"x\"] = 94;\n  return $O_1;\n}";
         let result = fold_literal_fills(source).unwrap();
         assert_eq!(result.folded_stores, 2, "{}", result.code);
-        assert!(result.code.contains("[\"emoji\"]: \"x\""), "{}", result.code);
+        assert!(
+            result.code.contains("[\"emoji\"]: \"x\""),
+            "{}",
+            result.code
+        );
         assert!(result.code.contains("[\"x\"]: 94"), "{}", result.code);
         assert!(!result.code.contains("$O_1[\"emoji\"]"), "{}", result.code);
     }
 
     #[test]
     fn extends_an_assigned_object_literal_with_the_next_stores() {
-        let folded =
-            fold_literal_fills("function f(v, g) {\n  let o;\n  o = { [\"a\"]: g() };\n  o[\"b\"] = v;\n  g(o);\n}").unwrap();
-        assert!(folded.code.contains("o = { [\"a\"]: g(), [\"b\"]: v };"), "{}", folded.code);
+        let folded = fold_literal_fills(
+            "function f(v, g) {\n  let o;\n  o = { [\"a\"]: g() };\n  o[\"b\"] = v;\n  g(o);\n}",
+        )
+        .unwrap();
+        assert!(
+            folded.code.contains("o = { [\"a\"]: g(), [\"b\"]: v };"),
+            "{}",
+            folded.code
+        );
         assert_eq!(folded.folded_stores, 1);
     }
 
     #[test]
     fn extends_an_assigned_array_literal_with_the_next_stores() {
-        let folded =
-            fold_literal_fills("function f(v, g) {\n  let a;\n  a = [g()];\n  a[1] = v;\n  g(a);\n}").unwrap();
+        let folded = fold_literal_fills(
+            "function f(v, g) {\n  let a;\n  a = [g()];\n  a[1] = v;\n  g(a);\n}",
+        )
+        .unwrap();
         assert!(folded.code.contains("a = [g(), v];"), "{}", folded.code);
         assert_eq!(folded.folded_stores, 1);
     }
@@ -786,7 +881,13 @@ mod tests {
     fn moves_an_assigned_empty_object_down_to_its_stores() {
         let source = "function f(a) {\n  let $S_1;\n  $S_1 = {};\n  var $K_0 = a;\n  $S_1[\"args\"] = $K_0;\n  return $S_1;\n}";
         let result = fold_literal_fills(source).unwrap();
-        assert!(result.code.contains("var $K_0 = a;\n  $S_1 = { [\"args\"]: $K_0 };"), "{}", result.code);
+        assert!(
+            result
+                .code
+                .contains("var $K_0 = a;\n  $S_1 = { [\"args\"]: $K_0 };"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]

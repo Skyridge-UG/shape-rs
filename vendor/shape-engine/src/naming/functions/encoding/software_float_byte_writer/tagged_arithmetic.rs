@@ -297,7 +297,11 @@ const PROTOCOL: &str = r#"(
  )
 )"#;
 
-pub(in crate::naming) fn evaluate(model: &Model<'_, '_>, site: FunctionSite, f: &Facts<'_>) -> Vec<Proposal> {
+pub(in crate::naming) fn evaluate(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    f: &Facts<'_>,
+) -> Vec<Proposal> {
     fn prove(model: &Model<'_, '_>, site: FunctionSite) -> Option<()> {
         let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
             return None;
@@ -330,7 +334,9 @@ pub(in crate::naming) fn evaluate(model: &Model<'_, '_>, site: FunctionSite, f: 
         proof.bind("output", plain_param(model, output)?)?;
         let p = protocol();
         proof.statements(p.list()?, &body.statements)?;
-        crate::naming::functions::encoding::numeric_byte_writers::software_float_capture_ready(model, site, proof.tag?)
+        crate::naming::functions::encoding::numeric_byte_writers::software_float_capture_ready(
+            model, site, proof.tag?,
+        )
     }
     if prove(model, site).is_none() {
         return Vec::new();

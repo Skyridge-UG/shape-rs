@@ -1,10 +1,12 @@
 //! `CanvasReadbackProbe`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafView, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafView,
+    SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `CanvasReadbackProbe`. Card: [`CARD`].
 ///
@@ -39,33 +41,71 @@ pub(crate) fn bind_canvas_readback_probe(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
-        let records: Vec<usize> = (0..fields.len()).filter(|i| is_array(&fields[*i].node)).collect();
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let records: Vec<usize> = (0..fields.len())
+            .filter(|i| is_array(&fields[*i].node))
+            .collect();
         let [records] = records.as_slice() else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected one record repeat")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected one record repeat"),
+            ));
         };
         for (index, field) in fields.iter().enumerate() {
             if index == *records {
                 continue;
             }
             if !is_scalar(&field.node) {
-                return Err(refuse(SIGNAL, format!("{}: top-level field is not a scalar", field.key)));
+                return Err(refuse(
+                    SIGNAL,
+                    format!("{}: top-level field is not a scalar", field.key),
+                ));
             }
-            let length = leaves[index].iter().all(|leaf| path_ends_with_length(ctx, leaf));
-            binding.insert(message, field.key.clone(), if length { "recordCount" } else { "seedFraction" });
+            let length = leaves[index]
+                .iter()
+                .all(|leaf| path_ends_with_length(ctx, leaf));
+            binding.insert(
+                message,
+                field.key.clone(),
+                if length {
+                    "recordCount"
+                } else {
+                    "seedFraction"
+                },
+            );
         }
         let scalars: Vec<&str> = fields
             .iter()
             .filter_map(|field| binding.get(message, &field.key))
             .collect();
-        if !scalars.contains(&"recordCount") || scalars.iter().filter(|name| **name == "recordCount").count() != 1 {
-            return Err(refuse(SIGNAL, format!("message {message}: no single record count (`.length`)")));
+        if !scalars.contains(&"recordCount")
+            || scalars
+                .iter()
+                .filter(|name| **name == "recordCount")
+                .count()
+                != 1
+        {
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: no single record count (`.length`)"),
+            ));
         }
-        if scalars.iter().filter(|name| **name == "seedFraction").count() > 1 {
-            return Err(refuse(SIGNAL, format!("message {message}: more than one seed scalar")));
+        if scalars
+            .iter()
+            .filter(|name| **name == "seedFraction")
+            .count()
+            > 1
+        {
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: more than one seed scalar"),
+            ));
         }
         binding.insert(message, fields[*records].key.clone(), "records");
-        let LayoutNode::Array { item } = &fields[*records].node else { unreachable!() };
+        let LayoutNode::Array { item } = &fields[*records].node else {
+            unreachable!()
+        };
         // A record whose whole body sits under the hash choice (`C{B tail |
         // N tail}` as the loop item itself) is the one-field record of that
         // choice.
@@ -73,12 +113,16 @@ pub(crate) fn bind_canvas_readback_probe(
         let record: &[LayoutField] = match item.as_ref() {
             LayoutNode::Record { fields } => fields,
             LayoutNode::Choice { .. } => {
-                choice_record = [LayoutField { key: format!("{}.item", fields[*records].key), node: item.as_ref().clone() }];
+                choice_record = [LayoutField {
+                    key: format!("{}.item", fields[*records].key),
+                    node: item.as_ref().clone(),
+                }];
                 &choice_record
             }
             _ => return Err(refuse(SIGNAL, "scene record is not a record")),
         };
-        let parts = split_leaves(&leaves[*records], record).ok_or_else(|| refuse(SIGNAL, "record leaf alignment failed"))?;
+        let parts = split_leaves(&leaves[*records], record)
+            .ok_or_else(|| refuse(SIGNAL, "record leaf alignment failed"))?;
         bind_readback_record(ctx, &feeds, message, record, &parts, &mut binding)
             .map_err(|reason| refuse(SIGNAL, reason))?;
     }
@@ -93,7 +137,10 @@ struct ReadbackFeeds {
 }
 
 /// Split the leaves of one record iteration by record field.
-fn split_leaves<'v>(leaves: &[&'v LeafView], fields: &[LayoutField]) -> Option<Vec<Vec<&'v LeafView>>> {
+fn split_leaves<'v>(
+    leaves: &[&'v LeafView],
+    fields: &[LayoutField],
+) -> Option<Vec<Vec<&'v LeafView>>> {
     let mut cursor = 0;
     let mut out = Vec::new();
     for field in fields {
@@ -120,7 +167,11 @@ fn path_history(path: &[crate::signals::analysis::write_sites::PathStep]) -> Opt
 
 /// The history every leaf of `leaves` reads, when they agree and it is one
 /// of the two fed histories: `Some(true)` direct, `Some(false)` round trip.
-fn leaves_history(ctx: &FinderCtx, feeds: &ReadbackFeeds, leaves: &[&LeafView]) -> Result<bool, String> {
+fn leaves_history(
+    ctx: &FinderCtx,
+    feeds: &ReadbackFeeds,
+    leaves: &[&LeafView],
+) -> Result<bool, String> {
     let mut found = std::collections::BTreeSet::new();
     for leaf in leaves {
         let path = leaf_path(ctx, leaf);
@@ -139,7 +190,11 @@ fn leaves_history(ctx: &FinderCtx, feeds: &ReadbackFeeds, leaves: &[&LeafView]) 
 /// The component index a colour leaf reads (`colour[k]`).
 fn component_index(ctx: &FinderCtx, leaf: &LeafView) -> Option<usize> {
     match leaf_path(ctx, leaf).last() {
-        Some(crate::signals::analysis::write_sites::PathStep::Index(k)) if (0.0..4.0).contains(k) && k.fract() == 0.0 => Some(*k as usize),
+        Some(crate::signals::analysis::write_sites::PathStep::Index(k))
+            if (0.0..4.0).contains(k) && k.fract() == 0.0 =>
+        {
+            Some(*k as usize)
+        }
         _ => None,
     }
 }
@@ -154,14 +209,23 @@ fn bind_readback_record(
     parts: &[Vec<&LeafView>],
     binding: &mut FieldBinding,
 ) -> Result<(), String> {
-    let hashes: Vec<usize> = (0..record.len()).filter(|i| matches!(record[*i].node, LayoutNode::Choice { .. })).collect();
-    let [hash] = hashes.as_slice() else { return Err("expected one hash-or-null choice per record".into()) };
+    let hashes: Vec<usize> = (0..record.len())
+        .filter(|i| matches!(record[*i].node, LayoutNode::Choice { .. }))
+        .collect();
+    let [hash] = hashes.as_slice() else {
+        return Err("expected one hash-or-null choice per record".into());
+    };
     // A choice that is the loop item itself has no key of its own.
     if !record[*hash].key.ends_with(".item") {
         binding.insert(message, record[*hash].key.clone(), "dataUrlHash");
     }
-    let LayoutNode::Choice { arms } = &record[*hash].node else { unreachable!() };
-    if !arms.iter().all(|arm| matches!(arm.node, LayoutNode::Record { .. })) {
+    let LayoutNode::Choice { arms } = &record[*hash].node else {
+        unreachable!()
+    };
+    if !arms
+        .iter()
+        .all(|arm| matches!(arm.node, LayoutNode::Record { .. }))
+    {
         let fields: Vec<&LayoutField> = record.iter().collect();
         return bind_readback_fields(ctx, feeds, message, &fields, parts, Some(*hash), binding);
     }
@@ -179,26 +243,39 @@ fn bind_readback_record(
                 Some(LayoutNode::Leaf(leaf))
                     if leaf.kind == LeafKind::Byte
                         && (leaf.byte.is_some_and(|b| b >= 128)
-                            || (leaf.byte.is_none() && leaf.xor.is_some_and(|x| x >= 128.0 && x < 256.0 && x.fract() == 0.0))) =>
+                            || (leaf.byte.is_none()
+                                && leaf.xor.is_some_and(|x| {
+                                    x >= 128.0 && x < 256.0 && x.fract() == 0.0
+                                }))) =>
                 {
                     Some(LeafKind::Byte)
                 }
-                Some(LayoutNode::Leaf(leaf)) if leaf.kind == LeafKind::Number => Some(LeafKind::Number),
+                Some(LayoutNode::Leaf(leaf)) if leaf.kind == LeafKind::Number => {
+                    Some(LeafKind::Number)
+                }
                 _ => None,
             },
             _ => None,
         })
         .collect();
-    if heads.len() != 2 || !heads.contains(&Some(LeafKind::Byte)) || !heads.contains(&Some(LeafKind::Number)) {
+    if heads.len() != 2
+        || !heads.contains(&Some(LeafKind::Byte))
+        || !heads.contains(&Some(LeafKind::Number))
+    {
         return Err("hash choice arms are not `null marker, …` and `hash, …`".into());
     }
     let mut cursor = 0;
     for arm in arms {
-        let LayoutNode::Record { fields: arm_fields } = &arm.node else { unreachable!() };
+        let LayoutNode::Record { fields: arm_fields } = &arm.node else {
+            unreachable!()
+        };
         let count = node_leaf_count(&arm.node);
-        let arm_leaves = parts[*hash].get(cursor..cursor + count).ok_or("hash arm leaf alignment failed")?;
+        let arm_leaves = parts[*hash]
+            .get(cursor..cursor + count)
+            .ok_or("hash arm leaf alignment failed")?;
         cursor += count;
-        let arm_parts = split_leaves(arm_leaves, arm_fields).ok_or("hash arm leaf alignment failed")?;
+        let arm_parts =
+            split_leaves(arm_leaves, arm_fields).ok_or("hash arm leaf alignment failed")?;
         let mut fields: Vec<&LayoutField> = record[..*hash].iter().collect();
         let mut field_parts: Vec<Vec<&LeafView>> = parts[..*hash].to_vec();
         binding.insert(message, arm_fields[0].key.clone(), "dataUrlHash");
@@ -206,7 +283,15 @@ fn bind_readback_record(
         field_parts.extend(arm_parts);
         fields.extend(record[*hash + 1..].iter());
         field_parts.extend(parts[*hash + 1..].iter().cloned());
-        bind_readback_fields(ctx, feeds, message, &fields, &field_parts, Some(*hash), binding)?;
+        bind_readback_fields(
+            ctx,
+            feeds,
+            message,
+            &fields,
+            &field_parts,
+            Some(*hash),
+            binding,
+        )?;
     }
     Ok(())
 }
@@ -235,15 +320,25 @@ fn bind_readback_fields(
     let mut lists = Vec::new();
     for (count, list) in &pairs {
         let direct = leaves_history(ctx, feeds, &parts[*list])?;
-        if leaves_history(ctx, feeds, &parts[*count])? != direct || !parts[*count].iter().all(|l| path_ends_with_length(ctx, l)) {
-            return Err(format!("{}: colour count does not read its list's length", record[*count].key));
+        if leaves_history(ctx, feeds, &parts[*count])? != direct
+            || !parts[*count].iter().all(|l| path_ends_with_length(ctx, l))
+        {
+            return Err(format!(
+                "{}: colour count does not read its list's length",
+                record[*count].key
+            ));
         }
-        let (count_name, list_name) =
-            if direct { ("directColourCount", "directColours") } else { ("roundTripColourCount", "roundTripColours") };
+        let (count_name, list_name) = if direct {
+            ("directColourCount", "directColours")
+        } else {
+            ("roundTripColourCount", "roundTripColours")
+        };
         binding.insert(message, record[*count].key.clone(), count_name);
         binding.insert(message, record[*list].key.clone(), list_name);
         lists.push(direct);
-        let LayoutNode::Array { item } = &record[*list].node else { unreachable!() };
+        let LayoutNode::Array { item } = &record[*list].node else {
+            unreachable!()
+        };
         bind_colour(ctx, message, item, &parts[*list], binding)?;
     }
     lists.sort();
@@ -252,14 +347,27 @@ fn bind_readback_fields(
     }
     let mut news = Vec::new();
     for index in 0..record.len() {
-        if index == hash || pairs.iter().any(|(count, list)| index == *count || index == *list) {
+        if index == hash
+            || pairs
+                .iter()
+                .any(|(count, list)| index == *count || index == *list)
+        {
             continue;
         }
         if !is_scalar(&record[index].node) {
             return Err(format!("{}: unexpected record field", record[index].key));
         }
-        let direct = leaves_history(ctx, feeds, &parts[index]).map_err(|reason| format!("{}: {reason}", record[index].key))?;
-        binding.insert(message, record[index].key.clone(), if direct { "directNewCount" } else { "roundTripNewCount" });
+        let direct = leaves_history(ctx, feeds, &parts[index])
+            .map_err(|reason| format!("{}: {reason}", record[index].key))?;
+        binding.insert(
+            message,
+            record[index].key.clone(),
+            if direct {
+                "directNewCount"
+            } else {
+                "roundTripNewCount"
+            },
+        );
         news.push(direct);
     }
     news.sort();
@@ -280,7 +388,9 @@ fn bind_colour(
     leaves: &[&LeafView],
     binding: &mut FieldBinding,
 ) -> Result<(), String> {
-    let LayoutNode::Record { fields } = item else { return Err("colour is not a record".into()) };
+    let LayoutNode::Record { fields } = item else {
+        return Err("colour is not a record".into());
+    };
     let parts = split_leaves(leaves, fields).ok_or("colour leaf alignment failed")?;
     let mut seen = [false; 4];
     for (field, leaves) in fields.iter().zip(&parts) {
@@ -292,16 +402,24 @@ fn bind_colour(
             // The loop form (`for (k = 0; k < colour.length; k++) write(colour[k])`):
             // one repeated component after the colour's length, every leaf
             // reading `colour[k]` with a computed index.
-            let LayoutNode::Array { item } = &field.node else { unreachable!() };
+            let LayoutNode::Array { item } = &field.node else {
+                unreachable!()
+            };
             let loop_form = fields.len() == 2
                 && is_scalar(item)
                 && binding.get(message, &fields[0].key) == Some("pixelLength")
                 && !leaves.is_empty()
-                && leaves
-                    .iter()
-                    .all(|leaf| matches!(leaf_path(ctx, leaf).last(), Some(crate::signals::analysis::write_sites::PathStep::Dynamic)));
+                && leaves.iter().all(|leaf| {
+                    matches!(
+                        leaf_path(ctx, leaf).last(),
+                        Some(crate::signals::analysis::write_sites::PathStep::Dynamic)
+                    )
+                });
             if !loop_form {
-                return Err(format!("{}: colour component loop does not read `colour[k]` after its length", field.key));
+                return Err(format!(
+                    "{}: colour component loop does not read `colour[k]` after its length",
+                    field.key
+                ));
             }
             binding.insert(message, field.key.clone(), "components");
             return Ok(());
@@ -313,7 +431,10 @@ fn bind_colour(
             .into_iter()
             .collect();
         let (true, [Some(k)]) = (is_scalar(&field.node), indices.as_slice()) else {
-            return Err(format!("{}: colour component does not read a literal RGBA index", field.key));
+            return Err(format!(
+                "{}: colour component does not read a literal RGBA index",
+                field.key
+            ));
         };
         if std::mem::replace(&mut seen[*k], true) {
             return Err(format!("{}: component {k} written twice", field.key));
@@ -341,7 +462,10 @@ fn readback_feeds(view: &SlotView, ctx: &FinderCtx) -> Result<ReadbackFeeds, Str
             return None;
         }
         id = parent;
-        if matches!(nodes.kind(id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+        if matches!(
+            nodes.kind(id),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+        ) {
             return Some(id);
         }
     };
@@ -356,10 +480,16 @@ fn readback_feeds(view: &SlotView, ctx: &FinderCtx) -> Result<ReadbackFeeds, Str
         }
     }
     let first = writes.first().ok_or("no writes")?;
-    let mut producer = ctx.node_with_span(*first).and_then(function_of).ok_or("no producer function")?;
+    let mut producer = ctx
+        .node_with_span(*first)
+        .and_then(function_of)
+        .ok_or("no producer function")?;
     loop {
         let span = nodes.kind(producer).span();
-        if writes.iter().all(|write| span.start <= write.start && write.end <= span.end) {
+        if writes
+            .iter()
+            .all(|write| span.start <= write.start && write.end <= span.end)
+        {
             break;
         }
         producer = function_of(producer).ok_or("no function holds every write")?;
@@ -380,14 +510,20 @@ fn readback_feeds(view: &SlotView, ctx: &FinderCtx) -> Result<ReadbackFeeds, Str
     let mut round_trip = std::collections::BTreeSet::new();
     loop {
         for id in ctx.nodes_within(nodes.kind(scope).span()) {
-            let AstKind::CallExpression(call) = nodes.kind(id) else { continue };
+            let AstKind::CallExpression(call) = nodes.kind(id) else {
+                continue;
+            };
             // The recorder is called with exactly the pixel slice and the
             // history (`record(pixel, rec.h)`); a wire write or an inlined
             // push helper that reads pixels takes other arguments.
             if call.arguments.len() != 2 {
                 continue;
             }
-            let expression = |argument: &Argument| argument.as_expression().and_then(|e| ctx.node_with_span(e.span()));
+            let expression = |argument: &Argument| {
+                argument
+                    .as_expression()
+                    .and_then(|e| ctx.node_with_span(e.span()))
+            };
             let pixel = call.arguments.iter().any(|argument| {
                 expression(argument).is_some_and(|node| {
                     !matches!(nodes.kind(node), AstKind::StaticMemberExpression(_))
@@ -400,14 +536,27 @@ fn readback_feeds(view: &SlotView, ctx: &FinderCtx) -> Result<ReadbackFeeds, Str
             let histories: Vec<String> = call
                 .arguments
                 .iter()
-                .filter_map(|argument| match argument.as_expression()?.without_parentheses() {
-                    Expression::StaticMemberExpression(member) => Some(member.property.name.to_string()),
-                    _ => None,
-                })
+                .filter_map(
+                    |argument| match argument.as_expression()?.without_parentheses() {
+                        Expression::StaticMemberExpression(member) => {
+                            Some(member.property.name.to_string())
+                        }
+                        _ => None,
+                    },
+                )
                 .collect();
-            let [history] = histories.as_slice() else { continue };
-            let Some(function) = function_of(id) else { continue };
-            if draws(function) { &mut round_trip } else { &mut direct }.insert(history.clone());
+            let [history] = histories.as_slice() else {
+                continue;
+            };
+            let Some(function) = function_of(id) else {
+                continue;
+            };
+            if draws(function) {
+                &mut round_trip
+            } else {
+                &mut direct
+            }
+            .insert(history.clone());
         }
         if !direct.is_empty() || !round_trip.is_empty() {
             break;

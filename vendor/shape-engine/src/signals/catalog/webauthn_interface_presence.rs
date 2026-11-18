@@ -1,18 +1,31 @@
 //! `WebAuthnInterfacePresence`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `WebAuthnInterfacePresence`. Card: [`CARD`].
-pub(crate) fn recognize_webauthn_interface_presence(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_webauthn_interface_presence(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     (one_byte(view)
-        && probes_all(view, &census, &["PublicKeyCredential", "AuthenticatorAttestationResponse"])
+        && probes_all(
+            view,
+            &census,
+            &["PublicKeyCredential", "AuthenticatorAttestationResponse"],
+        )
         && !outranked(&census, "WebAuthnInterfacePresence"))
-        .then(|| Claim::new(["typeof PublicKeyCredential / Authenticator*Response", "one flag byte"]))
+    .then(|| {
+        Claim::new([
+            "typeof PublicKeyCredential / Authenticator*Response",
+            "one flag byte",
+        ])
+    })
 }
 
 pub(crate) fn bind_webauthn_interface_presence(

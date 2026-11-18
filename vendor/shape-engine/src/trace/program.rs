@@ -17,8 +17,7 @@ use std::{
 };
 
 use crate::emitted_cleanup::{
-    simplify_cleaned_emitted_property_writes,
-    simplify_emitted_property_writes,
+    simplify_cleaned_emitted_property_writes, simplify_emitted_property_writes,
 };
 use crate::trace::cell_contents::{CellContents, CellGraph, Summary};
 use crate::trace::corpus::{
@@ -499,7 +498,13 @@ fn link_source_prepared(
             .enumerate()
             .map(|(number, function)| (function_namespace(*function), number))
             .collect();
-        crate::emitted_cleanup::finish_program(code, &function_names, artifact.native_functions(), &source, &dump_stage)?
+        crate::emitted_cleanup::finish_program(
+            code,
+            &function_names,
+            artifact.native_functions(),
+            &source,
+            &dump_stage,
+        )?
     };
 
     let code = if args.thread_cleanup {
@@ -528,8 +533,9 @@ fn link_source_prepared(
         // argument has an edit span inside the other's, so they cannot both be
         // rewritten in one round.
         for _ in 0..6 {
-            let removed = crate::emitted_cleanup::inline_remaining_vm_subs(&code, false)
-                .map_err(|error| format!("cannot remove remaining VM subroutine helpers: {error}"))?;
+            let removed = crate::emitted_cleanup::inline_remaining_vm_subs(&code, false).map_err(
+                |error| format!("cannot remove remaining VM subroutine helpers: {error}"),
+            )?;
             if removed.removed == 0 {
                 break;
             }
@@ -539,8 +545,10 @@ fn link_source_prepared(
         // the declaration it replaces; a few bytes is cheaper than a registry
         // name in the output.
         for _ in 0..6 {
-            let removed = crate::emitted_cleanup::inline_remaining_vm_subs(&code, true)
-                .map_err(|error| format!("cannot remove remaining VM subroutine helpers: {error}"))?;
+            let removed =
+                crate::emitted_cleanup::inline_remaining_vm_subs(&code, true).map_err(|error| {
+                    format!("cannot remove remaining VM subroutine helpers: {error}")
+                })?;
             if removed.removed == 0 {
                 break;
             }
@@ -553,7 +561,8 @@ fn link_source_prepared(
     // `SHAPE_CHECK_EDITS` set.
     if cfg!(debug_assertions) || std::env::var_os("SHAPE_CHECK_EDITS").is_some() {
         let allocator = oxc_allocator::Allocator::default();
-        crate::analysis::parse_program(&allocator, &code).map_err(|error| format!("program output does not parse: {error}"))?;
+        crate::analysis::parse_program(&allocator, &code)
+            .map_err(|error| format!("program output does not parse: {error}"))?;
     }
 
     let stopped: Vec<(String, String)> = linked
@@ -789,7 +798,6 @@ fn cleanup_program_thread(
     Ok(cleaned)
 }
 
-
 /// What a thread's cleanup stands in for the code it cannot see: the
 /// program around it, which can read and write every key it shares.
 const OUTSIDE: &str = "$SHAPE_OUTSIDE";
@@ -812,7 +820,11 @@ fn clean_program_thread(
     // The unit is code this command printed: its parses skip the source
     // scan (this runs on a walk thread, so the guard is set here).
     let _own_output = crate::analysis::OwnOutput::enter();
-    let shared: Vec<String> = facts.captured.iter().map(|slot| format!("$KEY_{slot}")).collect();
+    let shared: Vec<String> = facts
+        .captured
+        .iter()
+        .map(|slot| format!("$KEY_{slot}"))
+        .collect();
     let mut unit = String::new();
     for name in &shared {
         unit.push_str(&format!("let {name} = {OUTSIDE}();\n"));
@@ -823,8 +835,15 @@ fn clean_program_thread(
         let Some(at) = thread.find(&marker) else {
             return Err(format!("thread pipeline: no marker for {}", child.name));
         };
-        let uses: String = child.cells.iter().map(|slot| format!(" $KEY_{slot} = {OUTSIDE}($KEY_{slot});")).collect();
-        thread.replace_range(at..at + marker.len(), &format!("function {}() {{{uses} }}", child.name));
+        let uses: String = child
+            .cells
+            .iter()
+            .map(|slot| format!(" $KEY_{slot} = {OUTSIDE}($KEY_{slot});"))
+            .collect();
+        thread.replace_range(
+            at..at + marker.len(),
+            &format!("function {}() {{{uses} }}", child.name),
+        );
     }
     unit.push_str(&thread);
     unit.push_str(&format!("\nfunction {OUTSIDE}() {{\n"));
@@ -840,17 +859,24 @@ fn clean_program_thread(
         // With --dump-stages, each stage's unit goes to the thread's folder.
         if let Some(directory) = dump_dir {
             let directory = directory.join("pipeline");
-            fs::create_dir_all(&directory).map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
-            fs::write(directory.join(name), stage_code).map_err(|error| format!("cannot write {name}: {error}"))?;
+            fs::create_dir_all(&directory)
+                .map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
+            fs::write(directory.join(name), stage_code)
+                .map_err(|error| format!("cannot write {name}: {error}"))?;
         }
         if crate::profile::enabled() {
             let now = Instant::now();
-            let label: &'static str = Box::leak(format!("{}{name}", if small { "ts." } else { "t." }).into_boxed_str());
+            let label: &'static str =
+                Box::leak(format!("{}{name}", if small { "ts." } else { "t." }).into_boxed_str());
             crate::profile::record(label, now - clock.replace(now));
         }
         Ok(())
     };
-    let cleaned = crate::emitted_cleanup::clean_function(unit, &|code| fold_program_strings(artifact, code), &stage)?;
+    let cleaned = crate::emitted_cleanup::clean_function(
+        unit,
+        &|code| fold_program_strings(artifact, code),
+        &stage,
+    )?;
     // Take the thread back out, its markers empty again.
     let allocator = oxc_allocator::Allocator::default();
     let program = crate::analysis::parse_program(&allocator, &cleaned)?;
@@ -859,7 +885,10 @@ fn clean_program_thread(
         .iter()
         .find_map(|statement| match statement {
             Statement::FunctionDeclaration(function)
-                if function.id.as_ref().is_some_and(|id| id.name == PROGRAM_SELF) =>
+                if function
+                    .id
+                    .as_ref()
+                    .is_some_and(|id| id.name == PROGRAM_SELF) =>
             {
                 Some(function)
             }
@@ -875,15 +904,24 @@ fn clean_program_thread(
         foreign: Vec<String>,
     }
     impl<'a> Visit<'a> for Markers<'_> {
-        fn visit_function(&mut self, function: &oxc_ast::ast::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
+        fn visit_function(
+            &mut self,
+            function: &oxc_ast::ast::Function<'a>,
+            flags: oxc_syntax::scope::ScopeFlags,
+        ) {
             if let Some(id) = &function.id {
                 if self.names.contains(id.name.as_str()) {
                     self.found.push((function.span, id.name.to_string()));
                     let stored = self.keys.entry(id.name.to_string()).or_default();
                     for statement in function.body.iter().flat_map(|body| body.statements.iter()) {
                         if let Statement::ExpressionStatement(expression) = statement {
-                            if let oxc_ast::ast::Expression::AssignmentExpression(assignment) = &expression.expression {
-                                if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left {
+                            if let oxc_ast::ast::Expression::AssignmentExpression(assignment) =
+                                &expression.expression
+                            {
+                                if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(
+                                    target,
+                                ) = &assignment.left
+                                {
                                     if let Some(reference) = target.reference_id.get() {
                                         stored.push(reference);
                                         continue;
@@ -926,7 +964,10 @@ fn clean_program_thread(
         if binding.name == key.as_str() {
             continue;
         }
-        let symbol = binding.symbol_id.get().ok_or("thread pipeline: unbound shared key")?;
+        let symbol = binding
+            .symbol_id
+            .get()
+            .ok_or("thread pipeline: unbound shared key")?;
         for reference in scoping.get_resolved_references(symbol) {
             let span = nodes.kind(reference.node_id()).span();
             if function.span.start <= span.start && span.end <= function.span.end {
@@ -934,20 +975,34 @@ fn clean_program_thread(
             }
         }
     }
-    let names: BTreeSet<&str> = facts.threads.iter().map(|thread| thread.name.as_str()).collect();
-    let mut markers = Markers { names: &names, found: Vec::new(), keys: BTreeMap::new(), foreign: Vec::new() };
+    let names: BTreeSet<&str> = facts
+        .threads
+        .iter()
+        .map(|thread| thread.name.as_str())
+        .collect();
+    let mut markers = Markers {
+        names: &names,
+        found: Vec::new(),
+        keys: BTreeMap::new(),
+        foreign: Vec::new(),
+    };
     if let Some(body) = &function.body {
         markers.visit_function_body(body);
     }
     if let Some(name) = markers.foreign.first() {
-        return Err(format!("thread pipeline: cleanup moved code into the marker of {name}"));
+        return Err(format!(
+            "thread pipeline: cleanup moved code into the marker of {name}"
+        ));
     }
     // A key handed to a child keeps the name the child reads it by: when a
     // pass renamed it here, its declaration and reads go back.
     for child in &facts.threads {
         let stored = markers.keys.get(&child.name).cloned().unwrap_or_default();
         if stored.len() != child.cells.len() {
-            return Err(format!("thread pipeline: the keys {} is given changed", child.name));
+            return Err(format!(
+                "thread pipeline: the keys {} is given changed",
+                child.name
+            ));
         }
         for (reference, slot) in stored.iter().zip(&child.cells) {
             let key = format!("$KEY_{slot}");

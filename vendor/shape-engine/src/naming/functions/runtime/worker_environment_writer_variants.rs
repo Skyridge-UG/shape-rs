@@ -1,7 +1,7 @@
 //! Complete interned-string factory alternatives, retaining cache, cursor,
 //! surrogate-pair, mask order, publication and captured producer identities.
 pub(super) const FORMS: &[&str] = &[
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1 = Object.create(null);
     let slot2 = 0;
@@ -54,7 +54,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1;
     slot1 = Object.create(null);
@@ -115,7 +115,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1;
     slot1 = Object.create(null);
@@ -168,7 +168,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1 = Object.create(null);
     let slot2 = 0;
@@ -218,7 +218,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1, slot2;
     slot1 = Object.create(null);
@@ -271,7 +271,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1, slot2;
     slot2 = Object.create(null);
@@ -324,7 +324,7 @@ r###"function factory(maskInput) {
     }
     return slot3;
   }"###,
-r###"function factory(maskInput) {
+    r###"function factory(maskInput) {
     let slot0 = maskInput;
     let slot1 = Object.create(null);
     let slot2 = 0;
@@ -383,5 +383,5 @@ r###"function factory(maskInput) {
       return slot7;
     }
     return slot3;
-  }"###
+  }"###,
 ];

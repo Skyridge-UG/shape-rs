@@ -1,11 +1,12 @@
 //! `ScrollOffsets`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `ScrollOffsets`. Card: [`CARD`].
 pub(crate) fn recognize_scroll_offsets(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -14,9 +15,9 @@ pub(crate) fn recognize_scroll_offsets(view: &SlotView, ctx: &FinderCtx) -> Opti
     }
     let facts = slot_facts(view, ctx);
     let ok = facts.all_matched()
-        && facts
-            .descs()
-            .all(|desc| (desc.has_member("pageYOffset") || desc.has_member("scrollY")) && !desc.counter);
+        && facts.descs().all(|desc| {
+            (desc.has_member("pageYOffset") || desc.has_member("scrollY")) && !desc.counter
+        });
     ok.then(|| Claim::new(["two pageYOffset readings", "RAW4 NUMBER NUMBER"]))
 }
 

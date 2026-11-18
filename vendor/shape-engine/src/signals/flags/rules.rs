@@ -21,9 +21,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oxc_span::GetSpan;
 
+use crate::signals::analysis::{FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::flags::flow::{split, Sym};
 use crate::signals::schema::{find_key, flag_leaf_offsets};
-use crate::signals::analysis::{FieldBinding, FinderCtx, SignalLayout, SlotView};
 
 /// Names one boolean: `Ok(Some(flag))`, `Ok(None)` when nothing it reads
 /// names a flag, `Err` when it reads more than one.
@@ -57,7 +57,19 @@ pub(crate) const SIGNALS: &[SignalFlags] = &[
     },
     SignalFlags {
         signal: "FingerprintApiIntegrity",
-        fields: &["integrityFlags1", "integrityFlags2", "integrityFlags3", "integrityFlags4", "integrityFlags5", "integrityFlags6", "integrityFlags7", "integrityFlags8", "integrityFlags9", "integrityFlags10", "integrityFlags11"],
+        fields: &[
+            "integrityFlags1",
+            "integrityFlags2",
+            "integrityFlags3",
+            "integrityFlags4",
+            "integrityFlags5",
+            "integrityFlags6",
+            "integrityFlags7",
+            "integrityFlags8",
+            "integrityFlags9",
+            "integrityFlags10",
+            "integrityFlags11",
+        ],
         flags_from: &["integrityFlags1"],
         namer: fingerprint_api,
         reads: false,
@@ -200,7 +212,9 @@ fn apply_signal_flags(
     let wanted: Vec<(usize, String, String)> = binding
         .entries()
         .filter(|(message, key, name)| {
-            entry.fields.contains(name) && binding.flags(*message, key).is_none() && only.is_none_or(|only| only == *name)
+            entry.fields.contains(name)
+                && binding.flags(*message, key).is_none()
+                && only.is_none_or(|only| only == *name)
         })
         .map(|(message, key, name)| (message, key.to_string(), name.to_string()))
         .collect();
@@ -224,12 +238,16 @@ fn apply_signal_flags(
                 if layout.part_message(emission_index, part) != Some(message) {
                     continue;
                 }
-                let Some((node, offset)) = find_key(&part_layout.fields, &key) else { continue };
+                let Some((node, offset)) = find_key(&part_layout.fields, &key) else {
+                    continue;
+                };
                 let leaves = emission.part_leaves(part);
                 for inner in flag_leaf_offsets(node) {
                     let leaf = leaves
                         .get(offset + inner)
-                        .and_then(|index| view.emissions().get(emission.emission)?.leaves.get(*index))
+                        .and_then(|index| {
+                            view.emissions().get(emission.emission)?.leaves.get(*index)
+                        })
                         .ok_or_else(|| format!("flags {field}: leaf not found"))?;
                     let value = ctx
                         .caller_value_node(leaf)
@@ -244,19 +262,30 @@ fn apply_signal_flags(
                             site.insert(bit, None);
                             continue;
                         }
-                        let term = if items.len() == 1 { items[0].clone() } else { Sym::Phi(items) };
+                        let term = if items.len() == 1 {
+                            items[0].clone()
+                        } else {
+                            Sym::Phi(items)
+                        };
                         let named = (entry.namer)(ctx, &term, &flags);
-                        match named.map_err(|reason| format!("flags {field}: bit {bit}: {reason}"))? {
+                        match named
+                            .map_err(|reason| format!("flags {field}: bit {bit}: {reason}"))?
+                        {
                             Some(name) => {
                                 if !flags.contains(&name) {
-                                    return Err(format!("flags {field}: {name} is not a card flag"));
+                                    return Err(format!(
+                                        "flags {field}: {name} is not a card flag"
+                                    ));
                                 }
                                 used.insert(name.clone());
                                 site.insert(bit, Some(name));
                             }
                             None => {
                                 first_unnamed.get_or_insert_with(|| {
-                                    format!("flags {field}: bit {bit} (`{}`) reads no card flag", clip(&term.render()))
+                                    format!(
+                                        "flags {field}: bit {bit} (`{}`) reads no card flag",
+                                        clip(&term.render())
+                                    )
                                 });
                                 site.insert(bit, None);
                             }
@@ -297,14 +326,26 @@ fn apply_signal_flags(
                     leftover.len()
                 ));
             }
-            return Err(first_unnamed.unwrap_or_else(|| {
-                format!(
-                    "flags: {} constant or unmatched bit(s) with {} unnamed card flag(s)",
-                    unnamed.len(),
-                    leftover.len()
-                )
-            })
-            .replace("reads no card flag", &format!("reads no card flag ({} unmatched bit(s), unused card flags: {})", unnamed.len(), leftover.iter().map(|flag| flag.as_str()).collect::<Vec<_>>().join(", "))))
+            return Err(first_unnamed
+                .unwrap_or_else(|| {
+                    format!(
+                        "flags: {} constant or unmatched bit(s) with {} unnamed card flag(s)",
+                        unnamed.len(),
+                        leftover.len()
+                    )
+                })
+                .replace(
+                    "reads no card flag",
+                    &format!(
+                        "reads no card flag ({} unmatched bit(s), unused card flags: {})",
+                        unnamed.len(),
+                        leftover
+                            .iter()
+                            .map(|flag| flag.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                ));
         }
     };
     let mut claimed: BTreeMap<(usize, String), String> = BTreeMap::new();
@@ -326,9 +367,14 @@ fn apply_signal_flags(
             let merged = bits.get_or_insert_with(BTreeMap::new);
             for (name, bit) in site_bits {
                 if merged.get(&name).is_some_and(|known| *known != bit)
-                    || merged.iter().any(|(other, known)| *known == bit && *other != name)
+                    || merged
+                        .iter()
+                        .any(|(other, known)| *known == bit && *other != name)
                 {
-                    return Err(format!("flags {}: write sites disagree on the bits", target.field));
+                    return Err(format!(
+                        "flags {}: write sites disagree on the bits",
+                        target.field
+                    ));
                 }
                 merged.insert(name, bit);
             }
@@ -337,7 +383,9 @@ fn apply_signal_flags(
         for name in bits.keys() {
             // One boolean is packed once per message (a field repeated per
             // record of a list is one field).
-            if let Some(other) = claimed.insert((target.message, name.clone()), target.field.clone()) {
+            if let Some(other) =
+                claimed.insert((target.message, name.clone()), target.field.clone())
+            {
                 if other != target.field {
                     return Err(format!("flags: {name} on {other} and {}", target.field));
                 }
@@ -389,7 +437,11 @@ fn by_probes(alt: &Sym, table: &[(&str, &[&str])]) -> Result<Option<String>, Str
     let strings = alt.strings();
     let matched: Vec<&str> = table
         .iter()
-        .filter(|(_, probes)| probes.iter().all(|probe| members.contains(probe) || strings.contains(probe)))
+        .filter(|(_, probes)| {
+            probes
+                .iter()
+                .all(|probe| members.contains(probe) || strings.contains(probe))
+        })
         .map(|(flag, _)| *flag)
         .collect();
     match matched.as_slice() {
@@ -408,7 +460,11 @@ fn probes_namer(
     agree(ctx, sym, flags, |_, alt, _| by_probes(alt, table))
 }
 
-fn navigator_properties(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<String>, String> {
+fn navigator_properties(
+    ctx: &FinderCtx,
+    sym: &Sym,
+    flags: &[String],
+) -> Result<Option<String>, String> {
     probes_namer(
         ctx,
         sym,
@@ -423,7 +479,12 @@ fn navigator_properties(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<
 }
 
 fn user_agent_data(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<String>, String> {
-    probes_namer(ctx, sym, flags, &[("wow64", &["wow64"]), ("mobile", &["mobile"])])
+    probes_namer(
+        ctx,
+        sym,
+        flags,
+        &[("wow64", &["wow64"]), ("mobile", &["mobile"])],
+    )
 }
 
 fn webgl_context(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<String>, String> {
@@ -431,7 +492,10 @@ fn webgl_context(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<
         ctx,
         sym,
         flags,
-        &[("antialias", &["antialias"]), ("collectedUsingWebWorker", &["collectedUsingWebWorker"])],
+        &[
+            ("antialias", &["antialias"]),
+            ("collectedUsingWebWorker", &["collectedUsingWebWorker"]),
+        ],
     )
 }
 
@@ -450,8 +514,14 @@ fn grecaptcha(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<Str
                 alt,
                 &[
                     ("featurePolicy", &["hasOwnProperty", "FeaturePolicy"]),
-                    ("layoutShiftAttribution", &["hasOwnProperty", "LayoutShiftAttribution"]),
-                    ("compressionStream", &["hasOwnProperty", "CompressionStream"]),
+                    (
+                        "layoutShiftAttribution",
+                        &["hasOwnProperty", "LayoutShiftAttribution"],
+                    ),
+                    (
+                        "compressionStream",
+                        &["hasOwnProperty", "CompressionStream"],
+                    ),
                 ],
             );
         }
@@ -498,7 +568,9 @@ fn grecaptcha(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<Str
 fn host_text(sym: &Sym) -> String {
     let mut text = sym.render();
     for index in 0..10 {
-        text = text.replace(&format!("P{index}.global."), "G.").replace(&format!("P{index}.global"), "G");
+        text = text
+            .replace(&format!("P{index}.global."), "G.")
+            .replace(&format!("P{index}.global"), "G");
     }
     text
 }
@@ -509,7 +581,9 @@ fn descriptor_reads(alt: &Sym) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for node in alt.nodes() {
         if let Sym::Call(callee, args) = node {
-            if let (Some(method), [target, Sym::Str(prop)]) = (called_method(callee), args.as_slice()) {
+            if let (Some(method), [target, Sym::Str(prop)]) =
+                (called_method(callee), args.as_slice())
+            {
                 if method == "getOwnPropertyDescriptor" {
                     let item = (host_text(target), prop.clone());
                     if !out.contains(&item) {
@@ -529,7 +603,9 @@ fn descriptor_reads(alt: &Sym) -> Vec<(String, String)> {
 fn outer_descriptor_props(value: &Sym) -> Vec<String> {
     fn walk(sym: &Sym, out: &mut Vec<String>) {
         if let Sym::Call(callee, args) = sym {
-            if let (Some("getOwnPropertyDescriptor"), [_, Sym::Str(prop)]) = (called_method(callee), args.as_slice()) {
+            if let (Some("getOwnPropertyDescriptor"), [_, Sym::Str(prop)]) =
+                (called_method(callee), args.as_slice())
+            {
                 if !out.contains(prop) {
                     out.push(prop.clone());
                 }
@@ -579,8 +655,12 @@ fn called_method(callee: &Sym) -> Option<&str> {
             _ => false,
         }
     }
-    let not_callable =
-        |sym: &Sym| matches!(sym, Sym::Num(_) | Sym::Str(_) | Sym::Bool(_) | Sym::Null | Sym::Undef) || throws(sym);
+    let not_callable = |sym: &Sym| {
+        matches!(
+            sym,
+            Sym::Num(_) | Sym::Str(_) | Sym::Bool(_) | Sym::Null | Sym::Undef
+        ) || throws(sym)
+    };
     match callee {
         Sym::Member(_, method) => Some(method),
         Sym::Phi(items) => {
@@ -693,20 +773,29 @@ fn primitive_update(kind: oxc_ast::AstKind) -> bool {
 /// (`IsFunction`), the native-source pattern test (`LooksNative`), no own
 /// `prototype` (`NoOwnPrototype`), `delete f.prototype` succeeded (a `true`
 /// stored under a test: `PrototypeDeletable`).
-fn helper_roles(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> Option<BTreeMap<String, &'static str>> {
+fn helper_roles(
+    ctx: &FinderCtx,
+    function: oxc_semantic::NodeId,
+) -> Option<BTreeMap<String, &'static str>> {
     use oxc_ast::AstKind;
     let nodes = ctx.parse.nodes;
     let span = nodes.kind(function).span();
     let mut record: Option<crate::signals::analysis::write_sites::RecordConstruction> = None;
     for id in ctx.nodes_within(span) {
-        let AstKind::ReturnStatement(statement) = nodes.kind(id) else { continue };
+        let AstKind::ReturnStatement(statement) = nodes.kind(id) else {
+            continue;
+        };
         if ctx.flow_root(id) != function || never_runs(ctx, id, function) {
             continue;
         }
-        let Some(argument) = statement.argument.as_ref() else { continue };
+        let Some(argument) = statement.argument.as_ref() else {
+            continue;
+        };
         // `return (defineProperty(o, "d", …), o)`: the last expression.
         let argument = match argument.without_parentheses() {
-            oxc_ast::ast::Expression::SequenceExpression(sequence) => sequence.expressions.last()?,
+            oxc_ast::ast::Expression::SequenceExpression(sequence) => {
+                sequence.expressions.last()?
+            }
             other => other,
         };
         let node = ctx.node_with_span(argument.without_parentheses().span())?;
@@ -719,68 +808,72 @@ fn helper_roles(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> Option<BTree
             AstKind::IdentifierReference(_) => match live_object(ctx, node, function) {
                 Some(value) => value,
                 None => {
-                // `o = {…}` is the record. An opaque guard on a boolean the
-                // helper made (`if (d !== void 0) o.d = d; else o = d;`)
-                // adds stores of non-object values to the same binding, or
-                // a `return x` of one: they are not the record. Exactly one
-                // object literal must reach; a store this resolver does not
-                // follow (a parameter, `o |= …`) keeps the helper unknown.
-                // `r = o` copies the record into another binding: follow it.
-                // `r = t ? x : o` stores either arm. A copied read that is
-                // not a local (`o = Infinity`) is not the record.
-                let mut literals: Vec<oxc_semantic::NodeId> = Vec::new();
-                let mut pending = vec![(node, true)];
-                let mut seen = 0usize;
-                while let Some((value, root)) = pending.pop() {
-                    seen += 1;
-                    if seen > 16 {
-                        return None;
-                    }
-                    match nodes.kind(value) {
-                        AstKind::ObjectExpression(_) => {
-                            if !literals.contains(&value) {
-                                literals.push(value);
-                            }
+                    // `o = {…}` is the record. An opaque guard on a boolean the
+                    // helper made (`if (d !== void 0) o.d = d; else o = d;`)
+                    // adds stores of non-object values to the same binding, or
+                    // a `return x` of one: they are not the record. Exactly one
+                    // object literal must reach; a store this resolver does not
+                    // follow (a parameter, `o |= …`) keeps the helper unknown.
+                    // `r = o` copies the record into another binding: follow it.
+                    // `r = t ? x : o` stores either arm. A copied read that is
+                    // not a local (`o = Infinity`) is not the record.
+                    let mut literals: Vec<oxc_semantic::NodeId> = Vec::new();
+                    let mut pending = vec![(node, true)];
+                    let mut seen = 0usize;
+                    while let Some((value, root)) = pending.pop() {
+                        seen += 1;
+                        if seen > 16 {
+                            return None;
                         }
-                        AstKind::ConditionalExpression(conditional) => {
-                            for arm in [&conditional.consequent, &conditional.alternate] {
-                                if let Some(arm) = ctx.node_with_span(arm.without_parentheses().span()) {
-                                    pending.push((arm, false));
+                        match nodes.kind(value) {
+                            AstKind::ObjectExpression(_) => {
+                                if !literals.contains(&value) {
+                                    literals.push(value);
                                 }
                             }
-                        }
-                        AstKind::IdentifierReference(_) => {
-                            let Some((_, stores)) = ctx.reaching(value) else {
-                                if root {
-                                    return None;
-                                }
-                                continue;
-                            };
-                            for store in &stores {
-                                match store {
-                                    crate::signals::flags::flow::Store::Assign(store) | crate::signals::flags::flow::Store::Declare(store) => {
-                                        if let Some(stored) = ctx.definition_value(*store) {
-                                            pending.push((stored, false));
-                                        }
+                            AstKind::ConditionalExpression(conditional) => {
+                                for arm in [&conditional.consequent, &conditional.alternate] {
+                                    if let Some(arm) =
+                                        ctx.node_with_span(arm.without_parentheses().span())
+                                    {
+                                        pending.push((arm, false));
                                     }
-                                    // `--x`, `x += 1`: a primitive, not the record.
-                                    crate::signals::flags::flow::Store::Other(update) if primitive_update(nodes.kind(*update)) => {}
-                                    // A copy's parameter or unfollowed store is not
-                                    // this helper's record either.
-                                    _ if !root => {}
-                                    _ => return None,
                                 }
                             }
+                            AstKind::IdentifierReference(_) => {
+                                let Some((_, stores)) = ctx.reaching(value) else {
+                                    if root {
+                                        return None;
+                                    }
+                                    continue;
+                                };
+                                for store in &stores {
+                                    match store {
+                                        crate::signals::flags::flow::Store::Assign(store)
+                                        | crate::signals::flags::flow::Store::Declare(store) => {
+                                            if let Some(stored) = ctx.definition_value(*store) {
+                                                pending.push((stored, false));
+                                            }
+                                        }
+                                        // `--x`, `x += 1`: a primitive, not the record.
+                                        crate::signals::flags::flow::Store::Other(update)
+                                            if primitive_update(nodes.kind(*update)) => {}
+                                        // A copy's parameter or unfollowed store is not
+                                        // this helper's record either.
+                                        _ if !root => {}
+                                        _ => return None,
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
+                    }
+                    match literals[..] {
+                        [value] => value,
+                        [] => continue,
+                        _ => return None,
                     }
                 }
-                match literals[..] {
-                    [value] => value,
-                    [] => continue,
-                    _ => return None,
-                }
-            },
             },
             _ => continue,
         };
@@ -793,13 +886,22 @@ fn helper_roles(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> Option<BTree
     let mut record = record?;
     // `o = {k: void 0, …}; o.k = v`: the later store is the value.
     for id in ctx.nodes_within(span) {
-        let AstKind::AssignmentExpression(assignment) = nodes.kind(id) else { continue };
+        let AstKind::AssignmentExpression(assignment) = nodes.kind(id) else {
+            continue;
+        };
         if ctx.flow_root(id) != function || !assignment.operator.is_assign() {
             continue;
         }
-        let oxc_ast::ast::AssignmentTarget::StaticMemberExpression(member) = &assignment.left else { continue };
-        let Some(object) = ctx.node_with_span(member.object.without_parentheses().span()) else { continue };
-        if !matches!(nodes.kind(object), AstKind::IdentifierReference(_)) || ctx.reaching_value(object) != Some(record.node) {
+        let oxc_ast::ast::AssignmentTarget::StaticMemberExpression(member) = &assignment.left
+        else {
+            continue;
+        };
+        let Some(object) = ctx.node_with_span(member.object.without_parentheses().span()) else {
+            continue;
+        };
+        if !matches!(nodes.kind(object), AstKind::IdentifierReference(_))
+            || ctx.reaching_value(object) != Some(record.node)
+        {
             continue;
         }
         let key = member.property.name.to_string();
@@ -813,22 +915,38 @@ fn helper_roles(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> Option<BTree
     }
     // `Object.defineProperty(o, "k", {value: v})` inside the helper.
     for id in ctx.nodes_within(span) {
-        let AstKind::CallExpression(call) = nodes.kind(id) else { continue };
+        let AstKind::CallExpression(call) = nodes.kind(id) else {
+            continue;
+        };
         if ctx.flow_root(id) != function {
             continue;
         }
-        let oxc_ast::ast::Expression::StaticMemberExpression(callee) = call.callee.without_parentheses() else { continue };
+        let oxc_ast::ast::Expression::StaticMemberExpression(callee) =
+            call.callee.without_parentheses()
+        else {
+            continue;
+        };
         if callee.property.name != "defineProperty" || call.arguments.len() != 3 {
             continue;
         }
-        let (Some(oxc_ast::ast::Expression::StringLiteral(key)), Some(oxc_ast::ast::Expression::ObjectExpression(descriptor))) = (
-            call.arguments[1].as_expression().map(|e| e.without_parentheses()),
-            call.arguments[2].as_expression().map(|e| e.without_parentheses()),
-        ) else {
+        let (
+            Some(oxc_ast::ast::Expression::StringLiteral(key)),
+            Some(oxc_ast::ast::Expression::ObjectExpression(descriptor)),
+        ) = (
+            call.arguments[1]
+                .as_expression()
+                .map(|e| e.without_parentheses()),
+            call.arguments[2]
+                .as_expression()
+                .map(|e| e.without_parentheses()),
+        )
+        else {
             continue;
         };
         for property in &descriptor.properties {
-            let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property) = property else { continue };
+            let oxc_ast::ast::ObjectPropertyKind::ObjectProperty(property) = property else {
+                continue;
+            };
             if property.key.static_name().as_deref() == Some("value") {
                 if let Some(value) = ctx.node_with_span(property.value.span()) {
                     record.values.entry(key.value.to_string()).or_insert(value);
@@ -840,7 +958,10 @@ fn helper_roles(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> Option<BTree
     for (key, value) in &record.values {
         let value = live_sym(ctx, *value, function);
         let text = value.render();
-        let role = if value.nodes().iter().any(|node| matches!(node, Sym::Regex(_)))
+        let role = if value
+            .nodes()
+            .iter()
+            .any(|node| matches!(node, Sym::Regex(_)))
             || text.contains(".test(")
             || text.contains(".exec(")
         {
@@ -883,17 +1004,26 @@ fn live_sym(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semantic:
     // `b !== void 0 ? b : b + 1`: the arm a decided test takes.
     if let oxc_ast::AstKind::ConditionalExpression(conditional) = ctx.parse.nodes.kind(node) {
         if let Some(taken) = nullish_test(ctx, &conditional.test) {
-            let arm = if taken { &conditional.consequent } else { &conditional.alternate };
+            let arm = if taken {
+                &conditional.consequent
+            } else {
+                &conditional.alternate
+            };
             if let Some(arm) = ctx.node_with_span(arm.without_parentheses().span()) {
                 return live_sym(ctx, arm, function);
             }
         }
     }
     let whole = ctx.sym(node);
-    if !matches!(ctx.parse.nodes.kind(node), oxc_ast::AstKind::IdentifierReference(_)) {
+    if !matches!(
+        ctx.parse.nodes.kind(node),
+        oxc_ast::AstKind::IdentifierReference(_)
+    ) {
         return whole;
     }
-    let Some((_, stores)) = ctx.reaching(node) else { return whole };
+    let Some((_, stores)) = ctx.reaching(node) else {
+        return whole;
+    };
     let dead = |store: &Store| match store {
         Store::Assign(at) | Store::Declare(at) | Store::Other(at) => never_runs(ctx, *at, function),
         Store::Entry => false,
@@ -903,8 +1033,12 @@ fn live_sym(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semantic:
     }
     let mut values = Vec::new();
     for store in stores.iter().filter(|store| !dead(store)) {
-        let (Store::Assign(at) | Store::Declare(at)) = store else { return whole };
-        let Some(value) = ctx.definition_value(*at) else { return whole };
+        let (Store::Assign(at) | Store::Declare(at)) = store else {
+            return whole;
+        };
+        let Some(value) = ctx.definition_value(*at) else {
+            return whole;
+        };
         values.push(ctx.sym(value));
     }
     match values.len() {
@@ -919,32 +1053,46 @@ fn live_sym(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semantic:
 fn returns_record(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> bool {
     use oxc_ast::AstKind;
     let nodes = ctx.parse.nodes;
-    ctx.nodes_within(nodes.kind(function).span()).into_iter().any(|id| {
-        let AstKind::ReturnStatement(statement) = nodes.kind(id) else { return false };
-        if ctx.flow_root(id) != function || never_runs(ctx, id, function) {
-            return false;
-        }
-        let Some(argument) = statement.argument.as_ref() else { return false };
-        let argument = match argument.without_parentheses() {
-            oxc_ast::ast::Expression::SequenceExpression(sequence) => match sequence.expressions.last() {
-                Some(last) => last,
-                None => return false,
-            },
-            other => other,
-        };
-        let Some(node) = ctx.node_with_span(argument.without_parentheses().span()) else { return false };
-        match nodes.kind(node) {
-            AstKind::ObjectExpression(_) => true,
-            AstKind::IdentifierReference(_) => live_object(ctx, node, function).is_some(),
-            _ => false,
-        }
-    })
+    ctx.nodes_within(nodes.kind(function).span())
+        .into_iter()
+        .any(|id| {
+            let AstKind::ReturnStatement(statement) = nodes.kind(id) else {
+                return false;
+            };
+            if ctx.flow_root(id) != function || never_runs(ctx, id, function) {
+                return false;
+            }
+            let Some(argument) = statement.argument.as_ref() else {
+                return false;
+            };
+            let argument = match argument.without_parentheses() {
+                oxc_ast::ast::Expression::SequenceExpression(sequence) => {
+                    match sequence.expressions.last() {
+                        Some(last) => last,
+                        None => return false,
+                    }
+                }
+                other => other,
+            };
+            let Some(node) = ctx.node_with_span(argument.without_parentheses().span()) else {
+                return false;
+            };
+            match nodes.kind(node) {
+                AstKind::ObjectExpression(_) => true,
+                AstKind::IdentifierReference(_) => live_object(ctx, node, function).is_some(),
+                _ => false,
+            }
+        })
 }
 
 /// The object literal the binding read `node` holds on every path that
 /// runs (stores in never-run arms dropped, through binding copies:
 /// `if (b === null) {r = "d" - b} else {o.d = b; r = o}; return r`).
-fn live_object(ctx: &FinderCtx, mut node: oxc_semantic::NodeId, function: oxc_semantic::NodeId) -> Option<oxc_semantic::NodeId> {
+fn live_object(
+    ctx: &FinderCtx,
+    mut node: oxc_semantic::NodeId,
+    function: oxc_semantic::NodeId,
+) -> Option<oxc_semantic::NodeId> {
     use crate::signals::flags::flow::Store;
     use oxc_ast::AstKind;
     let nodes = ctx.parse.nodes;
@@ -956,7 +1104,9 @@ fn live_object(ctx: &FinderCtx, mut node: oxc_semantic::NodeId, function: oxc_se
         let live: Vec<_> = stores
             .iter()
             .filter(|store| match store {
-                Store::Assign(at) | Store::Declare(at) | Store::Other(at) => !never_runs(ctx, *at, function),
+                Store::Assign(at) | Store::Declare(at) | Store::Other(at) => {
+                    !never_runs(ctx, *at, function)
+                }
                 Store::Entry => true,
             })
             .cloned()
@@ -974,13 +1124,15 @@ fn live_object(ctx: &FinderCtx, mut node: oxc_semantic::NodeId, function: oxc_se
         let live: Vec<_> = live
             .into_iter()
             .filter(|store| match store {
-                Store::Assign(at) | Store::Declare(at) | Store::Other(at) => {
-                    !overwriting.iter().any(|branch| passes_before(ctx, *at, *branch, node))
-                }
+                Store::Assign(at) | Store::Declare(at) | Store::Other(at) => !overwriting
+                    .iter()
+                    .any(|branch| passes_before(ctx, *at, *branch, node)),
                 Store::Entry => true,
             })
             .collect();
-        let [Store::Assign(store) | Store::Declare(store)] = live[..] else { return None };
+        let [Store::Assign(store) | Store::Declare(store)] = live[..] else {
+            return None;
+        };
         let mut value = ctx.definition_value(store)?;
         // `r = b === null ? b : o`: the arm a decided test takes.
         if let AstKind::ConditionalExpression(conditional) = nodes.kind(value) {
@@ -1006,12 +1158,16 @@ fn decided_arm_store(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<oxc
     use oxc_ast::ast::Statement;
     use oxc_ast::AstKind;
     let nodes = ctx.parse.nodes;
-    let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else { return None };
+    let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else {
+        return None;
+    };
     if !assignment.operator.is_assign() {
         return None;
     }
     let statement = nodes.parent_id(store);
-    let AstKind::ExpressionStatement(_) = nodes.kind(statement) else { return None };
+    let AstKind::ExpressionStatement(_) = nodes.kind(statement) else {
+        return None;
+    };
     let statement_span = nodes.kind(statement).span();
     let mut arm = nodes.parent_id(statement);
     if let AstKind::BlockStatement(block) = nodes.kind(arm) {
@@ -1027,14 +1183,23 @@ fn decided_arm_store(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<oxc
         arm = statement;
     }
     let branch = nodes.parent_id(arm);
-    let AstKind::IfStatement(statement) = nodes.kind(branch) else { return None };
-    (statement.consequent.span() == nodes.kind(arm).span() && nullish_test(ctx, &statement.test) == Some(true)).then_some(branch)
+    let AstKind::IfStatement(statement) = nodes.kind(branch) else {
+        return None;
+    };
+    (statement.consequent.span() == nodes.kind(arm).span()
+        && nullish_test(ctx, &statement.test) == Some(true))
+    .then_some(branch)
 }
 
 /// The statement `branch` lies between `store` and `read` on every path:
 /// `store` ends before it, and `read` is inside a later statement of the
 /// same statement list.
-fn passes_before(ctx: &FinderCtx, store: oxc_semantic::NodeId, branch: oxc_semantic::NodeId, read: oxc_semantic::NodeId) -> bool {
+fn passes_before(
+    ctx: &FinderCtx,
+    store: oxc_semantic::NodeId,
+    branch: oxc_semantic::NodeId,
+    read: oxc_semantic::NodeId,
+) -> bool {
     use oxc_ast::AstKind;
     let nodes = ctx.parse.nodes;
     let branch_span = nodes.kind(branch).span();
@@ -1042,7 +1207,10 @@ fn passes_before(ctx: &FinderCtx, store: oxc_semantic::NodeId, branch: oxc_seman
         return false;
     }
     let list = nodes.parent_id(branch);
-    if !matches!(nodes.kind(list), AstKind::BlockStatement(_) | AstKind::FunctionBody(_)) {
+    if !matches!(
+        nodes.kind(list),
+        AstKind::BlockStatement(_) | AstKind::FunctionBody(_)
+    ) {
         return false;
     }
     let mut child = read;
@@ -1054,7 +1222,10 @@ fn passes_before(ctx: &FinderCtx, store: oxc_semantic::NodeId, branch: oxc_seman
         if parent == list {
             return nodes.kind(child).span().start >= branch_span.end;
         }
-        if matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+        if matches!(
+            nodes.kind(parent),
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+        ) {
             return false;
         }
         child = parent;
@@ -1072,13 +1243,18 @@ fn never_runs(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semanti
     let returns = |statement: &Statement| match statement {
         Statement::ReturnStatement(_) | Statement::ThrowStatement(_) => true,
         Statement::BlockStatement(block) => {
-            matches!(block.body.last(), Some(Statement::ReturnStatement(_) | Statement::ThrowStatement(_)))
+            matches!(
+                block.body.last(),
+                Some(Statement::ReturnStatement(_) | Statement::ThrowStatement(_))
+            )
         }
         _ => false,
     };
     // Some(arm) of an `if` decided to always take `arm`.
     let decided = |statement: &Statement| -> Option<bool> {
-        let Statement::IfStatement(statement) = statement else { return None };
+        let Statement::IfStatement(statement) = statement else {
+            return None;
+        };
         nullish_test(ctx, &statement.test)
     };
     let mut child = node;
@@ -1089,14 +1265,18 @@ fn never_runs(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semanti
         }
         let child_span = nodes.kind(child).span();
         let earlier = |body: &[Statement]| {
-            body.iter().take_while(|statement| statement.span().end <= child_span.start).any(|statement| {
-                let Statement::IfStatement(branch) = statement else { return false };
-                match decided(statement) {
-                    Some(true) => returns(&branch.consequent),
-                    Some(false) => branch.alternate.as_ref().is_some_and(returns),
-                    None => false,
-                }
-            })
+            body.iter()
+                .take_while(|statement| statement.span().end <= child_span.start)
+                .any(|statement| {
+                    let Statement::IfStatement(branch) = statement else {
+                        return false;
+                    };
+                    match decided(statement) {
+                        Some(true) => returns(&branch.consequent),
+                        Some(false) => branch.alternate.as_ref().is_some_and(returns),
+                        None => false,
+                    }
+                })
         };
         match nodes.kind(parent) {
             AstKind::IfStatement(statement) => {
@@ -1104,7 +1284,12 @@ fn never_runs(ctx: &FinderCtx, node: oxc_semantic::NodeId, function: oxc_semanti
                 if taken == Some(false) && statement.consequent.span() == child_span {
                     return true;
                 }
-                if taken == Some(true) && statement.alternate.as_ref().is_some_and(|arm| arm.span() == child_span) {
+                if taken == Some(true)
+                    && statement
+                        .alternate
+                        .as_ref()
+                        .is_some_and(|arm| arm.span() == child_span)
+                {
                     return true;
                 }
             }
@@ -1130,7 +1315,9 @@ fn nullish_test(ctx: &FinderCtx, test: &oxc_ast::ast::Expression) -> Option<bool
 
 fn direct_nullish_test(ctx: &FinderCtx, test: &oxc_ast::ast::Expression) -> Option<bool> {
     use oxc_ast::ast::{BinaryOperator, Expression, UnaryOperator};
-    let Expression::BinaryExpression(binary) = test.without_parentheses() else { return None };
+    let Expression::BinaryExpression(binary) = test.without_parentheses() else {
+        return None;
+    };
     let equal = match binary.operator {
         BinaryOperator::StrictEquality | BinaryOperator::Equality => true,
         BinaryOperator::StrictInequality | BinaryOperator::Inequality => false,
@@ -1140,7 +1327,11 @@ fn direct_nullish_test(ctx: &FinderCtx, test: &oxc_ast::ast::Expression) -> Opti
         Expression::NullLiteral(_) => true,
         Expression::Identifier(identifier) => identifier.name == "undefined",
         Expression::UnaryExpression(unary) => {
-            unary.operator == UnaryOperator::Void && matches!(unary.argument.without_parentheses(), Expression::NumericLiteral(_))
+            unary.operator == UnaryOperator::Void
+                && matches!(
+                    unary.argument.without_parentheses(),
+                    Expression::NumericLiteral(_)
+                )
         }
         _ => false,
     };
@@ -1149,12 +1340,16 @@ fn direct_nullish_test(ctx: &FinderCtx, test: &oxc_ast::ast::Expression) -> Opti
         (false, true) => &binary.left,
         _ => return None,
     };
-    let Expression::Identifier(_) = binding.without_parentheses() else { return None };
+    let Expression::Identifier(_) = binding.without_parentheses() else {
+        return None;
+    };
     let read = ctx.node_with_span(binding.without_parentheses().span())?;
     let value = ctx.sym(read);
     let alternatives = value.alternatives();
     let boolean = !alternatives.is_empty()
-        && alternatives.iter().all(|alternative| matches!(unread(alternative), Sym::Bool(_) | Sym::Guard(..)));
+        && alternatives
+            .iter()
+            .all(|alternative| matches!(unread(alternative), Sym::Bool(_) | Sym::Guard(..)));
     boolean.then_some(!equal)
 }
 
@@ -1233,9 +1428,13 @@ fn fingerprint_api(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Optio
     agree(ctx, sym, flags, |ctx, alt, _| {
         let mut found: Vec<String> = Vec::new();
         for node in alt.nodes() {
-            let Sym::Member(object, key) = node else { continue };
+            let Sym::Member(object, key) = node else {
+                continue;
+            };
             let calls = probe_calls(object);
-            let Some((function, _)) = calls.first() else { continue };
+            let Some((function, _)) = calls.first() else {
+                continue;
+            };
             if calls.iter().any(|(other, _)| other != function) {
                 return Err("two probe helpers".into());
             }
@@ -1247,7 +1446,8 @@ fn fingerprint_api(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Optio
             let roles = helper_roles(ctx, *function).ok_or("probe helper roles")?;
             let Some(role) = roles.get(key) else { continue };
             let arguments: Vec<&Sym> = calls.iter().map(|(_, argument)| *argument).collect();
-            let api = probed_api(&arguments).ok_or_else(|| format!("probed function of `{}`", clip(&object.render())))?;
+            let api = probed_api(&arguments)
+                .ok_or_else(|| format!("probed function of `{}`", clip(&object.render())))?;
             let flag = format!("{api}{role}");
             if !found.contains(&flag) {
                 found.push(flag);
@@ -1256,9 +1456,16 @@ fn fingerprint_api(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Optio
         if found.is_empty() {
             // `!hasOwn(owner, "prop")`.
             for node in alt.nodes() {
-                let Sym::Call(callee, args) = node else { continue };
-                let [owner, Sym::Str(prop)] = args.as_slice() else { continue };
-                if !callee.render().contains("hasOwnProperty") || prop == "prototype" || prop == "value" {
+                let Sym::Call(callee, args) = node else {
+                    continue;
+                };
+                let [owner, Sym::Str(prop)] = args.as_slice() else {
+                    continue;
+                };
+                if !callee.render().contains("hasOwnProperty")
+                    || prop == "prototype"
+                    || prop == "value"
+                {
                     continue;
                 }
                 let owner = host_text(owner);
@@ -1279,7 +1486,9 @@ fn fingerprint_api(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Optio
                 }
             }
         }
-        if found.is_empty() && (alt.has_string("[object Object]") || alt.has_string("[object Function]")) {
+        if found.is_empty()
+            && (alt.has_string("[object Object]") || alt.has_string("[object Function]"))
+        {
             match (alt.has_member("plugins"), alt.has_member("mimeTypes")) {
                 (true, false) => found.push("pluginsTagGenuine".into()),
                 (false, true) => found.push("mimeTypesTagGenuine".into()),
@@ -1301,7 +1510,9 @@ fn visibility(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<Str
     agree(ctx, sym, flags, |ctx, alt, _| {
         // Copies through registers: the innermost binding holding the
         // sampled value.
-        let Sym::Read(first, first_value) = alt else { return Ok(None) };
+        let Sym::Read(first, first_value) = alt else {
+            return Ok(None);
+        };
         let (mut symbol, mut value): (oxc_semantic::SymbolId, &Sym) = (*first, first_value);
         while let [Sym::Read(inner, inner_value)] = value.alternatives().as_slice() {
             symbol = *inner;
@@ -1328,10 +1539,18 @@ fn visibility(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<Str
         );
         // Sampled where the binding lives (the producer's setup) and
         // never stored again from a callback.
-        if (initialised || !writes.is_empty()) && writes.iter().all(|write| ctx.flow_root(*write) == declared_in) {
+        if (initialised || !writes.is_empty())
+            && writes
+                .iter()
+                .all(|write| ctx.flow_root(*write) == declared_in)
+        {
             return Ok(Some("initiallyVisible".into()));
         }
-        if !writes.is_empty() && writes.iter().all(|write| ctx.flow_root(*write) != declared_in) {
+        if !writes.is_empty()
+            && writes
+                .iter()
+                .all(|write| ctx.flow_root(*write) != declared_in)
+        {
             return Ok(Some("currentlyVisible".into()));
         }
         Ok(None)
@@ -1344,21 +1563,30 @@ fn visibility(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<Str
 /// helper), or after calling `console.log.__sentry_original__`.
 fn console_roles(ctx: &FinderCtx, sym: &Sym) -> Result<Option<&'static str>, String> {
     let alternatives = sym.alternatives();
-    let [Sym::Slot(symbol, index)] = alternatives.as_slice() else { return Ok(None) };
+    let [Sym::Slot(symbol, index)] = alternatives.as_slice() else {
+        return Ok(None);
+    };
     let nodes = ctx.parse.nodes;
     let mut roles: Vec<&'static str> = Vec::new();
     for reference in ctx.parse.scoping.get_resolved_references(*symbol) {
         let member = nodes.parent_id(reference.node_id());
-        let oxc_ast::AstKind::ComputedMemberExpression(element) = nodes.kind(member) else { continue };
-        if !matches!(element.expression.without_parentheses(), oxc_ast::ast::Expression::NumericLiteral(literal) if literal.value == *index as f64) {
+        let oxc_ast::AstKind::ComputedMemberExpression(element) = nodes.kind(member) else {
+            continue;
+        };
+        if !matches!(element.expression.without_parentheses(), oxc_ast::ast::Expression::NumericLiteral(literal) if literal.value == *index as f64)
+        {
             continue;
         }
         let store = nodes.parent_id(member);
-        let oxc_ast::AstKind::AssignmentExpression(assignment) = nodes.kind(store) else { continue };
+        let oxc_ast::AstKind::AssignmentExpression(assignment) = nodes.kind(store) else {
+            continue;
+        };
         if assignment.left.span() != element.span || !assignment.operator.is_assign() {
             continue;
         }
-        let Some(right) = ctx.node_with_span(assignment.right.without_parentheses().span()) else { continue };
+        let Some(right) = ctx.node_with_span(assignment.right.without_parentheses().span()) else {
+            continue;
+        };
         if ctx.sym(right).is_unset() {
             continue;
         }
@@ -1387,7 +1615,9 @@ fn console_store_role(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<&'
         }
         if let AstKind::IfStatement(statement) = nodes.kind(parent) {
             if let Some(test) = ctx.node_with_span(statement.test.without_parentheses().span()) {
-                if ctx.sym(test).has_string("__sentry_original__") || ctx.sym(test).has_member("__sentry_original__") {
+                if ctx.sym(test).has_string("__sentry_original__")
+                    || ctx.sym(test).has_member("__sentry_original__")
+                {
                     return Some("sentry");
                 }
             }
@@ -1395,7 +1625,10 @@ fn console_store_role(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<&'
         child = parent;
     }
     // In a `stack` getter: `defineProperty(probe, "stack", {get: f})`.
-    if !matches!(nodes.kind(root), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+    if !matches!(
+        nodes.kind(root),
+        AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+    ) {
         return None;
     }
     let outer = ctx.flow_root(nodes.parent_id(root));
@@ -1403,19 +1636,38 @@ fn console_store_role(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<&'
     // `defineProperty(probe, "stack", {get})`, also through `.call(o, …)`.
     let mut define = None;
     for id in ctx.nodes_within(outer_span) {
-        let AstKind::CallExpression(call) = nodes.kind(id) else { continue };
+        let AstKind::CallExpression(call) = nodes.kind(id) else {
+            continue;
+        };
         if ctx.flow_root(id) != outer {
             continue;
         }
-        let arguments: Vec<_> = call.arguments.iter().filter_map(|argument| argument.as_expression()).collect();
+        let arguments: Vec<_> = call
+            .arguments
+            .iter()
+            .filter_map(|argument| argument.as_expression())
+            .collect();
         for index in 1..arguments.len().saturating_sub(1) {
-            let oxc_ast::ast::Expression::StringLiteral(literal) = arguments[index].without_parentheses() else { continue };
+            let oxc_ast::ast::Expression::StringLiteral(literal) =
+                arguments[index].without_parentheses()
+            else {
+                continue;
+            };
             if literal.value != "stack" {
                 continue;
             }
-            let Some(descriptor) = ctx.node_with_span(arguments[index + 1].without_parentheses().span()) else { continue };
-            let Sym::Object(entries) = ctx.sym(descriptor) else { continue };
-            if entries.iter().any(|(key, value)| key == "get" && *value == Sym::Func(root)) {
+            let Some(descriptor) =
+                ctx.node_with_span(arguments[index + 1].without_parentheses().span())
+            else {
+                continue;
+            };
+            let Sym::Object(entries) = ctx.sym(descriptor) else {
+                continue;
+            };
+            if entries
+                .iter()
+                .any(|(key, value)| key == "get" && *value == Sym::Func(root))
+            {
                 if define.is_some() {
                     return None;
                 }
@@ -1436,8 +1688,12 @@ fn console_store_role(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<&'
             continue;
         }
         let call = nodes.parent_id(read);
-        let AstKind::CallExpression(call_expression) = nodes.kind(call) else { continue };
-        let Some(receiver) = log_receiver(ctx, call_expression, span) else { continue };
+        let AstKind::CallExpression(call_expression) = nodes.kind(call) else {
+            continue;
+        };
+        let Some(receiver) = log_receiver(ctx, call_expression, span) else {
+            continue;
+        };
         if log.as_ref().is_none_or(|(start, _)| span.start < *start) {
             log = Some((span.start, receiver));
         }
@@ -1463,23 +1719,39 @@ fn console_store_role(ctx: &FinderCtx, store: oxc_semantic::NodeId) -> Option<&'
 /// `c.log(probe)`, or the method extracted first and called on the
 /// console, `x = [c, c.log]; x[1].call(x[0], probe)` / `f = c.log;
 /// f.call(c, probe)`.
-fn log_receiver(ctx: &FinderCtx, call: &oxc_ast::ast::CallExpression, probe: oxc_span::Span) -> Option<oxc_semantic::NodeId> {
+fn log_receiver(
+    ctx: &FinderCtx,
+    call: &oxc_ast::ast::CallExpression,
+    probe: oxc_span::Span,
+) -> Option<oxc_semantic::NodeId> {
     use oxc_ast::ast::Expression;
     use oxc_ast::AstKind;
-    let oxc_ast::ast::Expression::StaticMemberExpression(callee) = call.callee.without_parentheses() else { return None };
+    let oxc_ast::ast::Expression::StaticMemberExpression(callee) =
+        call.callee.without_parentheses()
+    else {
+        return None;
+    };
     if callee.property.name == "log" {
         return ctx.node_with_span(callee.object.without_parentheses().span());
     }
-    if callee.property.name != "call" || call.arguments.get(1).map(|argument| argument.span()) != Some(probe) {
+    if callee.property.name != "call"
+        || call.arguments.get(1).map(|argument| argument.span()) != Some(probe)
+    {
         return None;
     }
-    let receiver = call.arguments.first()?.as_expression()?.without_parentheses();
+    let receiver = call
+        .arguments
+        .first()?
+        .as_expression()?
+        .without_parentheses();
     let method = ctx.node_with_span(callee.object.without_parentheses().span())?;
     // The extracted method's value: `c.log` (through `x[1]` of a pair).
     let value = match ctx.parse.nodes.kind(method) {
         AstKind::ComputedMemberExpression(element) => {
             let pair = ctx.node_with_span(element.object.without_parentheses().span())?;
-            let Expression::ComputedMemberExpression(first) = receiver else { return None };
+            let Expression::ComputedMemberExpression(first) = receiver else {
+                return None;
+            };
             let first_pair = ctx.node_with_span(first.object.without_parentheses().span())?;
             if ctx.reference_symbol(first_pair)? != ctx.reference_symbol(pair)?
                 || !matches!(first.expression.without_parentheses(), Expression::NumericLiteral(index) if index.value == 0.0)
@@ -1488,11 +1760,28 @@ fn log_receiver(ctx: &FinderCtx, call: &oxc_ast::ast::CallExpression, probe: oxc
                 return None;
             }
             let value = ctx.reaching_value(pair)?;
-            let AstKind::ArrayExpression(array) = ctx.parse.nodes.kind(value) else { return None };
-            let [Some(object), Some(log), None] = [array.elements.first(), array.elements.get(1), array.elements.get(2)] else { return None };
-            let (object, log) = (object.as_expression()?.without_parentheses(), log.as_expression()?.without_parentheses());
-            let Expression::StaticMemberExpression(log) = log else { return None };
-            if log.property.name != "log" || log.object.without_parentheses().span() != object.span() && ctx.sym(ctx.node_with_span(log.object.span())?) != ctx.sym(ctx.node_with_span(object.span())?) {
+            let AstKind::ArrayExpression(array) = ctx.parse.nodes.kind(value) else {
+                return None;
+            };
+            let [Some(object), Some(log), None] = [
+                array.elements.first(),
+                array.elements.get(1),
+                array.elements.get(2),
+            ] else {
+                return None;
+            };
+            let (object, log) = (
+                object.as_expression()?.without_parentheses(),
+                log.as_expression()?.without_parentheses(),
+            );
+            let Expression::StaticMemberExpression(log) = log else {
+                return None;
+            };
+            if log.property.name != "log"
+                || log.object.without_parentheses().span() != object.span()
+                    && ctx.sym(ctx.node_with_span(log.object.span())?)
+                        != ctx.sym(ctx.node_with_span(object.span())?)
+            {
                 return None;
             }
             return ctx.node_with_span(object.span());
@@ -1500,7 +1789,9 @@ fn log_receiver(ctx: &FinderCtx, call: &oxc_ast::ast::CallExpression, probe: oxc
         AstKind::IdentifierReference(_) => ctx.reaching_value(method)?,
         _ => return None,
     };
-    let AstKind::StaticMemberExpression(log) = ctx.parse.nodes.kind(value) else { return None };
+    let AstKind::StaticMemberExpression(log) = ctx.parse.nodes.kind(value) else {
+        return None;
+    };
     if log.property.name != "log" {
         return None;
     }
@@ -1519,7 +1810,11 @@ fn console_stack(ctx: &FinderCtx, sym: &Sym, _flags: &[String]) -> Result<Option
     })
 }
 
-fn clean_console_stack(ctx: &FinderCtx, sym: &Sym, _flags: &[String]) -> Result<Option<String>, String> {
+fn clean_console_stack(
+    ctx: &FinderCtx,
+    sym: &Sym,
+    _flags: &[String],
+) -> Result<Option<String>, String> {
     Ok(match console_roles(ctx, sym)? {
         Some("page") => Some("pageConsoleStackRead".into()),
         Some("sentry") => Some("sentryOriginalLogCalled".into()),
@@ -1576,7 +1871,14 @@ fn alias_root(ctx: &FinderCtx, mut node: oxc_semantic::NodeId) -> Option<oxc_sem
             _ => None,
         };
         match value {
-            Some(value) if matches!(ctx.parse.nodes.kind(value), oxc_ast::AstKind::IdentifierReference(_)) => node = value,
+            Some(value)
+                if matches!(
+                    ctx.parse.nodes.kind(value),
+                    oxc_ast::AstKind::IdentifierReference(_)
+                ) =>
+            {
+                node = value
+            }
             _ => return Some(symbol),
         }
     }
@@ -1591,9 +1893,15 @@ fn object_literal(ctx: &FinderCtx, node: oxc_semantic::NodeId) -> Option<oxc_sem
         oxc_ast::AstKind::IdentifierReference(_) => {
             let (_, stores) = ctx.reaching(node)?;
             let stores: Vec<Store> = stores.into_iter().collect();
-            let [Store::Assign(store) | Store::Declare(store)] = stores.as_slice() else { return None };
+            let [Store::Assign(store) | Store::Declare(store)] = stores.as_slice() else {
+                return None;
+            };
             let value = ctx.definition_value(*store)?;
-            matches!(ctx.parse.nodes.kind(value), oxc_ast::AstKind::ObjectExpression(_)).then_some(value)
+            matches!(
+                ctx.parse.nodes.kind(value),
+                oxc_ast::AstKind::ObjectExpression(_)
+            )
+            .then_some(value)
         }
         _ => None,
     }
@@ -1603,42 +1911,87 @@ fn object_literal(ctx: &FinderCtx, node: oxc_semantic::NodeId) -> Option<oxc_sem
 struct RingPutsKey;
 
 /// Every `x.put({…})` record by the binding `x` is copied from.
-fn ring_puts(ctx: &FinderCtx) -> std::rc::Rc<BTreeMap<oxc_semantic::SymbolId, Vec<crate::signals::analysis::write_sites::RecordConstruction>>> {
+fn ring_puts(
+    ctx: &FinderCtx,
+) -> std::rc::Rc<
+    BTreeMap<
+        oxc_semantic::SymbolId,
+        Vec<crate::signals::analysis::write_sites::RecordConstruction>,
+    >,
+> {
     ctx.memo(RingPutsKey, || {
         use oxc_ast::AstKind;
-        let mut out: BTreeMap<oxc_semantic::SymbolId, Vec<crate::signals::analysis::write_sites::RecordConstruction>> = BTreeMap::new();
+        let mut out: BTreeMap<
+            oxc_semantic::SymbolId,
+            Vec<crate::signals::analysis::write_sites::RecordConstruction>,
+        > = BTreeMap::new();
         for node in ctx.parse.nodes.iter() {
-            let AstKind::CallExpression(call) = node.kind() else { continue };
-            let oxc_ast::ast::Expression::StaticMemberExpression(callee) = call.callee.without_parentheses() else { continue };
+            let AstKind::CallExpression(call) = node.kind() else {
+                continue;
+            };
+            let oxc_ast::ast::Expression::StaticMemberExpression(callee) =
+                call.callee.without_parentheses()
+            else {
+                continue;
+            };
             // `ring.put(rec)`, or the method read first and called on the
             // ring: `f = ring.put; f.call(ring, rec)`.
-            let (receiver, argument) = if callee.property.name == "put" && call.arguments.len() == 1 {
-                (callee.object.without_parentheses().span(), &call.arguments[0])
+            let (receiver, argument) = if callee.property.name == "put" && call.arguments.len() == 1
+            {
+                (
+                    callee.object.without_parentheses().span(),
+                    &call.arguments[0],
+                )
             } else if callee.property.name == "call" && call.arguments.len() == 2 {
-                let Some(method) = ctx.node_with_span(callee.object.without_parentheses().span()) else { continue };
-                if !matches!(ctx.parse.nodes.kind(method), AstKind::IdentifierReference(_)) {
+                let Some(method) = ctx.node_with_span(callee.object.without_parentheses().span())
+                else {
+                    continue;
+                };
+                if !matches!(
+                    ctx.parse.nodes.kind(method),
+                    AstKind::IdentifierReference(_)
+                ) {
                     continue;
                 }
-                let Some(value) = ctx.reaching_value(method) else { continue };
-                let AstKind::StaticMemberExpression(put) = ctx.parse.nodes.kind(value) else { continue };
-                let Some(this) = call.arguments[0].as_expression() else { continue };
+                let Some(value) = ctx.reaching_value(method) else {
+                    continue;
+                };
+                let AstKind::StaticMemberExpression(put) = ctx.parse.nodes.kind(value) else {
+                    continue;
+                };
+                let Some(this) = call.arguments[0].as_expression() else {
+                    continue;
+                };
                 let (Some(owner), Some(this)) = (
                     ctx.node_with_span(put.object.without_parentheses().span()),
                     ctx.node_with_span(this.without_parentheses().span()),
                 ) else {
                     continue;
                 };
-                if put.property.name != "put" || alias_root(ctx, owner).is_none() || alias_root(ctx, owner) != alias_root(ctx, this) {
+                if put.property.name != "put"
+                    || alias_root(ctx, owner).is_none()
+                    || alias_root(ctx, owner) != alias_root(ctx, this)
+                {
                     continue;
                 }
                 (this_span(ctx, this), &call.arguments[1])
             } else {
                 continue;
             };
-            let Some(receiver) = ctx.node_with_span(receiver) else { continue };
-            let Some(argument) = argument.as_expression() else { continue };
-            let Some(argument) = ctx.node_with_span(argument.without_parentheses().span()) else { continue };
-            let (Some(ring), Some(literal)) = (alias_root(ctx, receiver), object_literal(ctx, argument)) else { continue };
+            let Some(receiver) = ctx.node_with_span(receiver) else {
+                continue;
+            };
+            let Some(argument) = argument.as_expression() else {
+                continue;
+            };
+            let Some(argument) = ctx.node_with_span(argument.without_parentheses().span()) else {
+                continue;
+            };
+            let (Some(ring), Some(literal)) =
+                (alias_root(ctx, receiver), object_literal(ctx, argument))
+            else {
+                continue;
+            };
             if let Some(record) = ctx.record_at(literal) {
                 out.entry(ring).or_default().push(record);
             }
@@ -1651,7 +2004,10 @@ fn this_span(ctx: &FinderCtx, node: oxc_semantic::NodeId) -> oxc_span::Span {
     ctx.parse.nodes.kind(node).span()
 }
 
-fn ring_records(ctx: &FinderCtx, ring: oxc_semantic::SymbolId) -> Vec<crate::signals::analysis::write_sites::RecordConstruction> {
+fn ring_records(
+    ctx: &FinderCtx,
+    ring: oxc_semantic::SymbolId,
+) -> Vec<crate::signals::analysis::write_sites::RecordConstruction> {
     ring_puts(ctx).get(&ring).cloned().unwrap_or_default()
 }
 
@@ -1659,20 +2015,46 @@ fn ring_records(ctx: &FinderCtx, ring: oxc_semantic::SymbolId) -> Vec<crate::sig
 /// passing an event-name string and then the handler.
 fn handler_events(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> BTreeSet<String> {
     use oxc_ast::AstKind;
-    const EVENTS: &[&str] = &["mousedown", "mouseup", "click", "mousemove", "touchstart", "touchmove", "touchend", "touchcancel"];
+    const EVENTS: &[&str] = &[
+        "mousedown",
+        "mouseup",
+        "click",
+        "mousemove",
+        "touchstart",
+        "touchmove",
+        "touchend",
+        "touchcancel",
+    ];
     let mut out = BTreeSet::new();
     for node in ctx.parse.nodes.iter() {
-        let AstKind::CallExpression(call) = node.kind() else { continue };
-        let arguments: Vec<_> = call.arguments.iter().filter_map(|argument| argument.as_expression()).collect();
+        let AstKind::CallExpression(call) = node.kind() else {
+            continue;
+        };
+        let arguments: Vec<_> = call
+            .arguments
+            .iter()
+            .filter_map(|argument| argument.as_expression())
+            .collect();
         for (index, argument) in arguments.iter().enumerate() {
-            let oxc_ast::ast::Expression::StringLiteral(literal) = argument.without_parentheses() else { continue };
+            let oxc_ast::ast::Expression::StringLiteral(literal) = argument.without_parentheses()
+            else {
+                continue;
+            };
             if !EVENTS.contains(&literal.value.as_str()) {
                 continue;
             }
-            let Some(handler) = arguments.get(index + 1) else { continue };
-            let Some(handler) = ctx.node_with_span(handler.without_parentheses().span()) else { continue };
+            let Some(handler) = arguments.get(index + 1) else {
+                continue;
+            };
+            let Some(handler) = ctx.node_with_span(handler.without_parentheses().span()) else {
+                continue;
+            };
             let value = ctx.sym(handler);
-            if value.alternatives().iter().any(|item| **item == Sym::Func(function)) {
+            if value
+                .alternatives()
+                .iter()
+                .any(|item| **item == Sym::Func(function))
+            {
                 out.insert(literal.value.to_string());
             }
         }
@@ -1684,13 +2066,19 @@ fn handler_events(ctx: &FinderCtx, function: oxc_semantic::NodeId) -> BTreeSet<S
 /// listeners store under `k` (the trust record's `instanceof UIEvent` /
 /// `isTrusted`), and `ring[i].k[j]` by the event of the listener storing
 /// `true` at `j` in its literal kind pair.
-fn ui_event_samples(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Option<String>, String> {
+fn ui_event_samples(
+    ctx: &FinderCtx,
+    sym: &Sym,
+    flags: &[String],
+) -> Result<Option<String>, String> {
     agree(ctx, sym, flags, |ctx, alt, _| {
         let alt = unread(alt);
         let (record, key, element) = match alt {
             Sym::Member(record, key) => (record.as_ref(), key, None),
             Sym::Index(list, index) => match (unread(list), index.as_ref()) {
-                (Sym::Member(record, key), Sym::Num(index)) => (record.as_ref(), key, Some(*index as usize)),
+                (Sym::Member(record, key), Sym::Num(index)) => {
+                    (record.as_ref(), key, Some(*index as usize))
+                }
                 _ => return Ok(None),
             },
             _ => return Ok(None),
@@ -1704,10 +2092,14 @@ fn ui_event_samples(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Opti
                 }
             }
         }
-        let [ring] = rings.into_iter().collect::<Vec<_>>()[..] else { return Ok(None) };
+        let [ring] = rings.into_iter().collect::<Vec<_>>()[..] else {
+            return Ok(None);
+        };
         let mut found: BTreeSet<String> = BTreeSet::new();
         for record in ring_records(ctx, ring) {
-            let Some(value) = record.values.get(key) else { continue };
+            let Some(value) = record.values.get(key) else {
+                continue;
+            };
             match element {
                 None => {
                     let stored = fold_member(&ctx.sym(*value));
@@ -1721,14 +2113,20 @@ fn ui_event_samples(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Opti
                     }
                 }
                 Some(index) => {
-                    let Sym::Array(items) = ctx.sym(*value) else { return Err("kind pair".into()) };
+                    let Sym::Array(items) = ctx.sym(*value) else {
+                        return Err("kind pair".into());
+                    };
                     match items.get(index) {
                         Some(Sym::Bool(true)) => {}
                         Some(Sym::Bool(false)) => continue,
                         _ => return Err("kind pair element".into()),
                     }
                     let function = ctx.flow_root(record.node);
-                    if !matches!(ctx.parse.nodes.kind(function), oxc_ast::AstKind::Function(_) | oxc_ast::AstKind::ArrowFunctionExpression(_)) {
+                    if !matches!(
+                        ctx.parse.nodes.kind(function),
+                        oxc_ast::AstKind::Function(_)
+                            | oxc_ast::AstKind::ArrowFunctionExpression(_)
+                    ) {
                         return Err("listener".into());
                     }
                     let events = handler_events(ctx, function);
@@ -1737,7 +2135,11 @@ fn ui_event_samples(ctx: &FinderCtx, sym: &Sym, flags: &[String]) -> Result<Opti
                     };
                     let mut name = event.clone();
                     let rest = name.split_off(5);
-                    found.insert(format!("is{}{}", name[..1].to_uppercase() + &name[1..], rest));
+                    found.insert(format!(
+                        "is{}{}",
+                        name[..1].to_uppercase() + &name[1..],
+                        rest
+                    ));
                 }
             }
         }
@@ -1757,7 +2159,8 @@ mod tests {
     #[test]
     fn signal_fields_have_card_flags() {
         for entry in SIGNALS {
-            let flags = all_flags(entry).unwrap_or_else(|| panic!("{}: card has no flags list", entry.signal));
+            let flags = all_flags(entry)
+                .unwrap_or_else(|| panic!("{}: card has no flags list", entry.signal));
             assert!(!flags.is_empty(), "{}: empty flags", entry.signal);
         }
     }

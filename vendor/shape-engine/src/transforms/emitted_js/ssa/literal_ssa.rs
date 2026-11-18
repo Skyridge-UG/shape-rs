@@ -16,8 +16,8 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LiteralSsaResult {
@@ -72,10 +72,7 @@ pub fn inline_literal_ssa(source: &str) -> Result<LiteralSsaResult, String> {
                 continue;
             }
             let value = &source[declaration.value.start as usize..declaration.value.end as usize];
-            edits.push(analysis::Edit::delete(whole_line(
-                source,
-                declaration.span,
-            )));
+            edits.push(analysis::Edit::delete(whole_line(source, declaration.span)));
             for reference in references {
                 let span = nodes.get_node(reference.node_id()).kind().span();
                 let replacement = if declaration.bare_literal {

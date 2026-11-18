@@ -616,9 +616,10 @@ mod tests {
         struct SampleFile {
             signals: Vec<SampleSignal>,
         }
-        let sample: SampleFile =
-            serde_json::from_str(include_str!("../../../tests/fixtures/sdk/generator/signal-codec.json"))
-                .expect("sample json");
+        let sample: SampleFile = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/sdk/generator/signal-codec.json"
+        ))
+        .expect("sample json");
         assert_eq!(sample.signals.len(), 3);
         for signal in &sample.signals {
             let extra = encode_layout(

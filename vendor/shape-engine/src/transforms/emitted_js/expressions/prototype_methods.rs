@@ -21,7 +21,12 @@ pub(crate) fn name_prototype_methods(source: &str) -> Result<(String, usize), St
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new() };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+    };
     scan.visit_program(&program);
     if scan.edits.is_empty() {
         return Ok((source.into(), 0));
@@ -64,16 +69,32 @@ impl Scan<'_, '_> {
         let Some(node) = self.nodes.iter().find(|node| node.kind().span() == member) else {
             return;
         };
-        if self.scoping.find_binding(node.scope_id(), constructor.into()).is_some() {
+        if self
+            .scoping
+            .find_binding(node.scope_id(), constructor.into())
+            .is_some()
+        {
             return;
         }
         // `({}).x`: the parentheses go with the literal.
         let mut span = object.span();
-        let (before, after) = (&self.source[..span.start as usize], &self.source[span.end as usize..]);
-        if before.trim_end().ends_with('(') && after.trim_start().starts_with(')') && before.trim_end().len() >= member.start as usize {
-            span = oxc_span::Span::new(before.trim_end().len() as u32 - 1, (self.source.len() - after.trim_start().len()) as u32 + 1);
+        let (before, after) = (
+            &self.source[..span.start as usize],
+            &self.source[span.end as usize..],
+        );
+        if before.trim_end().ends_with('(')
+            && after.trim_start().starts_with(')')
+            && before.trim_end().len() >= member.start as usize
+        {
+            span = oxc_span::Span::new(
+                before.trim_end().len() as u32 - 1,
+                (self.source.len() - after.trim_start().len()) as u32 + 1,
+            );
         }
-        self.edits.push(analysis::Edit::replace(span, format!("{constructor}.prototype")));
+        self.edits.push(analysis::Edit::replace(
+            span,
+            format!("{constructor}.prototype"),
+        ));
     }
 }
 

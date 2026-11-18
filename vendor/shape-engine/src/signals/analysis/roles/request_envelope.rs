@@ -32,10 +32,10 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator};
 
-use crate::signals::extract::bindings::{numeric_index, object_members_of, ParameterSlots};
-use crate::signals::schema::Confidence;
 use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 use crate::analysis;
+use crate::signals::extract::bindings::{numeric_index, object_members_of, ParameterSlots};
+use crate::signals::schema::Confidence;
 
 const URL_PARSER: &str = "url_parser";
 const URL_PARSER_ALIAS: &str = "url_parser_alias";
@@ -77,15 +77,27 @@ const LENGTH_LIST: &str = "prefixed_key_length_list";
 const LENGTH_ENTRY: &str = "prefixed_key_length_entry";
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn main(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -97,7 +109,10 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     function(URL_PARSER, "parseUrl"),
     alias(URL_PARSER_ALIAS, "urlParser"),
     function(URL_PATHNAME_DECODER, "decodePathnameEscape"),
-    function(URL_RELATIVE_PATHNAME_DECODER, "decodeRelativePathnameEscape"),
+    function(
+        URL_RELATIVE_PATHNAME_DECODER,
+        "decodeRelativePathnameEscape",
+    ),
     function(URL_SEARCH_DECODER, "decodeSearchEscape"),
     function(URL_HASH_DECODER, "decodeHashEscape"),
     main(URL_PARSER_DOCUMENT, "urlParserDocument"),
@@ -139,11 +154,13 @@ pub(crate) fn find(ctx: &FinderCtx) -> Vec<FinderClaim> {
     let index = Index::new(ctx);
     let mut out = Claims::default();
     let count = index.fns.len();
-    let parsers: Vec<usize> =
-        (0..count).filter(|f| index.claim_url_parser(*f, &mut out)).collect();
+    let parsers: Vec<usize> = (0..count)
+        .filter(|f| index.claim_url_parser(*f, &mut out))
+        .collect();
     index.claim_anchor_fallbacks(&mut out);
-    let matchers: Vec<usize> =
-        (0..count).filter(|f| index.claim_route_matcher(*f, &parsers, &mut out)).collect();
+    let matchers: Vec<usize> = (0..count)
+        .filter(|f| index.claim_route_matcher(*f, &parsers, &mut out))
+        .collect();
     let envelope_builder_candidates: Vec<usize> = (0..count)
         .filter(|f| index.claim_envelope_builder(*f, &mut out))
         .collect();
@@ -293,7 +310,10 @@ fn target_member<'e, 'a>(
 }
 
 fn call_arguments<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 /// `(receiver, method, arguments)` of `receiver.method(...)` and of the traced
@@ -449,7 +469,10 @@ impl<'a> Index<'a> {
             let unit = match node.kind() {
                 AstKind::Function(function) => Some((
                     function.span,
-                    function.body.as_ref().map_or(&[][..], |body| body.statements.as_slice()),
+                    function
+                        .body
+                        .as_ref()
+                        .map_or(&[][..], |body| body.statements.as_slice()),
                     function.id.as_ref().and_then(|id| id.symbol_id.get()),
                 )),
                 AstKind::ArrowFunctionExpression(arrow) => {
@@ -459,7 +482,13 @@ impl<'a> Index<'a> {
             };
             if let Some((span, statements, symbol)) = unit {
                 let unit_index = self.fns.len();
-                self.fns.push(Unit { node: id, span, parent: owner, statements, own: Own::default() });
+                self.fns.push(Unit {
+                    node: id,
+                    span,
+                    parent: owner,
+                    statements,
+                    own: Own::default(),
+                });
                 fn_of_node[position] = Some(unit_index);
                 self.fn_by_span.insert((span.start, span.end), unit_index);
                 if let Some(symbol) = symbol {
@@ -496,7 +525,10 @@ impl<'a> Index<'a> {
             {
                 if let AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left {
                     if let Some(symbol) = analysis::identifier_symbol(identifier, self.scoping) {
-                        self.values.entry(symbol).or_default().push(&assignment.right);
+                        self.values
+                            .entry(symbol)
+                            .or_default()
+                            .push(&assignment.right);
                         *self.assigned.entry(symbol).or_default() += 1;
                     }
                 }
@@ -522,7 +554,8 @@ impl<'a> Index<'a> {
                 None => own.bare_returns += 1,
             },
             AstKind::StaticMemberExpression(member) => {
-                own.members.push((&member.object, member.property.name.as_str()));
+                own.members
+                    .push((&member.object, member.property.name.as_str()));
             }
             AstKind::ComputedMemberExpression(member) => {
                 if let Expression::StringLiteral(literal) = &member.expression {
@@ -560,7 +593,11 @@ impl<'a> Index<'a> {
         {
             return None;
         }
-        let writes = self.scoping.get_resolved_references(symbol).filter(|r| r.is_write()).count();
+        let writes = self
+            .scoping
+            .get_resolved_references(symbol)
+            .filter(|r| r.is_write())
+            .count();
         if writes != self.assigned.get(&symbol).copied().unwrap_or(0) {
             return None;
         }
@@ -624,10 +661,16 @@ impl<'a> Index<'a> {
         for _ in 0..8 {
             match current {
                 Expression::FunctionExpression(function) => {
-                    return self.fn_by_span.get(&(function.span.start, function.span.end)).copied();
+                    return self
+                        .fn_by_span
+                        .get(&(function.span.start, function.span.end))
+                        .copied();
                 }
                 Expression::ArrowFunctionExpression(arrow) => {
-                    return self.fn_by_span.get(&(arrow.span.start, arrow.span.end)).copied();
+                    return self
+                        .fn_by_span
+                        .get(&(arrow.span.start, arrow.span.end))
+                        .copied();
                 }
                 _ => {}
             }
@@ -692,7 +735,13 @@ impl<'a> Index<'a> {
         self.slot(expression, f) == Some(index)
     }
 
-    fn is_slot_member(&self, expression: &Expression<'a>, f: usize, index: u32, name: &str) -> bool {
+    fn is_slot_member(
+        &self,
+        expression: &Expression<'a>,
+        f: usize,
+        index: u32,
+        name: &str,
+    ) -> bool {
         member_of(expression)
             .is_some_and(|(object, member)| member == name && self.is_slot(object, f, index))
     }
@@ -782,7 +831,8 @@ impl<'a> Index<'a> {
     fn returned_null_object(&self, f: usize) -> Option<SymbolId> {
         self.own(f).returns.iter().find_map(|value| {
             let symbol = self.symbol(value)?;
-            self.is_null_prototype_object(self.single_value(symbol)?).then_some(symbol)
+            self.is_null_prototype_object(self.single_value(symbol)?)
+                .then_some(symbol)
         })
     }
 
@@ -803,8 +853,10 @@ impl<'a> Index<'a> {
         literal: &'a ObjectExpression<'a>,
         f: usize,
     ) -> BTreeSet<String> {
-        let mut fields: BTreeSet<String> =
-            object_members_of(literal).into_iter().map(|member| member.name).collect();
+        let mut fields: BTreeSet<String> = object_members_of(literal)
+            .into_iter()
+            .map(|member| member.name)
+            .collect();
         for assignment in &self.own(f).assignments {
             if let Some((object, name)) = target_member(&assignment.left) {
                 if self.symbol(object) == Some(local) {
@@ -834,9 +886,11 @@ impl<'a> Index<'a> {
             return false;
         };
         let fields = self.object_fields(result, literal, f);
-        let complete = ["protocol", "hostname", "port", "pathname", "search", "hash", "href"]
-            .iter()
-            .all(|field| fields.contains(*field));
+        let complete = [
+            "protocol", "hostname", "port", "pathname", "search", "hash", "href",
+        ]
+        .iter()
+        .all(|field| fields.contains(*field));
         let reads_anchor = object_members_of(literal).iter().any(|member| {
             member.name == "hostname"
                 && member_of(member.value).is_some_and(|(object, name)| {
@@ -871,7 +925,10 @@ impl<'a> Index<'a> {
     ) {
         let own = self.own(f);
         if let Some(symbol) = self.outer_binding(document, f) {
-            if self.single_value(symbol).is_some_and(|value| self.is_global(value, "document")) {
+            if self
+                .single_value(symbol)
+                .is_some_and(|value| self.is_global(value, "document"))
+            {
                 out.main(
                     URL_PARSER_DOCUMENT,
                     self.identifier(symbol),
@@ -897,8 +954,10 @@ impl<'a> Index<'a> {
             else {
                 continue;
             };
-            let names: BTreeSet<String> =
-                object_members_of(table).into_iter().map(|member| member.name).collect();
+            let names: BTreeSet<String> = object_members_of(table)
+                .into_iter()
+                .map(|member| member.name)
+                .collect();
             if names.contains("http") && names.contains("https") {
                 out.main(
                     DEFAULT_PORTS,
@@ -917,7 +976,10 @@ impl<'a> Index<'a> {
             let Some(symbol) = self.outer_binding(&target.object, f) else {
                 continue;
             };
-            if self.single_value(symbol).is_some_and(|value| self.is_null_prototype_object(value)) {
+            if self
+                .single_value(symbol)
+                .is_some_and(|value| self.is_null_prototype_object(value))
+            {
                 out.main(
                     URL_PARSE_CACHE,
                     self.identifier(symbol),
@@ -1017,7 +1079,11 @@ impl<'a> Index<'a> {
                 _ => self.function_of(value).into_iter().collect(),
             };
             for f in candidates {
-                let proven = if setter { self.is_href_setter(f) } else { self.is_href_getter(f) };
+                let proven = if setter {
+                    self.is_href_setter(f)
+                } else {
+                    self.is_href_getter(f)
+                };
                 if proven {
                     out.function(
                         role,
@@ -1033,17 +1099,19 @@ impl<'a> Index<'a> {
     fn is_href_getter(&self, f: usize) -> bool {
         self.fns[f].statements.len() == 1
             && self.own(f).calls.is_empty()
-            && self.single_return(f).is_some_and(|value| self.is_slot_member(value, f, 0, "href"))
+            && self
+                .single_return(f)
+                .is_some_and(|value| self.is_slot_member(value, f, 0, "href"))
     }
 
     fn is_href_setter(&self, f: usize) -> bool {
         let own = self.own(f);
         own.calls.is_empty()
             && matches!(own.assignments.as_slice(), [assignment]
-                if self.is_slot(&assignment.right, f, 1)
-                    && target_member(&assignment.left).is_some_and(|(object, name)| {
-                        name == "href" && self.is_slot(object, f, 0)
-                    }))
+            if self.is_slot(&assignment.right, f, 1)
+                && target_member(&assignment.left).is_some_and(|(object, name)| {
+                    name == "href" && self.is_slot(object, f, 0)
+                }))
             && own.returns.iter().all(|value| is_void(value))
     }
 
@@ -1055,8 +1123,11 @@ impl<'a> Index<'a> {
         let own = self.own(f);
         let parses_url = own.calls.iter().any(|call| {
             let arguments = call_arguments(call);
-            self.function_of(&call.callee).is_some_and(|callee| parsers.contains(&callee))
-                && arguments.first().is_some_and(|first| self.is_slot_member(first, f, 0, "url"))
+            self.function_of(&call.callee)
+                .is_some_and(|callee| parsers.contains(&callee))
+                && arguments
+                    .first()
+                    .is_some_and(|first| self.is_slot_member(first, f, 0, "url"))
         });
         let reads_method = own.calls.iter().any(|call| {
             method_call(call).is_some_and(|(receiver, name, _)| {
@@ -1067,9 +1138,15 @@ impl<'a> Index<'a> {
             return false;
         }
         let tree = self.subtree(f);
-        let rules: Vec<usize> = tree.iter().flat_map(|unit| self.callbacks(*unit, "some")).collect();
-        let static_rules: Vec<usize> =
-            rules.iter().copied().filter(|rule| self.is_static_rule(*rule)).collect();
+        let rules: Vec<usize> = tree
+            .iter()
+            .flat_map(|unit| self.callbacks(*unit, "some"))
+            .collect();
+        let static_rules: Vec<usize> = rules
+            .iter()
+            .copied()
+            .filter(|rule| self.is_static_rule(*rule))
+            .collect();
         if static_rules.is_empty() {
             return false;
         }
@@ -1100,7 +1177,11 @@ impl<'a> Index<'a> {
                 }
             }
         }
-        for rule in rules.iter().copied().filter(|rule| self.is_dynamic_rule(*rule)) {
+        for rule in rules
+            .iter()
+            .copied()
+            .filter(|rule| self.is_dynamic_rule(*rule))
+        {
             out.function(
                 DYNAMIC_RULE,
                 self.fns[rule].span,
@@ -1161,7 +1242,9 @@ impl<'a> Index<'a> {
                 }
             }
         }
-        ["protocol", "host", "path", "port"].iter().all(|field| tested.contains(field))
+        ["protocol", "host", "path", "port"]
+            .iter()
+            .all(|field| tested.contains(field))
     }
 
     /// `slot.toLowerCase()`.
@@ -1189,7 +1272,8 @@ impl<'a> Index<'a> {
     }
 
     fn is_lowercase(&self, f: usize) -> bool {
-        self.single_return(f).is_some_and(|value| self.is_slot_lowercase(value, f))
+        self.single_return(f)
+            .is_some_and(|value| self.is_slot_lowercase(value, f))
     }
 
     fn is_port_default(&self, f: usize) -> bool {
@@ -1236,7 +1320,8 @@ impl<'a> Index<'a> {
         argument: Option<&Expression<'a>>,
         out: &mut Claims,
     ) {
-        let (Some(argument), Some(symbol)) = (argument, self.outer_binding(receiver, matcher)) else {
+        let (Some(argument), Some(symbol)) = (argument, self.outer_binding(receiver, matcher))
+        else {
             return;
         };
         if !self.holds_regexp(symbol) {
@@ -1273,7 +1358,10 @@ impl<'a> Index<'a> {
         if self.decl_fn.contains_key(&symbol) {
             return;
         }
-        let Some(target) = self.single_value(symbol).and_then(|value| self.function_of(value)) else {
+        let Some(target) = self
+            .single_value(symbol)
+            .and_then(|value| self.function_of(value))
+        else {
             return;
         };
         if self.is_code_units_to_string(target) {
@@ -1295,7 +1383,8 @@ impl<'a> Index<'a> {
         });
         let joins = self.own(f).calls.iter().any(|call| {
             method_call(call).is_some_and(|(_, name, arguments)| {
-                name == "join" && arguments.first().and_then(|first| string_value(first)) == Some("")
+                name == "join"
+                    && arguments.first().and_then(|first| string_value(first)) == Some("")
             })
         });
         converts && joins
@@ -1341,8 +1430,10 @@ impl<'a> Index<'a> {
         if !self.same_predicate_input(&parts, f) {
             return false;
         }
-        let ranges: Vec<(SymbolId, SymbolId)> =
-            parts.iter().filter_map(|part| self.code_point_range(part, f)).collect();
+        let ranges: Vec<(SymbolId, SymbolId)> = parts
+            .iter()
+            .filter_map(|part| self.code_point_range(part, f))
+            .collect();
         let exact = parts.iter().any(|part| self.is_exact_code_point(part, f));
         if parts.len() != 3 || ranges.len() != 2 || !exact {
             return false;
@@ -1355,7 +1446,12 @@ impl<'a> Index<'a> {
                 _ => return false,
             }
         }
-        if bounds.iter().filter(|(role, _)| *role == DIGIT_START).count() != 1 {
+        if bounds
+            .iter()
+            .filter(|(role, _)| *role == DIGIT_START)
+            .count()
+            != 1
+        {
             return false;
         }
         out.function(
@@ -1486,14 +1582,18 @@ impl<'a> Index<'a> {
         let Some(Expression::CallExpression(call)) = self.single_return(f).map(strip) else {
             return;
         };
-        let Some(matcher) = self.function_of(&call.callee).filter(|m| matchers.contains(m)) else {
+        let Some(matcher) = self
+            .function_of(&call.callee)
+            .filter(|m| matchers.contains(m))
+        else {
             return;
         };
         let arguments = call_arguments(call);
         let [request, table, dynamic, provider] = arguments.as_slice() else {
             return;
         };
-        if !self.is_slot(request, f, 0) || !matches!(strip(dynamic), Expression::BooleanLiteral(_)) {
+        if !self.is_slot(request, f, 0) || !matches!(strip(dynamic), Expression::BooleanLiteral(_))
+        {
             return;
         }
         out.function(
@@ -1567,8 +1667,10 @@ impl<'a> Index<'a> {
         // literal. The base64url variant instead assigns it onto the same
         // collector local after the literal and emits the inline sextet loop.
         let collects_literal = own.objects.iter().copied().any(|object| {
-            let names: BTreeSet<String> =
-                object_members_of(object).into_iter().map(|member| member.name).collect();
+            let names: BTreeSet<String> = object_members_of(object)
+                .into_iter()
+                .map(|member| member.name)
+                .collect();
             ["signalFilter", "includeDebugNames", "notifyLastChance"]
                 .iter()
                 .all(|name| names.contains(*name))
@@ -1716,8 +1818,10 @@ impl<'a> Index<'a> {
                 let Expression::ObjectExpression(literal) = strip(value) else {
                     return false;
                 };
-                let names: BTreeSet<String> =
-                    object_members_of(literal).into_iter().map(|member| member.name).collect();
+                let names: BTreeSet<String> = object_members_of(literal)
+                    .into_iter()
+                    .map(|member| member.name)
+                    .collect();
                 names.contains("signalFilter") && names.contains("includeDebugNames")
             })
         })
@@ -1736,11 +1840,7 @@ impl<'a> Index<'a> {
     ///   field hashes it with the captured token written to packet field `f`.
     ///
     /// No alphabet, key, constant, span, name or vendor is consulted.
-    fn base64url_emission(
-        &self,
-        f: usize,
-        writes: &[(&'a str, &'a Expression<'a>)],
-    ) -> bool {
+    fn base64url_emission(&self, f: usize, writes: &[(&'a str, &'a Expression<'a>)]) -> bool {
         let own = self.own(f);
         let Some(payload) = writes
             .iter()
@@ -1873,9 +1973,7 @@ impl<'a> Index<'a> {
     /// Whether the loop index is advanced by exactly three inside the loop.
     fn steps_by_three(&self, own: &Own<'a>, index: SymbolId, loop_span: Span) -> bool {
         own.assignments.iter().any(|assignment| {
-            if !(loop_span.start <= assignment.span.start
-                && assignment.span.end <= loop_span.end)
-            {
+            if !(loop_span.start <= assignment.span.start && assignment.span.end <= loop_span.end) {
                 return false;
             }
             let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
@@ -1885,9 +1983,7 @@ impl<'a> Index<'a> {
                 return false;
             }
             match assignment.operator {
-                AssignmentOperator::Addition => {
-                    literal_number(&assignment.right) == Some(3.0)
-                }
+                AssignmentOperator::Addition => literal_number(&assignment.right) == Some(3.0),
                 AssignmentOperator::Assign => matches!(
                     strip(&assignment.right),
                     Expression::BinaryExpression(sum)
@@ -1910,9 +2006,7 @@ impl<'a> Index<'a> {
         loop_span: Span,
     ) -> Option<SymbolId> {
         own.assignments.iter().find_map(|assignment| {
-            if !(loop_span.start <= assignment.span.start
-                && assignment.span.end <= loop_span.end)
-            {
+            if !(loop_span.start <= assignment.span.start && assignment.span.end <= loop_span.end) {
                 return None;
             }
             let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
@@ -2051,9 +2145,9 @@ impl<'a> Index<'a> {
         for conditional in &own.conditionals {
             if member_of(&conditional.alternate).is_some_and(|(_, name)| name == "signalFilter") {
                 if let Some(symbol) = self.outer_binding(&conditional.consequent, f) {
-                    let is_array = self.single_value(symbol).is_some_and(
-                        |value| matches!(strip(value), Expression::ArrayExpression(_)),
-                    );
+                    let is_array = self.single_value(symbol).is_some_and(|value| {
+                        matches!(strip(value), Expression::ArrayExpression(_))
+                    });
                     if is_array {
                         out.main(
                             DEFAULT_FILTER,
@@ -2098,7 +2192,10 @@ impl<'a> Index<'a> {
             let Some(symbol) = self.outer_binding(&sum.left, f) else {
                 continue;
             };
-            if writes.iter().any(|(_, value)| self.outer_binding(value, f) == Some(symbol)) {
+            if writes
+                .iter()
+                .any(|(_, value)| self.outer_binding(value, f) == Some(symbol))
+            {
                 out.main(
                     ENVELOPE_TOKEN,
                     self.identifier(symbol),
@@ -2125,9 +2222,9 @@ impl<'a> Index<'a> {
                 continue;
             }
             let sliced = matches!(strip(&assignment.right), Expression::CallExpression(call)
-                if method_call(call).is_some_and(|(receiver, name, arguments)| {
-                    name == "slice" && self.is_slot(receiver, f, 1) && arguments.len() == 2
-                }));
+            if method_call(call).is_some_and(|(receiver, name, arguments)| {
+                name == "slice" && self.is_slot(receiver, f, 1) && arguments.len() == 2
+            }));
             if self.is_slot(&target.expression, f, 0) {
                 let mut parts = Vec::new();
                 additions(&assignment.right, &mut parts);
@@ -2156,8 +2253,11 @@ impl<'a> Index<'a> {
     /// Whether a function that calls `f` also calls `object.headers.set(...)`.
     fn reaches_headers(&self, f: usize) -> bool {
         self.fns.iter().any(|unit| {
-            let calls_f =
-                unit.own.calls.iter().any(|call| self.function_of(&call.callee) == Some(f));
+            let calls_f = unit
+                .own
+                .calls
+                .iter()
+                .any(|call| self.function_of(&call.callee) == Some(f));
             calls_f
                 && unit.own.calls.iter().any(|call| {
                     method_call(call).is_some_and(|(receiver, name, _)| {
@@ -2186,11 +2286,16 @@ impl<'a> Index<'a> {
         };
         let reads_keys = member_of(&keys.callee)
             .is_some_and(|(object, name)| name == "keys" && self.is_global(object, "Object"))
-            && call_arguments(keys).first().is_some_and(|first| self.is_slot(first, f, 0));
+            && call_arguments(keys)
+                .first()
+                .is_some_and(|first| self.is_slot(first, f, 0));
         if !reads_keys || separators.first().and_then(|first| string_value(first)) != Some(" ") {
             return;
         }
-        let Some(entry) = callbacks.first().and_then(|callback| self.function_of(callback)) else {
+        let Some(entry) = callbacks
+            .first()
+            .and_then(|callback| self.function_of(callback))
+        else {
             return;
         };
         let Some(value) = self.single_return(entry) else {

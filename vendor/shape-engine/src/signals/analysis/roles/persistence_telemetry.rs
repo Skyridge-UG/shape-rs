@@ -37,10 +37,10 @@ use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
 use crate::analysis;
 
-use crate::signals::extract::bindings::{call_arguments, object_members_of, Model};
-use crate::signals::schema::{Confidence, ProgramPropertiesLimits};
-use crate::signals::extract::reaching::expression_value_at_use;
 use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::signals::extract::bindings::{call_arguments, object_members_of, Model};
+use crate::signals::extract::reaching::expression_value_at_use;
+use crate::signals::schema::{Confidence, ProgramPropertiesLimits};
 
 // ---------------------------------------------------------------------------
 // Roles and names
@@ -94,15 +94,27 @@ const APPLY_DECRYPTED_AGGREGATE: &str = "persistence_apply_decrypted_aggregate";
 const REPORT_AGGREGATE_FAILURE: &str = "persistence_report_aggregate_failure";
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn main(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -262,9 +274,7 @@ fn member_of<'a>(expression: &'a Expression<'a>) -> Option<(&'a Expression<'a>, 
     Some((member_object(expression)?, name))
 }
 
-fn target_member<'a>(
-    target: &'a AssignmentTarget<'a>,
-) -> Option<(&'a Expression<'a>, &'a str)> {
+fn target_member<'a>(target: &'a AssignmentTarget<'a>) -> Option<(&'a Expression<'a>, &'a str)> {
     match target {
         AssignmentTarget::StaticMemberExpression(member) => {
             Some((&member.object, member.property.name.as_str()))
@@ -431,7 +441,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                     if let Some(Statement::ExpressionStatement(statement)) =
                         arrow.body.statements.first()
                     {
-                        self.own.entry(id).or_default().returns.push(&statement.expression);
+                        self.own
+                            .entry(id)
+                            .or_default()
+                            .returns
+                            .push(&statement.expression);
                     }
                 }
             }
@@ -454,7 +468,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 AstKind::IfStatement(statement) => entry.tests.push(&statement.test),
                 AstKind::ConditionalExpression(conditional) => entry.tests.push(&conditional.test),
                 AstKind::StaticMemberExpression(member) => {
-                    entry.members.push((member.property.name.as_str(), &member.object));
+                    entry
+                        .members
+                        .push((member.property.name.as_str(), &member.object));
                 }
                 AstKind::ComputedMemberExpression(member) => {
                     if let Expression::StringLiteral(literal) = &member.expression {
@@ -486,7 +502,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                     if let Some(symbol) =
                         analysis::identifier_symbol(identifier, self.model.scoping())
                     {
-                        self.values.entry(symbol).or_default().push(&assignment.right);
+                        self.values
+                            .entry(symbol)
+                            .or_default()
+                            .push(&assignment.right);
                     }
                 }
             }
@@ -591,7 +610,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
 
     /// A binding's one value, when it is declared once and written once.
     fn single_value(&self, symbol: SymbolId) -> Option<&'a Expression<'a>> {
-        if !self.model.scoping().symbol_redeclarations(symbol).is_empty() {
+        if !self
+            .model
+            .scoping()
+            .symbol_redeclarations(symbol)
+            .is_empty()
+        {
             return None;
         }
         match self.values_of(symbol) {
@@ -660,7 +684,8 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         &self,
         expression: &Expression<'a>,
     ) -> Option<crate::signals::extract::bindings::FunctionSite> {
-        self.model.function_from_expression(expression.without_parentheses())
+        self.model
+            .function_from_expression(expression.without_parentheses())
     }
 
     fn identifier(&self, symbol: SymbolId) -> Span {
@@ -691,14 +716,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         })
     }
 
-    fn is_global_method(
-        &self,
-        call: &Call<'a>,
-        global: &str,
-        method: &str,
-    ) -> bool {
+    fn is_global_method(&self, call: &Call<'a>, global: &str, method: &str) -> bool {
         call.method == Some(method)
-            && call.receiver.is_some_and(|receiver| self.is_global(receiver, global))
+            && call
+                .receiver
+                .is_some_and(|receiver| self.is_global(receiver, global))
     }
 
     fn is_json_call(&self, expression: &'a Expression<'a>, method: &str) -> bool {
@@ -745,15 +767,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         })
     }
 
-    fn addition_operands(
-        &self,
-        expression: &'a Expression<'a>,
-        out: &mut Vec<&'a Expression<'a>>,
-    ) {
+    fn addition_operands(&self, expression: &'a Expression<'a>, out: &mut Vec<&'a Expression<'a>>) {
         match expression.without_parentheses() {
-            Expression::BinaryExpression(binary)
-                if binary.operator == BinaryOperator::Addition =>
-            {
+            Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
                 self.addition_operands(&binary.left, out);
                 self.addition_operands(&binary.right, out);
             }
@@ -762,17 +778,16 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
     }
 
     fn is_local_storage_member(&self, expression: &'a Expression<'a>) -> bool {
-        matches!(
-            member_of(expression),
-            Some((_, "localStorage"))
-        )
+        matches!(member_of(expression), Some((_, "localStorage")))
     }
 
     /// A MAIN binding that holds a `localStorage` handle: one write is the
     /// `.localStorage` member and another write is the null fallback.
     fn storage_handle(&self, symbol: SymbolId) -> bool {
         let values = self.values_of(symbol);
-        values.iter().any(|value| self.is_local_storage_member(value))
+        values
+            .iter()
+            .any(|value| self.is_local_storage_member(value))
             && values.iter().any(|value| is_null(value))
     }
 
@@ -781,20 +796,31 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         if self.is_local_storage_member(origin) {
             return true;
         }
-        self.symbol(origin)
-            .is_some_and(|symbol| self.main_symbols.contains(&symbol) && self.storage_handle(symbol))
+        self.symbol(origin).is_some_and(|symbol| {
+            self.main_symbols.contains(&symbol) && self.storage_handle(symbol)
+        })
     }
 
     fn is_storage_method(&self, call: &Call<'a>, method: &str) -> bool {
         call.method == Some(method)
-            && call.receiver.is_some_and(|receiver| self.is_storage_receiver(receiver))
+            && call
+                .receiver
+                .is_some_and(|receiver| self.is_storage_receiver(receiver))
     }
 
-    fn site_gets_storage_item(&self, site: crate::signals::extract::bindings::FunctionSite) -> bool {
-        self.calls(site).iter().any(|call| self.is_storage_method(call, "getItem"))
+    fn site_gets_storage_item(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+    ) -> bool {
+        self.calls(site)
+            .iter()
+            .any(|call| self.is_storage_method(call, "getItem"))
     }
 
-    fn site_sets_storage_item(&self, site: crate::signals::extract::bindings::FunctionSite) -> bool {
+    fn site_sets_storage_item(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+    ) -> bool {
         self.calls(site)
             .iter()
             .any(|call| self.is_storage_method(call, "setItem"))
@@ -828,11 +854,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 self.expression_mentions_symbol(&binary.left, symbol)
                     || self.expression_mentions_symbol(&binary.right, symbol)
             }
-            Expression::SequenceExpression(sequence) => {
-                sequence.expressions.iter().any(|expression| {
-                    self.expression_mentions_symbol(expression, symbol)
-                })
-            }
+            Expression::SequenceExpression(sequence) => sequence
+                .expressions
+                .iter()
+                .any(|expression| self.expression_mentions_symbol(expression, symbol)),
             Expression::ParenthesizedExpression(inner) => {
                 self.expression_mentions_symbol(&inner.expression, symbol)
             }
@@ -840,16 +865,28 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         }
     }
 
-    fn reads_member(&self, site: crate::signals::extract::bindings::FunctionSite, name: &str) -> bool {
+    fn reads_member(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+        name: &str,
+    ) -> bool {
         self.own_of(site)
             .is_some_and(|own| own.members.iter().any(|(member, _)| *member == name))
     }
 
-    fn reads_members(&self, site: crate::signals::extract::bindings::FunctionSite, names: &[&str]) -> bool {
+    fn reads_members(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+        names: &[&str],
+    ) -> bool {
         names.iter().all(|name| self.reads_member(site, name))
     }
 
-    fn owns_call(&self, site: crate::signals::extract::bindings::FunctionSite, method: &str) -> bool {
+    fn owns_call(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+        method: &str,
+    ) -> bool {
         self.calls(site)
             .iter()
             .any(|call| call.method == Some(method))
@@ -862,7 +899,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
     }
 
     fn owns_json_parse(&self, site: crate::signals::extract::bindings::FunctionSite) -> bool {
-        self.calls(site).iter().any(|call| self.is_global_method(call, "JSON", "parse"))
+        self.calls(site)
+            .iter()
+            .any(|call| self.is_global_method(call, "JSON", "parse"))
     }
 
     fn owns_object_keys_of(
@@ -872,15 +911,14 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
     ) -> bool {
         self.calls(site).iter().any(|call| {
             self.is_global_method(call, "Object", "keys")
-                && call.args.first().is_some_and(|argument| self.refers_to(argument, symbol))
+                && call
+                    .args
+                    .first()
+                    .is_some_and(|argument| self.refers_to(argument, symbol))
         })
     }
 
-    fn json_stringify_of_member(
-        &self,
-        expression: &'a Expression<'a>,
-        symbol: SymbolId,
-    ) -> bool {
+    fn json_stringify_of_member(&self, expression: &'a Expression<'a>, symbol: SymbolId) -> bool {
         let Expression::CallExpression(call) = self.origin(expression) else {
             return false;
         };
@@ -1086,14 +1124,8 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             return false;
         };
         if upload_set.args.len() != 2
-            || !self.same_scoped_value(
-                get.args[0],
-                upload_set.args[0],
-            )
-            || !self.same_scoped_value(
-                get_receiver,
-                upload_receiver,
-            )
+            || !self.same_scoped_value(get.args[0], upload_set.args[0])
+            || !self.same_scoped_value(get_receiver, upload_receiver)
             || !self.upload_serializes_parsed(upload_set.args[1], parsed_symbol)
         {
             return false;
@@ -1118,9 +1150,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         else {
             return false;
         };
-        self.calls(tail).iter().any(|call| {
-            self.same_scoped_value(call.callee, first_sink.callee)
-        })
+        self.calls(tail)
+            .iter()
+            .any(|call| self.same_scoped_value(call.callee, first_sink.callee))
     }
 
     fn zero_formals(&self, site: crate::signals::extract::bindings::FunctionSite) -> bool {
@@ -1145,11 +1177,7 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             .any(|value| self.is_object_create_null(value))
     }
 
-    fn same_scoped_value(
-        &self,
-        left: &'a Expression<'a>,
-        right: &'a Expression<'a>,
-    ) -> bool {
+    fn same_scoped_value(&self, left: &'a Expression<'a>, right: &'a Expression<'a>) -> bool {
         let left = self.origin(left);
         let right = self.origin(right);
         if left.span() == right.span() {
@@ -1173,9 +1201,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         symbol: SymbolId,
     ) -> bool {
         self.own_of(site).is_some_and(|own| {
-            own.tests.iter().any(|test| {
-                self.contains_null_comparison(test, symbol)
-            })
+            own.tests
+                .iter()
+                .any(|test| self.contains_null_comparison(test, symbol))
         })
     }
 
@@ -1201,11 +1229,7 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         }
     }
 
-    fn is_object_keys_length_of(
-        &self,
-        expression: &'a Expression<'a>,
-        symbol: SymbolId,
-    ) -> bool {
+    fn is_object_keys_length_of(&self, expression: &'a Expression<'a>, symbol: SymbolId) -> bool {
         let Some((object, name)) = member_of(self.origin(expression)) else {
             return false;
         };
@@ -1217,9 +1241,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         };
         let call = normal_call(call);
         self.is_global_method(&call, "Object", "keys")
-            && call.args.first().is_some_and(|argument| {
-                self.refers_to(argument, symbol)
-            })
+            && call
+                .args
+                .first()
+                .is_some_and(|argument| self.refers_to(argument, symbol))
     }
 
     fn has_object_keys_length_guard(
@@ -1229,9 +1254,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         parsed_guard: bool,
     ) -> bool {
         self.own_of(site).is_some_and(|own| {
-            own.tests.iter().any(|test| {
-                self.contains_keys_length_guard(test, symbol, parsed_guard)
-            })
+            own.tests
+                .iter()
+                .any(|test| self.contains_keys_length_guard(test, symbol, parsed_guard))
         })
     }
 
@@ -1281,12 +1306,14 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             .into_iter()
             .filter(|call| self.in_span(call.span, body))
             .filter(|call| {
-                call.args.first().is_some_and(|argument| {
-                    self.error_record_argument(argument, body)
-                })
+                call.args
+                    .first()
+                    .is_some_and(|argument| self.error_record_argument(argument, body))
             })
             .collect();
-        (calls.len() == 1).then(|| calls.into_iter().next()).flatten()
+        (calls.len() == 1)
+            .then(|| calls.into_iter().next())
+            .flatten()
     }
 
     fn error_record_argument(&self, expression: &'a Expression<'a>, catch: Span) -> bool {
@@ -1324,20 +1351,22 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         }
     }
 
-    fn json_stringify_of(
-        &self,
-        expression: &'a Expression<'a>,
-        symbol: SymbolId,
-    ) -> bool {
+    fn json_stringify_of(&self, expression: &'a Expression<'a>, symbol: SymbolId) -> bool {
         let Expression::CallExpression(call) = self.origin(expression) else {
             return false;
         };
         let call = normal_call(call);
         self.is_global_method(&call, "JSON", "stringify")
-            && call.args.first().is_some_and(|argument| self.refers_to(argument, symbol))
+            && call
+                .args
+                .first()
+                .is_some_and(|argument| self.refers_to(argument, symbol))
     }
 
-    fn is_custom_event_dispatcher(&self, site: crate::signals::extract::bindings::FunctionSite) -> bool {
+    fn is_custom_event_dispatcher(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+    ) -> bool {
         let calls = self.calls(site);
         if calls.len() != 3 {
             return false;
@@ -1346,14 +1375,20 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             call.method == Some("createEvent")
                 && call.args.first().and_then(|arg| string_value(arg)) == Some("CustomEvent")
         });
-        let initializes = calls.iter().any(|call| call.method == Some("initCustomEvent"));
+        let initializes = calls
+            .iter()
+            .any(|call| call.method == Some("initCustomEvent"));
         let dispatches = calls.iter().any(|call| {
             self.is_global(call.callee, "dispatchEvent") || call.method == Some("dispatchEvent")
         });
         creates && initializes && dispatches
     }
 
-    fn returns_slot(&self, site: crate::signals::extract::bindings::FunctionSite, slot: u32) -> bool {
+    fn returns_slot(
+        &self,
+        site: crate::signals::extract::bindings::FunctionSite,
+        slot: u32,
+    ) -> bool {
         let Some(own) = self.own_of(site) else {
             return false;
         };
@@ -1381,8 +1416,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let Expression::ObjectExpression(object) = self.origin(argument) else {
                 return false;
             };
-            let keys: BTreeSet<String> =
-                object_members_of(object).into_iter().map(|member| member.name).collect();
+            let keys: BTreeSet<String> = object_members_of(object)
+                .into_iter()
+                .map(|member| member.name)
+                .collect();
             keys.contains("message") && keys.contains("stack")
         })
     }
@@ -1400,9 +1437,14 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let Expression::ObjectExpression(object) = self.origin(value) else {
                 continue;
             };
-            let keys: BTreeSet<String> =
-                object_members_of(object).into_iter().map(|member| member.name).collect();
-            if ["et", "lit", "tlr", "top", "lvTop"].iter().all(|key| keys.contains(*key)) {
+            let keys: BTreeSet<String> = object_members_of(object)
+                .into_iter()
+                .map(|member| member.name)
+                .collect();
+            if ["et", "lit", "tlr", "top", "lvTop"]
+                .iter()
+                .all(|key| keys.contains(*key))
+            {
                 found.push(symbol);
             }
         }
@@ -1463,12 +1505,13 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let [symbol] = found.as_slice() else {
             return None;
         };
-        let constructed = self
-            .sites
-            .iter()
-            .any(|site| self.own_of(*site).is_some_and(|own| {
-                own.news.iter().any(|new| self.refers_to(&new.callee, *symbol))
-            }));
+        let constructed = self.sites.iter().any(|site| {
+            self.own_of(*site).is_some_and(|own| {
+                own.news
+                    .iter()
+                    .any(|new| self.refers_to(&new.callee, *symbol))
+            })
+        });
         if !constructed {
             return None;
         }
@@ -1604,9 +1647,7 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
             let values = self.values_of(symbol);
             if values.len() < 2
-                || !values.iter().all(|value| {
-                    is_true(value) || is_false(value)
-                })
+                || !values.iter().all(|value| is_true(value) || is_false(value))
                 || !values.iter().any(|value| is_true(value))
                 || !values.iter().any(|value| is_false(value))
             {
@@ -1729,9 +1770,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
             let settlement_write = self.sites.iter().any(|site| {
                 let reads_status = self.reads_member(*site, "status")
-                    && self.own_of(*site).is_some_and(|own| {
-                        own.strings.contains(&"fulfilled")
-                    });
+                    && self
+                        .own_of(*site)
+                        .is_some_and(|own| own.strings.contains(&"fulfilled"));
                 reads_status
                     && self.own_of(*site).is_some_and(|own| {
                         own.assigns.iter().any(|assignment| {
@@ -1853,7 +1894,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let Some(function) = self.function_of(value) else {
                 continue;
             };
-            if dispatchers.iter().any(|dispatcher| dispatcher.span == function.span) {
+            if dispatchers
+                .iter()
+                .any(|dispatcher| dispatcher.span == function.span)
+            {
                 self.claims.main(
                     READY_EVENT_ALIAS,
                     self.identifier(symbol),
@@ -1959,19 +2003,20 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 .assigns
                 .iter()
                 .filter_map(|assignment| {
-                    target_member(&assignment.left).and_then(|(object, name)| {
-                        self.refers_to(object, state).then_some(name)
-                    })
+                    target_member(&assignment.left)
+                        .and_then(|(object, name)| self.refers_to(object, state).then_some(name))
                 })
                 .collect();
             if fields.len() < 4 || !fields.contains("et") {
                 continue;
             }
             let encrypted_aggregate = own.calls.iter().map(|call| normal_call(call)).any(|call| {
-                self.function_of(call.callee).is_some_and(|callee| callee.span == encryptor.span)
-                    && call.args.first().is_some_and(|argument| {
-                        self.json_stringify_of_member(argument, aggregate)
-                    })
+                self.function_of(call.callee)
+                    .is_some_and(|callee| callee.span == encryptor.span)
+                    && call
+                        .args
+                        .first()
+                        .is_some_and(|argument| self.json_stringify_of_member(argument, aggregate))
             });
             if !encrypted_aggregate {
                 continue;
@@ -2030,10 +2075,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 continue;
             }
             let encrypts_state = self.calls(site).iter().any(|call| {
-                self.function_of(call.callee).is_some_and(|callee| callee.span == encryptor.span)
-                    && call.args.first().is_some_and(|argument| {
-                        self.json_stringify_of(argument, state)
-                    })
+                self.function_of(call.callee)
+                    .is_some_and(|callee| callee.span == encryptor.span)
+                    && call
+                        .args
+                        .first()
+                        .is_some_and(|argument| self.json_stringify_of(argument, state))
             });
             if encrypts_state {
                 found.push(site);
@@ -2073,10 +2120,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 continue;
             }
             let encrypts_state = self.calls(site).iter().any(|call| {
-                self.function_of(call.callee).is_some_and(|callee| callee.span == encryptor.span)
-                    && call.args.first().is_some_and(|argument| {
-                        self.json_stringify_of(argument, state)
-                    })
+                self.function_of(call.callee)
+                    .is_some_and(|callee| callee.span == encryptor.span)
+                    && call
+                        .args
+                        .first()
+                        .is_some_and(|argument| self.json_stringify_of(argument, state))
             });
             if encrypts_state {
                 found.push(site);
@@ -2156,7 +2205,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             matched = true;
             if let Some(local) = self.symbol(argument) {
                 let declaration = self.model.scoping().symbol_declaration(local);
-                if self.model.owning_site(declaration).map(|owner| owner.node_id)
+                if self
+                    .model
+                    .owning_site(declaration)
+                    .map(|owner| owner.node_id)
                     != Some(site.node_id)
                 {
                     return false;
@@ -2190,10 +2242,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 call.args
                     .first()
                     .and_then(|arg| self.function_of(arg))
-                    .is_some_and(|callback| self.calls(callback).iter().any(|inner| {
-                        self.function_of(inner.callee)
-                            .is_some_and(|callee| callee.span == decryptor.span)
-                    }))
+                    .is_some_and(|callback| {
+                        self.calls(callback).iter().any(|inner| {
+                            self.function_of(inner.callee)
+                                .is_some_and(|callee| callee.span == decryptor.span)
+                        })
+                    })
             });
             if decrypts_entries {
                 found.push(site);
@@ -2219,9 +2273,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         };
         let call = normal_call(call);
         self.is_global_method(&call, "Object", "keys")
-            && call.args.first().is_some_and(|argument| {
-                self.refers_to(argument, symbol)
-            })
+            && call
+                .args
+                .first()
+                .is_some_and(|argument| self.refers_to(argument, symbol))
     }
 
     /// Resolve a reused serialization temporary at this actual call argument.
@@ -2249,8 +2304,15 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             return false;
         };
         let declaration = self.model.scoping().symbol_declaration(local);
-        if self.model.owning_site(declaration).map(|owner| owner.node_id) != Some(site.node_id)
-            || !matches!(self.model.nodes().kind(declaration), AstKind::VariableDeclarator(_))
+        if self
+            .model
+            .owning_site(declaration)
+            .map(|owner| owner.node_id)
+            != Some(site.node_id)
+            || !matches!(
+                self.model.nodes().kind(declaration),
+                AstKind::VariableDeclarator(_)
+            )
             || !self.model.scoping().symbol_redeclarations(local).is_empty()
         {
             return false;
@@ -2264,24 +2326,29 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
         }
 
-        let Ok(definition) = expression_value_at_use(
-            self.model.scoping(),
-            self.model.nodes(),
-            expression,
-        ) else {
+        let Ok(definition) =
+            expression_value_at_use(self.model.scoping(), self.model.nodes(), expression)
+        else {
             return false;
         };
         if !self.is_literal_json_stringify_of(definition.value, symbol) {
             return false;
         }
 
-        let mut stringify_writes = if declarator.init.as_ref().is_some() { 1 } else { 0 };
+        let mut stringify_writes = if declarator.init.as_ref().is_some() {
+            1
+        } else {
+            0
+        };
         let mut self_reassignments = 0;
         for reference in self.model.scoping().get_resolved_references(local) {
             if !reference.is_write() {
                 continue;
             }
-            if self.model.owning_site(reference.node_id()).map(|owner| owner.node_id)
+            if self
+                .model
+                .owning_site(reference.node_id())
+                .map(|owner| owner.node_id)
                 != Some(site.node_id)
             {
                 return false;
@@ -2413,9 +2480,7 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                         .arguments
                         .iter()
                         .filter_map(Argument::as_expression)
-                        .any(|argument| {
-                            self.expression_ties_symbol(argument, symbol, depth + 1)
-                        })
+                        .any(|argument| self.expression_ties_symbol(argument, symbol, depth + 1))
             }
             Expression::StaticMemberExpression(member) => {
                 self.expression_ties_symbol(&member.object, symbol, depth + 1)
@@ -2456,7 +2521,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             return false;
         };
         let declaration = self.model.scoping().symbol_declaration(symbol);
-        if self.model.owning_site(declaration).map(|owner| owner.node_id) == Some(site.node_id) {
+        if self
+            .model
+            .owning_site(declaration)
+            .map(|owner| owner.node_id)
+            == Some(site.node_id)
+        {
             return false;
         }
         let Some(body) = site.body_span else {
@@ -2505,10 +2575,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 continue;
             }
             let decrypts_summary = self.calls(site).iter().any(|call| {
-                self.function_of(call.callee).is_some_and(|callee| callee.span == decryptor.span)
-                    && call.args.first().is_some_and(|argument| {
-                        self.is_summary_of_parsed_record(argument)
-                    })
+                self.function_of(call.callee)
+                    .is_some_and(|callee| callee.span == decryptor.span)
+                    && call
+                        .args
+                        .first()
+                        .is_some_and(|argument| self.is_summary_of_parsed_record(argument))
             });
             if decrypts_summary {
                 found.push(site);
@@ -2589,7 +2661,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 return None;
             }
         }
-        spans.iter().next().map(|(start, end)| Span::new(*start, *end))
+        spans
+            .iter()
+            .next()
+            .map(|(start, end)| Span::new(*start, *end))
     }
 
     fn claim_record_steps(
@@ -2632,9 +2707,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             return;
         };
         if self.own_of(stringify).is_some_and(|own| {
-            own.news.iter().any(|new| {
-                self.is_global(&new.callee, "Uint8Array")
-            }) && self.owns_call(stringify, "toString")
+            own.news
+                .iter()
+                .any(|new| self.is_global(&new.callee, "Uint8Array"))
+                && self.owns_call(stringify, "toString")
         }) {
             self.claims.function(
                 STRINGIFY_ENVELOPE,
@@ -2646,7 +2722,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let Some((then2, store)) = self.step(record, then1, "then") else {
             return;
         };
-        if self.calls(store).iter().any(|call| self.is_storage_method(call, "setItem")) {
+        if self
+            .calls(store)
+            .iter()
+            .any(|call| self.is_storage_method(call, "setItem"))
+        {
             self.claims.function(
                 STORE_ENCRYPTED_RECORD,
                 store.span,
@@ -2773,7 +2853,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let Some((then1, collect)) = self.step(restore, all_settled, "then") else {
             return;
         };
-        let settles = self.calls(collect).iter().any(|call| call.method == Some("map"));
+        let settles = self
+            .calls(collect)
+            .iter()
+            .any(|call| call.method == Some("map"));
         if settles {
             self.claims.function(
                 COLLECT_SETTLED,
@@ -2855,9 +2938,8 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         };
         let applies = self.own_of(apply).is_some_and(|own| {
             own.assigns.iter().any(|assignment| {
-                target_member(&assignment.left).is_some_and(|(object, name)| {
-                    self.refers_to(object, aggregate) && name == "a"
-                })
+                target_member(&assignment.left)
+                    .is_some_and(|(object, name)| self.refers_to(object, aggregate) && name == "a")
             })
         });
         if applies {
@@ -2880,7 +2962,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         }
     }
 
-    fn claim_encryptor_steps(&mut self, encryptor: crate::signals::extract::bindings::FunctionSite) {
+    fn claim_encryptor_steps(
+        &mut self,
+        encryptor: crate::signals::extract::bindings::FunctionSite,
+    ) {
         let generate = Self::only_span(
             self.calls(encryptor)
                 .into_iter()
@@ -2951,7 +3036,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                     own.news
                         .iter()
                         .any(|new| self.is_global(&new.callee, "Uint8Array"))
-                        && own.calls.iter().any(|call| normal_call(call).method == Some("set"))
+                        && own
+                            .calls
+                            .iter()
+                            .any(|call| normal_call(call).method == Some("set"))
                 })
             })
             .collect();
@@ -2965,7 +3053,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         }
     }
 
-    fn claim_decryptor_steps(&mut self, decryptor: crate::signals::extract::bindings::FunctionSite) {
+    fn claim_decryptor_steps(
+        &mut self,
+        decryptor: crate::signals::extract::bindings::FunctionSite,
+    ) {
         let mut map_callbacks = Vec::new();
         for call in self.calls(decryptor) {
             if call.method != Some("map") {

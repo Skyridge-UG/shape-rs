@@ -43,7 +43,9 @@ pub(super) fn evaluate_additions(
     // anchors decline are the six newly accepted claims collected together
     // for the normal ambiguity resolver.
     let mut pass7 = Vec::new();
-    pass7.extend(browser::uri_component_decode::evaluate(model, site, f, proposals));
+    pass7.extend(browser::uri_component_decode::evaluate(
+        model, site, f, proposals,
+    ));
     pass7.extend(runtime::media_feature_bisection::evaluate(
         model, site, f, proposals,
     ));
@@ -165,7 +167,9 @@ pub(super) fn evaluate_additions(
     frontier.extend(graphics::frontier_unique_sample::evaluate(
         model, site, f, proposals,
     ));
-    frontier.extend(observables::error_enqueue::evaluate(model, site, f, proposals));
+    frontier.extend(observables::error_enqueue::evaluate(
+        model, site, f, proposals,
+    ));
     frontier.extend(observables::relay_subscription::evaluate(
         model, site, f, proposals,
     ));
@@ -310,7 +314,9 @@ pub(super) fn evaluate_additions(
     }
 
     let variant = browser::persistent_token_init_variants::evaluate(model, site, f, proposals);
-    if !variant.is_empty() { return variant; }
+    if !variant.is_empty() {
+        return variant;
+    }
 
     // EXCHANGE-001: evaluate the accepted custom-event exchange handshake
     // only after every earlier fallback stage has declined.
@@ -318,7 +324,9 @@ pub(super) fn evaluate_additions(
     stage_j.extend(events::exchange_handshake::evaluate(
         model, site, f, proposals,
     ));
-    stage_j.extend(events::submit_notification::evaluate(model, site, f, proposals));
+    stage_j.extend(events::submit_notification::evaluate(
+        model, site, f, proposals,
+    ));
     stage_j.extend(browser::navigation_submit::evaluate(
         model, site, f, proposals,
     ));
@@ -459,7 +467,8 @@ pub(super) fn evaluate_additions(
     if !stage_lexical.is_empty() {
         return stage_lexical;
     }
-    let stage_visibility = events::visibility_persistence_variants::evaluate(model, site, f, proposals);
+    let stage_visibility =
+        events::visibility_persistence_variants::evaluate(model, site, f, proposals);
     if !stage_visibility.is_empty() {
         return stage_visibility;
     }
@@ -471,7 +480,8 @@ pub(super) fn evaluate_additions(
     if !stage_matching.is_empty() {
         return stage_matching;
     }
-    let stage_string_table = observables::string_table_selection::evaluate(model, site, f, proposals);
+    let stage_string_table =
+        observables::string_table_selection::evaluate(model, site, f, proposals);
     if !stage_string_table.is_empty() {
         return stage_string_table;
     }
@@ -484,75 +494,154 @@ pub(super) fn evaluate_additions(
         return stage_url_query;
     }
     let prior_network = network::captured_key_callback_removal::evaluate(model, site, f, proposals);
-    if !prior_network.is_empty() { return prior_network; }
-    let prior_observable = observables::observable_map_operator::evaluate(model, site, f, proposals);
-    if !prior_observable.is_empty() { return prior_observable; }
-    let subscription_operators = observables::subscription_operators::evaluate(model, site, f, proposals);
-    if !subscription_operators.is_empty() { return subscription_operators; }
+    if !prior_network.is_empty() {
+        return prior_network;
+    }
+    let prior_observable =
+        observables::observable_map_operator::evaluate(model, site, f, proposals);
+    if !prior_observable.is_empty() {
+        return prior_observable;
+    }
+    let subscription_operators =
+        observables::subscription_operators::evaluate(model, site, f, proposals);
+    if !subscription_operators.is_empty() {
+        return subscription_operators;
+    }
     let prior_bounded = encoding::bounded_list_time_emitter::evaluate(model, site, f, proposals);
-    if !prior_bounded.is_empty() { return prior_bounded; }
+    if !prior_bounded.is_empty() {
+        return prior_bounded;
+    }
     let prior_audio = encoding::audio_result_emitter::evaluate(model, site, f, proposals);
-    if !prior_audio.is_empty() { return prior_audio; }
+    if !prior_audio.is_empty() {
+        return prior_audio;
+    }
     let prior_paste = events::input_paste_marker::evaluate(model, site, f, proposals);
-    if !prior_paste.is_empty() { return prior_paste; }
+    if !prior_paste.is_empty() {
+        return prior_paste;
+    }
     let prior_canvas = graphics::canvas_text_sampling_setup::evaluate(model, site, f, proposals);
-    if !prior_canvas.is_empty() { return prior_canvas; }
+    if !prior_canvas.is_empty() {
+        return prior_canvas;
+    }
     let prior_reverse = encoding::reverse_array_emitter::evaluate(model, site, f, proposals);
-    if !prior_reverse.is_empty() { return prior_reverse; }
+    if !prior_reverse.is_empty() {
+        return prior_reverse;
+    }
     let work_batch = scheduling::work_batch_protocols::evaluate(model, site, f);
-    if !work_batch.is_empty() { return work_batch; }
+    if !work_batch.is_empty() {
+        return work_batch;
+    }
     let numeric_writers = encoding::numeric_byte_writers::evaluate(model, site, f, proposals);
-    if !numeric_writers.is_empty() { return numeric_writers; }
+    if !numeric_writers.is_empty() {
+        return numeric_writers;
+    }
     let adapters = runtime::adapter_protocols::evaluate(model, site, f);
-    if !adapters.is_empty() { return adapters; }
-    let observer_forwarding = observables::captured_observer_forwarding::evaluate(model, site, f, proposals);
-    if !observer_forwarding.is_empty() { return observer_forwarding; }
-    let memory_attribution = encoding::memory_attribution_format::evaluate(model, site, f, proposals);
-    if !memory_attribution.is_empty() { return memory_attribution; }
+    if !adapters.is_empty() {
+        return adapters;
+    }
+    let observer_forwarding =
+        observables::captured_observer_forwarding::evaluate(model, site, f, proposals);
+    if !observer_forwarding.is_empty() {
+        return observer_forwarding;
+    }
+    let memory_attribution =
+        encoding::memory_attribution_format::evaluate(model, site, f, proposals);
+    if !memory_attribution.is_empty() {
+        return memory_attribution;
+    }
     let source_teardown = observables::captured_source_teardown::evaluate(model, site, f);
-    if !source_teardown.is_empty() { return source_teardown; }
+    if !source_teardown.is_empty() {
+        return source_teardown;
+    }
     let joined = observables::joined_observables::evaluate(model, site, f, proposals);
-    if !joined.is_empty() { return joined; }
+    if !joined.is_empty() {
+        return joined;
+    }
     let route_pattern = network::route_pattern_canonicalizer::evaluate(model, site, f, proposals);
-    if !route_pattern.is_empty() { return route_pattern; }
-    let tagged_float = encoding::software_float_byte_writer::evaluate_tagged_arithmetic(model, site, f);
-    if !tagged_float.is_empty() { return tagged_float; }
+    if !route_pattern.is_empty() {
+        return route_pattern;
+    }
+    let tagged_float =
+        encoding::software_float_byte_writer::evaluate_tagged_arithmetic(model, site, f);
+    if !tagged_float.is_empty() {
+        return tagged_float;
+    }
     let software_float = encoding::software_float_byte_writer::evaluate(model, site, f);
-    if !software_float.is_empty() { return software_float; }
+    if !software_float.is_empty() {
+        return software_float;
+    }
     let xhr_open = network::xhr_open_metadata::evaluate(model, site, f);
-    if !xhr_open.is_empty() { return xhr_open; }
+    if !xhr_open.is_empty() {
+        return xhr_open;
+    }
     let handle_termination = observables::captured_handle_termination::evaluate(model, site, f);
-    if !handle_termination.is_empty() { return handle_termination; }
+    if !handle_termination.is_empty() {
+        return handle_termination;
+    }
     let prior_unregister = operations::captured_key_list_unregister::evaluate(model, site, f);
-    if !prior_unregister.is_empty() { return prior_unregister; }
+    if !prior_unregister.is_empty() {
+        return prior_unregister;
+    }
     let prior_range = observables::captured_range_predicate::evaluate(model, site, f);
-    if !prior_range.is_empty() { return prior_range; }
+    if !prior_range.is_empty() {
+        return prior_range;
+    }
     let prior_request = network::request_open_metadata::evaluate(model, site, f, proposals);
-    if !prior_request.is_empty() { return prior_request; }
+    if !prior_request.is_empty() {
+        return prior_request;
+    }
     let prior_lifecycle = observables::observer_batch_lifecycle::evaluate(model, site, f);
-    if !prior_lifecycle.is_empty() { return prior_lifecycle; }
+    if !prior_lifecycle.is_empty() {
+        return prior_lifecycle;
+    }
     let prior_traits = runtime::function_shape_traits::evaluate(model, site, f);
-    if !prior_traits.is_empty() { return prior_traits; }
+    if !prior_traits.is_empty() {
+        return prior_traits;
+    }
     let storage = browser::persistent_event_state::evaluate(model, site, f);
-    if !storage.is_empty() { return storage; }
+    if !storage.is_empty() {
+        return storage;
+    }
     let callback_list = operations::callback_list_dispatch::evaluate(model, site, f);
-    if !callback_list.is_empty() { return callback_list; }
+    if !callback_list.is_empty() {
+        return callback_list;
+    }
     let candidate = network::ice_candidate::evaluate(model, site, f);
-    if !candidate.is_empty() { return candidate; }
+    if !candidate.is_empty() {
+        return candidate;
+    }
     let mut pair08 = Vec::new();
-    pair08.extend(events::orientation_moments::evaluate(model, site, f, proposals));
-    pair08.extend(events::wheel_counter_frame::evaluate(model, site, f, proposals));
-    pair08.extend(scheduling::interval_extrema::evaluate(model, site, f, proposals));
-    pair08.extend(network::script_digest_dispatch::evaluate(model, site, f, proposals));
-    if !pair08.is_empty() { return pair08; }
+    pair08.extend(events::orientation_moments::evaluate(
+        model, site, f, proposals,
+    ));
+    pair08.extend(events::wheel_counter_frame::evaluate(
+        model, site, f, proposals,
+    ));
+    pair08.extend(scheduling::interval_extrema::evaluate(
+        model, site, f, proposals,
+    ));
+    pair08.extend(network::script_digest_dispatch::evaluate(
+        model, site, f, proposals,
+    ));
+    if !pair08.is_empty() {
+        return pair08;
+    }
     let whole_body = runtime::whole_body_rules::evaluate(model, site, f, proposals);
-    if !whole_body.is_empty() { return whole_body; }
+    if !whole_body.is_empty() {
+        return whole_body;
+    }
     let thrown = operations::throw_type_error::evaluate(model, site, f);
-    if !thrown.is_empty() { return thrown; }
+    if !thrown.is_empty() {
+        return thrown;
+    }
     let scene = graphics::canvas_scene_anchor_frame::evaluate(model, site, f, proposals);
-    if !scene.is_empty() { return scene; }
+    if !scene.is_empty() {
+        return scene;
+    }
     let channel = graphics::sine_power_channel_render::evaluate(model, site, f, proposals);
-    if !channel.is_empty() { return channel; }
+    if !channel.is_empty() {
+        return channel;
+    }
     encoding::code_units::evaluate_code_units_to_string(model, site, f)
 }
 

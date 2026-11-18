@@ -156,14 +156,22 @@ mod tests {
             spans
                 .iter()
                 .copied()
-                .filter(|r| r.start <= to.start && to.end <= r.end && !(r.start <= from.start && from.end <= r.end))
+                .filter(|r| {
+                    r.start <= to.start
+                        && to.end <= r.end
+                        && !(r.start <= from.start && from.end <= r.end)
+                })
                 .max_by_key(|r| r.size())
         };
         for a in (0..105).step_by(3) {
             for b in (0..105).step_by(4) {
                 let from = Span::new(a, a + 1);
                 let to = Span::new(b, b + 1);
-                assert_eq!(index.repeated_between(from, to), linear(from, to), "{from:?} {to:?}");
+                assert_eq!(
+                    index.repeated_between(from, to),
+                    linear(from, to),
+                    "{from:?} {to:?}"
+                );
             }
         }
     }

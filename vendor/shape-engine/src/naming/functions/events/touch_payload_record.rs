@@ -64,20 +64,35 @@ fn touch_round(
     let Some(round) = call(value) else {
         return false;
     };
-    expression_path(model, &round.callee) == ["Math", "round"] && round.arguments.len() == 1 && call_arguments(round).len() == 1 && {
-        let args = call_arguments(round);
-        member(args[0], property).is_some_and(|receiver| symbol(model, receiver) == Some(source))
-    }
+    expression_path(model, &round.callee) == ["Math", "round"]
+        && round.arguments.len() == 1
+        && call_arguments(round).len() == 1
+        && {
+            let args = call_arguments(round);
+            member(args[0], property)
+                .is_some_and(|receiver| symbol(model, receiver) == Some(source))
+        }
 }
 
 /// A captured clock is opaque data, but its own binding must be immutable and
 /// initialized before this callback from the explicit clock property.
 fn split_clock(model: &Model<'_, '_>, site: FunctionSite, e: &Expression<'_>) -> bool {
-    if crate::naming::resolve::ordered_callable(model, e, 0).is_some() { return true; }
-    let Some(id) = capture(model, site, e) else { return false; };
-    let AstKind::VariableDeclarator(v) = model.nodes.kind(model.scoping.symbol_declaration(id)) else { return false; };
+    if crate::naming::resolve::ordered_callable(model, e, 0).is_some() {
+        return true;
+    }
+    let Some(id) = capture(model, site, e) else {
+        return false;
+    };
+    let AstKind::VariableDeclarator(v) = model.nodes.kind(model.scoping.symbol_declaration(id))
+    else {
+        return false;
+    };
     plain_binding(model, v, Some(0)) == Some(id)
-        && v.init.as_ref().is_some_and(|init| member(init, "timeElapsedSinceInit").and_then(|object| capture(model, site, object)).is_some())
+        && v.init.as_ref().is_some_and(|init| {
+            member(init, "timeElapsedSinceInit")
+                .and_then(|object| capture(model, site, object))
+                .is_some()
+        })
 }
 
 fn touch_payload(
@@ -118,11 +133,50 @@ fn touch_payload(
     }
     let report_sink = capture(model, site, member(&report_call.callee, "error")?)?;
     let statements = t.block.body.as_slice();
-    let (first, second, touches_statement, branch, ring_alias, payload_statement, field_b, field_c, field_d, field_e, put_statement, flag_statement) = match statements {
-        [first, second, touches, Statement::IfStatement(branch), payload, c, d, e, put, flag] =>
-            (first, second, touches, branch, None, payload, None, c, d, e, put, Some(flag)),
-        [first, second, touches, Statement::IfStatement(branch), ring, payload, b, c, d, e, put] =>
-            (first, second, touches, branch, Some(ring), payload, Some(b), c, d, e, put, None),
+    let (
+        first,
+        second,
+        touches_statement,
+        branch,
+        ring_alias,
+        payload_statement,
+        field_b,
+        field_c,
+        field_d,
+        field_e,
+        put_statement,
+        flag_statement,
+    ) = match statements {
+        [first, second, touches, Statement::IfStatement(branch), payload, c, d, e, put, flag] => (
+            first,
+            second,
+            touches,
+            branch,
+            None,
+            payload,
+            None,
+            c,
+            d,
+            e,
+            put,
+            Some(flag),
+        ),
+        [first, second, touches, Statement::IfStatement(branch), ring, payload, b, c, d, e, put] => {
+            (
+                first,
+                second,
+                touches,
+                branch,
+                Some(ring),
+                payload,
+                Some(b),
+                c,
+                d,
+                e,
+                put,
+                None,
+            )
+        }
         _ => return None,
     };
     let first_variable = one_variable(first)?;
@@ -213,11 +267,23 @@ fn touch_payload(
         return None;
     }
     let iteration = block(&scan.body)?;
-    let (touch_init, target_init, bounds_statement, x_init, target_y_statement, record_statement, push) = match iteration {
-        [touch, target, Statement::ExpressionStatement(bounds), x, Statement::ExpressionStatement(y), Statement::ExpressionStatement(push)] =>
-            (touch, target, bounds, x, y, None, push),
-        [touch, target, Statement::ExpressionStatement(bounds), x, Statement::ExpressionStatement(y), record, Statement::ExpressionStatement(push)] if ring_alias.is_some() =>
-            (touch, target, bounds, x, y, Some(record), push),
+    let (
+        touch_init,
+        target_init,
+        bounds_statement,
+        x_init,
+        target_y_statement,
+        record_statement,
+        push,
+    ) = match iteration {
+        [touch, target, Statement::ExpressionStatement(bounds), x, Statement::ExpressionStatement(y), Statement::ExpressionStatement(push)] => {
+            (touch, target, bounds, x, y, None, push)
+        }
+        [touch, target, Statement::ExpressionStatement(bounds), x, Statement::ExpressionStatement(y), record, Statement::ExpressionStatement(push)]
+            if ring_alias.is_some() =>
+        {
+            (touch, target, bounds, x, y, Some(record), push)
+        }
         _ => return None,
     };
     let touch_variable = one_variable(touch_init)?;
@@ -228,7 +294,11 @@ fn touch_payload(
         return None;
     }
     let target_variable = one_variable(target_init)?;
-    let target = plain_binding(model, target_variable, Some(if ring_alias.is_some() { 3 } else { 2 }))?;
+    let target = plain_binding(
+        model,
+        target_variable,
+        Some(if ring_alias.is_some() { 3 } else { 2 }),
+    )?;
     if !member(target_variable.init.as_ref()?, "target")
         .is_some_and(|receiver| symbol(model, receiver) == Some(touch))
     {
@@ -269,7 +339,9 @@ fn touch_payload(
     let Some(x_round) = call(&x_choice.alternate) else {
         return None;
     };
-    if expression_path(model, &x_round.callee) != ["Math", "round"] || x_round.arguments.len() != 1 || call_arguments(x_round).len() != 1
+    if expression_path(model, &x_round.callee) != ["Math", "round"]
+        || x_round.arguments.len() != 1
+        || call_arguments(x_round).len() != 1
     {
         return None;
     }
@@ -296,7 +368,9 @@ fn touch_payload(
     let Some(y_round) = call(&y_choice.alternate) else {
         return None;
     };
-    if expression_path(model, &y_round.callee) != ["Math", "round"] || y_round.arguments.len() != 1 || call_arguments(y_round).len() != 1
+    if expression_path(model, &y_round.callee) != ["Math", "round"]
+        || y_round.arguments.len() != 1
+        || call_arguments(y_round).len() != 1
     {
         return None;
     }
@@ -322,11 +396,15 @@ fn touch_payload(
     let record_expression = if let Some(statement) = record_statement {
         let a = assignment(statement)?;
         if assigned_symbol(model, &a.left) != Some(target)
-            || symbol(model, call_arguments(push_call)[0]) != Some(target) { return None; }
+            || symbol(model, call_arguments(push_call)[0]) != Some(target)
+        {
+            return None;
+        }
         &a.right
-    } else { call_arguments(push_call)[0] };
-    let Expression::ObjectExpression(record) = record_expression.without_parentheses()
-    else {
+    } else {
+        call_arguments(push_call)[0]
+    };
+    let Expression::ObjectExpression(record) = record_expression.without_parentheses() else {
         return None;
     };
     let entries = object_entries(record)?;
@@ -417,9 +495,11 @@ fn touch_payload(
         let a = assignment(statement)?;
         let (object, key) = static_property(&a.left)?;
         let clock = call(&a.right)?;
-        if key != "b" || symbol(model, object) != Some(payload)
+        if key != "b"
+            || symbol(model, object) != Some(payload)
             || !clock.arguments.is_empty()
-            || !split_clock(model, site, &clock.callee) {
+            || !split_clock(model, site, &clock.callee)
+        {
             return None;
         }
     }
@@ -457,15 +537,23 @@ fn touch_payload(
         || !member(&put.callee, "put").is_some_and(|receiver| {
             if let Some(statement) = ring_alias {
                 one_variable(statement).is_some_and(|v| {
-                    plain_binding(model, v, Some(0)).is_some_and(|id| symbol(model, receiver) == Some(id))
-                        && v.init.as_ref().and_then(|e| capture(model, site, e)).is_some_and(|ring| ring != report_sink)
+                    plain_binding(model, v, Some(0))
+                        .is_some_and(|id| symbol(model, receiver) == Some(id))
+                        && v.init
+                            .as_ref()
+                            .and_then(|e| capture(model, site, e))
+                            .is_some_and(|ring| ring != report_sink)
                 })
-            } else { capture(model, site, receiver).is_some() }
+            } else {
+                capture(model, site, receiver).is_some()
+            }
         })
     {
         return None;
     }
-    let Some(flag_statement) = flag_statement else { return Some(()); };
+    let Some(flag_statement) = flag_statement else {
+        return Some(());
+    };
     let flag = assignment(flag_statement)?;
     let target = assigned_symbol(model, &flag.left)?;
     capture_symbol(model, site, target)?;

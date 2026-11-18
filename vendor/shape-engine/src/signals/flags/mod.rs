@@ -32,8 +32,8 @@ mod flow;
 mod loops;
 mod rules;
 
-use crate::signals::schema::{find_key, flag_leaf_offsets};
 use crate::signals::analysis::{FieldBinding, FinderCtx, SignalLayout, SlotView};
+use crate::signals::schema::{find_key, flag_leaf_offsets};
 
 // ===========================================================================
 // Packed fields
@@ -100,13 +100,31 @@ pub(crate) const PACKED: &[PackedField] = &[
         fields: &["proxyFlags1", "proxyFlags2", "proxyFlags3"],
         flags_from: &["proxyFlags1"],
         namer: Namer::Probes(&[
-            ("HTMLMediaElement.prototype.canPlayType", &["HTMLMediaElement", "canPlayType"]),
-            ("Permissions.prototype.canPlayType", &["Permissions", "canPlayType"]),
+            (
+                "HTMLMediaElement.prototype.canPlayType",
+                &["HTMLMediaElement", "canPlayType"],
+            ),
+            (
+                "Permissions.prototype.canPlayType",
+                &["Permissions", "canPlayType"],
+            ),
             ("speechSynthesis", &["speechSynthesis"]),
-            ("Navigator.prototype.languages", &["getOwnPropertyDescriptor", "languages"]),
-            ("Navigator.prototype.hardwareConcurrency", &["getOwnPropertyDescriptor", "hardwareConcurrency"]),
-            ("Navigator.prototype.plugins", &["getOwnPropertyDescriptor", "plugins"]),
-            ("HTMLCanvasElement.prototype.toDataURL", &["HTMLCanvasElement", "toDataURL"]),
+            (
+                "Navigator.prototype.languages",
+                &["getOwnPropertyDescriptor", "languages"],
+            ),
+            (
+                "Navigator.prototype.hardwareConcurrency",
+                &["getOwnPropertyDescriptor", "hardwareConcurrency"],
+            ),
+            (
+                "Navigator.prototype.plugins",
+                &["getOwnPropertyDescriptor", "plugins"],
+            ),
+            (
+                "HTMLCanvasElement.prototype.toDataURL",
+                &["HTMLCanvasElement", "toDataURL"],
+            ),
             ("navigator.mimeTypes", &["navigator", "mimeTypes"]),
             ("navigator.plugins", &["navigator", "plugins"]),
             ("navigator.getBattery", &["navigator", "getBattery"]),
@@ -115,8 +133,14 @@ pub(crate) const PACKED: &[PackedField] = &[
             ("Intl", &["Intl"]),
             ("Intl.supportedValuesOf", &["Intl", "supportedValuesOf"]),
             ("document.createElement", &["createElement"]),
-            ("WebGLRenderingContext.prototype.getParameter", &["WebGLRenderingContext", "getParameter"]),
-            ("CanvasRenderingContext2D.prototype.getImageData", &["CanvasRenderingContext2D", "getImageData"]),
+            (
+                "WebGLRenderingContext.prototype.getParameter",
+                &["WebGLRenderingContext", "getParameter"],
+            ),
+            (
+                "CanvasRenderingContext2D.prototype.getImageData",
+                &["CanvasRenderingContext2D", "getImageData"],
+            ),
             ("Proxy", &["Proxy"]),
         ]),
     },
@@ -133,7 +157,10 @@ pub(crate) const PACKED: &[PackedField] = &[
         flags_from: &["proxyFlags"],
         // The navigator probe compares the brand string `#<Navigator>`; the
         // global probe has no host token: by elimination.
-        namer: Namer::Probes(&[("navigatorLooksLikeProxy", &["#<Navigator>"]), ("globalLooksLikeProxy", &[])]),
+        namer: Namer::Probes(&[
+            ("navigatorLooksLikeProxy", &["#<Navigator>"]),
+            ("globalLooksLikeProxy", &[]),
+        ]),
     },
     PackedField {
         signal: "PersistentStorageState",
@@ -163,13 +190,19 @@ pub(crate) const PACKED: &[PackedField] = &[
         signal: "SeleniumIdeArtifactFlags",
         fields: &["automationFlags"],
         flags_from: &["automationFlags"],
-        namer: Namer::Probes(&[("sideexPlaying", &["MutationObserver"]), ("promptScript", &["test"])]),
+        namer: Namer::Probes(&[
+            ("sideexPlaying", &["MutationObserver"]),
+            ("promptScript", &["test"]),
+        ]),
     },
     PackedField {
         signal: "BraveDuckDuckGoNavigatorFlags",
         fields: &["browserFlags"],
         flags_from: &["browserFlags"],
-        namer: Namer::Probes(&[("navigator.brave", &["brave"]), ("navigator.duckduckgo", &["duckduckgo"])]),
+        namer: Namer::Probes(&[
+            ("navigator.brave", &["brave"]),
+            ("navigator.duckduckgo", &["duckduckgo"]),
+        ]),
     },
     PackedField {
         signal: "CrossOriginIsolationFlags",
@@ -217,7 +250,48 @@ pub(crate) const PACKED: &[PackedField] = &[
         // Each group's in-loop flush (`<group>Bits`) and trailing flush
         // (`<group>Flush`) of the match-bit loop over its candidate list;
         // each field names its bits from its own card list.
-        fields: &["gridBits", "gridFlush", "overflowInlineBits", "overflowInlineFlush", "anyPointerBits", "anyPointerFlush", "prefersContrastBits", "prefersContrastFlush", "scriptingBits", "scriptingFlush", "lightLevelBits", "lightLevelFlush", "displayModeBits", "displayModeFlush", "forcedColorsBits", "forcedColorsFlush", "hoverBits", "hoverFlush", "prefersColorSchemeBits", "prefersColorSchemeFlush", "colorGamutBits", "colorGamutFlush", "invertedColorsBits", "invertedColorsFlush", "orientationBits", "orientationFlush", "scanBits", "scanFlush", "prefersReducedTransparencyBits", "prefersReducedTransparencyFlush", "updateBits", "updateFlush", "pointerBits", "pointerFlush", "anyHoverBits", "anyHoverFlush", "prefersReducedMotionBits", "prefersReducedMotionFlush", "overflowBlockBits", "overflowBlockFlush"],
+        fields: &[
+            "gridBits",
+            "gridFlush",
+            "overflowInlineBits",
+            "overflowInlineFlush",
+            "anyPointerBits",
+            "anyPointerFlush",
+            "prefersContrastBits",
+            "prefersContrastFlush",
+            "scriptingBits",
+            "scriptingFlush",
+            "lightLevelBits",
+            "lightLevelFlush",
+            "displayModeBits",
+            "displayModeFlush",
+            "forcedColorsBits",
+            "forcedColorsFlush",
+            "hoverBits",
+            "hoverFlush",
+            "prefersColorSchemeBits",
+            "prefersColorSchemeFlush",
+            "colorGamutBits",
+            "colorGamutFlush",
+            "invertedColorsBits",
+            "invertedColorsFlush",
+            "orientationBits",
+            "orientationFlush",
+            "scanBits",
+            "scanFlush",
+            "prefersReducedTransparencyBits",
+            "prefersReducedTransparencyFlush",
+            "updateBits",
+            "updateFlush",
+            "pointerBits",
+            "pointerFlush",
+            "anyHoverBits",
+            "anyHoverFlush",
+            "prefersReducedMotionBits",
+            "prefersReducedMotionFlush",
+            "overflowBlockBits",
+            "overflowBlockFlush",
+        ],
         flags_from: &[],
         namer: Namer::Loop,
     },
@@ -297,11 +371,15 @@ fn integer(expression: &Expression<'_>) -> Option<u32> {
 /// A mask draw at a byte write: `k()`, or the tracer's `k.call(void 0)`
 /// (`t[2].call(void 0)` with the draw in an argument tuple).
 fn mask_call(expression: &Expression<'_>) -> bool {
-    let Expression::CallExpression(call) = expression.without_parentheses() else { return false };
+    let Expression::CallExpression(call) = expression.without_parentheses() else {
+        return false;
+    };
     if call.arguments.is_empty() {
         return true;
     }
-    let Expression::StaticMemberExpression(callee) = call.callee.without_parentheses() else { return false };
+    let Expression::StaticMemberExpression(callee) = call.callee.without_parentheses() else {
+        return false;
+    };
     callee.property.name == "call"
         && call.arguments.len() == 1
         && matches!(call.arguments[0].as_expression().map(Expression::without_parentheses),
@@ -331,9 +409,16 @@ impl FinderCtx<'_, '_, '_> {
     fn identifier_value(&self, node: NodeId) -> Option<(NodeId, Updates)> {
         let slice = self.slice_of(node, 1);
         let symbol = self.reference_symbol(node)?;
-        let (_, definition, _) = slice.definitions.iter().find(|(defined, _, _)| *defined == symbol)?;
-        let definition = &self.past_zero_arm(symbol, *definition, node).unwrap_or(*definition);
-        let definition = &self.reaching_definition(symbol, *definition, node).unwrap_or(*definition);
+        let (_, definition, _) = slice
+            .definitions
+            .iter()
+            .find(|(defined, _, _)| *defined == symbol)?;
+        let definition = &self
+            .past_zero_arm(symbol, *definition, node)
+            .unwrap_or(*definition);
+        let definition = &self
+            .reaching_definition(symbol, *definition, node)
+            .unwrap_or(*definition);
         let defined_at = self.parse.nodes.kind(*definition).span().end;
         let read_at = self.parse.nodes.kind(node).span().start;
         let mut ors = Vec::new();
@@ -364,7 +449,9 @@ impl FinderCtx<'_, '_, '_> {
     fn past_zero_arm(&self, symbol: SymbolId, definition: NodeId, read: NodeId) -> Option<NodeId> {
         let nodes = self.parse.nodes;
         let value = self.definition_value(definition)?;
-        let AstKind::NumericLiteral(literal) = nodes.kind(value) else { return None };
+        let AstKind::NumericLiteral(literal) = nodes.kind(value) else {
+            return None;
+        };
         if literal.value != 0.0 {
             return None;
         }
@@ -378,7 +465,10 @@ impl FinderCtx<'_, '_, '_> {
             if let AstKind::IfStatement(statement) = nodes.kind(parent) {
                 let arm = nodes.kind(child).span();
                 let in_arm = statement.consequent.span() == arm
-                    || statement.alternate.as_ref().is_some_and(|alternate| alternate.span() == arm);
+                    || statement
+                        .alternate
+                        .as_ref()
+                        .is_some_and(|alternate| alternate.span() == arm);
                 if in_arm && !(arm.start <= read_at && read_at < arm.end) {
                     // The latest plain assignment in the other arm.
                     let other = if statement.consequent.span() == arm {
@@ -394,7 +484,9 @@ impl FinderCtx<'_, '_, '_> {
                         .filter_map(|reference| {
                             let parent = nodes.parent_id(reference.node_id());
                             match nodes.kind(parent) {
-                                AstKind::AssignmentExpression(assignment) if assignment.operator.is_assign() => {
+                                AstKind::AssignmentExpression(assignment)
+                                    if assignment.operator.is_assign() =>
+                                {
                                     Some((assignment.span, parent))
                                 }
                                 _ => None,
@@ -405,7 +497,10 @@ impl FinderCtx<'_, '_, '_> {
                         .map(|(_, node)| node);
                 }
             }
-            if matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+            if matches!(
+                nodes.kind(parent),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            ) {
                 return None;
             }
             child = parent;
@@ -425,8 +520,13 @@ impl FinderCtx<'_, '_, '_> {
                 _ => false,
             },
             AstKind::ConditionalExpression(conditional) => match self.decided_arm(conditional) {
-                Some(arm) => self.expression_node(arm).is_some_and(|arm| self.packing_shaped(arm)),
-                None => integer(&conditional.consequent).is_some() && integer(&conditional.alternate) == Some(0),
+                Some(arm) => self
+                    .expression_node(arm)
+                    .is_some_and(|arm| self.packing_shaped(arm)),
+                None => {
+                    integer(&conditional.consequent).is_some()
+                        && integer(&conditional.alternate) == Some(0)
+                }
             },
             AstKind::NumericLiteral(_) => true,
             AstKind::ParenthesizedExpression(inner) => self
@@ -458,22 +558,34 @@ impl FinderCtx<'_, '_, '_> {
         Ok(out)
     }
 
-    fn split_terms(&self, node: NodeId, shift: u32, hops: usize, out: &mut Vec<PackedTerm>) -> Result<(), String> {
+    fn split_terms(
+        &self,
+        node: NodeId,
+        shift: u32,
+        hops: usize,
+        out: &mut Vec<PackedTerm>,
+    ) -> Result<(), String> {
         let child = |expression: &Expression<'_>| {
             self.expression_node(expression)
                 .ok_or_else(|| "unresolved sub-expression".to_string())
         };
         match self.parse.nodes.kind(node) {
-            AstKind::ParenthesizedExpression(inner) => self.split_terms(child(&inner.expression)?, shift, hops, out),
+            AstKind::ParenthesizedExpression(inner) => {
+                self.split_terms(child(&inner.expression)?, shift, hops, out)
+            }
             AstKind::BinaryExpression(binary) => match binary.operator {
                 BinaryOperator::BitwiseOR | BinaryOperator::Addition => {
                     self.split_terms(child(&binary.left)?, shift, hops, out)?;
                     self.split_terms(child(&binary.right)?, shift, hops, out)
                 }
                 BinaryOperator::ShiftLeft => match integer(&binary.right) {
-                    Some(amount) => self.split_terms(child(&binary.left)?, shift + amount, hops, out),
+                    Some(amount) => {
+                        self.split_terms(child(&binary.left)?, shift + amount, hops, out)
+                    }
                     None => match self.guarded_shift(binary) {
-                        Some(amount) => self.split_terms(child(&binary.left)?, shift + amount, hops, out),
+                        Some(amount) => {
+                            self.split_terms(child(&binary.left)?, shift + amount, hops, out)
+                        }
                         None => Err("variable shift".into()),
                     },
                 },
@@ -482,27 +594,41 @@ impl FinderCtx<'_, '_, '_> {
                         integer(&binary.right).and_then(power_of_two),
                         integer(&binary.left).and_then(power_of_two),
                     ) {
-                        (Some(amount), _) => self.split_terms(child(&binary.left)?, shift + amount, hops, out),
-                        (None, Some(amount)) => self.split_terms(child(&binary.right)?, shift + amount, hops, out),
+                        (Some(amount), _) => {
+                            self.split_terms(child(&binary.left)?, shift + amount, hops, out)
+                        }
+                        (None, Some(amount)) => {
+                            self.split_terms(child(&binary.right)?, shift + amount, hops, out)
+                        }
                         _ => {
-                            out.push(PackedTerm { bit: shift, base: Some(node) });
+                            out.push(PackedTerm {
+                                bit: shift,
+                                base: Some(node),
+                            });
                             Ok(())
                         }
                     }
                 }
                 _ => {
-                    out.push(PackedTerm { bit: shift, base: Some(node) });
+                    out.push(PackedTerm {
+                        bit: shift,
+                        base: Some(node),
+                    });
                     Ok(())
                 }
             },
             // `t[k]` of the tracer's argument tuple: the element packed.
-            AstKind::ComputedMemberExpression(member) if hops > 0 && self.tuple_member_slot(member).is_some() => {
+            AstKind::ComputedMemberExpression(member)
+                if hops > 0 && self.tuple_member_slot(member).is_some() =>
+            {
                 let slot = self.tuple_member_slot(member).ok_or("tuple slot")?;
                 self.split_terms(slot, shift, hops - 1, out)
             }
             // A test decided by its values alone (`b !== null` for a
             // boolean `b`): the arm it takes.
-            AstKind::ConditionalExpression(conditional) if self.decided_arm(conditional).is_some() => {
+            AstKind::ConditionalExpression(conditional)
+                if self.decided_arm(conditional).is_some() =>
+            {
                 let arm = self.decided_arm(conditional).ok_or("decided arm")?;
                 self.split_terms(child(arm)?, shift, hops, out)
             }
@@ -516,13 +642,17 @@ impl FinderCtx<'_, '_, '_> {
                 let value = value as u32;
                 for bit in 0..8 {
                     if value & (1 << bit) != 0 {
-                        out.push(PackedTerm { bit: shift + bit, base: None });
+                        out.push(PackedTerm {
+                            bit: shift + bit,
+                            base: None,
+                        });
                     }
                 }
                 Ok(())
             }
             AstKind::ConditionalExpression(conditional)
-                if integer(&conditional.alternate) == Some(0) && integer(&conditional.consequent).is_some() =>
+                if integer(&conditional.alternate) == Some(0)
+                    && integer(&conditional.consequent).is_some() =>
             {
                 let consequent = integer(&conditional.consequent).unwrap_or(0);
                 match power_of_two(consequent) {
@@ -538,11 +668,16 @@ impl FinderCtx<'_, '_, '_> {
             }
             AstKind::IdentifierReference(_) if hops > 0 => match self.identifier_value(node) {
                 Some((_, Updates::Other)) => Err("binding updated in place".into()),
-                Some((value, Updates::Or(ors))) if self.packing_shaped(value) || !ors.is_empty() => {
+                Some((value, Updates::Or(ors)))
+                    if self.packing_shaped(value) || !ors.is_empty() =>
+                {
                     if self.packing_shaped(value) {
                         self.split_terms(value, shift, hops - 1, out)?;
                     } else {
-                        out.push(PackedTerm { bit: shift, base: Some(value) });
+                        out.push(PackedTerm {
+                            bit: shift,
+                            base: Some(value),
+                        });
                     }
                     for or in ors {
                         self.split_terms(or, shift, hops - 1, out)?;
@@ -550,12 +685,18 @@ impl FinderCtx<'_, '_, '_> {
                     Ok(())
                 }
                 _ => {
-                    out.push(PackedTerm { bit: shift, base: Some(node) });
+                    out.push(PackedTerm {
+                        bit: shift,
+                        base: Some(node),
+                    });
                     Ok(())
                 }
             },
             _ => {
-                out.push(PackedTerm { bit: shift, base: Some(node) });
+                out.push(PackedTerm {
+                    bit: shift,
+                    base: Some(node),
+                });
                 Ok(())
             }
         }
@@ -563,7 +704,10 @@ impl FinderCtx<'_, '_, '_> {
 
     /// The arm of `test ? a : b` whose test holds or fails on its values
     /// alone ([`flow::decided`]).
-    fn decided_arm<'e>(&self, conditional: &'e oxc_ast::ast::ConditionalExpression<'e>) -> Option<&'e Expression<'e>> {
+    fn decided_arm<'e>(
+        &self,
+        conditional: &'e oxc_ast::ast::ConditionalExpression<'e>,
+    ) -> Option<&'e Expression<'e>> {
         let test = self.expression_node(&conditional.test)?;
         match flow::decided(&self.sym(test))? {
             true => Some(&conditional.consequent),
@@ -576,12 +720,16 @@ impl FinderCtx<'_, '_, '_> {
     /// reused: the same binding holds different objects over time).
     fn member_read(&self, node: NodeId) -> Option<((SymbolId, Option<NodeId>), String)> {
         let (object, name) = match self.parse.nodes.kind(node) {
-            AstKind::StaticMemberExpression(member) => (&member.object, member.property.name.to_string()),
+            AstKind::StaticMemberExpression(member) => {
+                (&member.object, member.property.name.to_string())
+            }
             AstKind::ComputedMemberExpression(member) => match &member.expression {
                 Expression::StringLiteral(literal) => (&member.object, literal.value.to_string()),
                 _ => return None,
             },
-            AstKind::ParenthesizedExpression(inner) => return self.member_read(self.expression_node(&inner.expression)?),
+            AstKind::ParenthesizedExpression(inner) => {
+                return self.member_read(self.expression_node(&inner.expression)?)
+            }
             _ => return None,
         };
         // `((a, b, c, d) => { a[b] = c; return d; })(buf, i, v, recv).m`:
@@ -623,7 +771,10 @@ impl FinderCtx<'_, '_, '_> {
     /// arrow over plain formals whose body is one `a[b] = v;` store and
     /// `return p;` of a formal `p` that is not the stored-into array and is
     /// never written in the body.
-    fn returned_argument<'e>(&self, call: &'e oxc_ast::ast::CallExpression<'e>) -> Option<&'e Expression<'e>> {
+    fn returned_argument<'e>(
+        &self,
+        call: &'e oxc_ast::ast::CallExpression<'e>,
+    ) -> Option<&'e Expression<'e>> {
         let Expression::ArrowFunctionExpression(arrow) = call.callee.without_parentheses() else {
             return None;
         };
@@ -632,7 +783,8 @@ impl FinderCtx<'_, '_, '_> {
         }
         let mut formals = Vec::new();
         for parameter in &arrow.params.items {
-            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern else {
+            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern
+            else {
                 return None;
             };
             if parameter.initializer.is_some() {
@@ -645,10 +797,12 @@ impl FinderCtx<'_, '_, '_> {
         else {
             return None;
         };
-        let Expression::AssignmentExpression(assignment) = store.expression.without_parentheses() else {
+        let Expression::AssignmentExpression(assignment) = store.expression.without_parentheses()
+        else {
             return None;
         };
-        let oxc_ast::ast::AssignmentTarget::ComputedMemberExpression(target) = &assignment.left else {
+        let oxc_ast::ast::AssignmentTarget::ComputedMemberExpression(target) = &assignment.left
+        else {
             return None;
         };
         let formal = |expression: &Expression<'_>| match expression.without_parentheses() {
@@ -663,7 +817,10 @@ impl FinderCtx<'_, '_, '_> {
             return None;
         }
         let scoping = self.parse.scoping;
-        if scoping.get_resolved_references(formals[position]).any(|reference| reference.is_write()) {
+        if scoping
+            .get_resolved_references(formals[position])
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
         match call.arguments.get(position)? {
@@ -683,7 +840,9 @@ impl FinderCtx<'_, '_, '_> {
             return Some(read);
         }
         let (object, name) = match self.parse.nodes.kind(node) {
-            AstKind::StaticMemberExpression(member) => (&member.object, member.property.name.to_string()),
+            AstKind::StaticMemberExpression(member) => {
+                (&member.object, member.property.name.to_string())
+            }
             _ => return None,
         };
         let Expression::ComputedMemberExpression(element) = object.without_parentheses() else {
@@ -739,7 +898,11 @@ pub(crate) struct LoopStream {
 fn is_loop(kind: &AstKind<'_>) -> bool {
     matches!(
         kind,
-        AstKind::ForStatement(_) | AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_) | AstKind::ForInStatement(_) | AstKind::ForOfStatement(_)
+        AstKind::ForStatement(_)
+            | AstKind::WhileStatement(_)
+            | AstKind::DoWhileStatement(_)
+            | AstKind::ForInStatement(_)
+            | AstKind::ForOfStatement(_)
     )
 }
 
@@ -749,7 +912,12 @@ impl FinderCtx<'_, '_, '_> {
         let mut child = node;
         loop {
             let parent = nodes.parent_id(child);
-            if parent == child || matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+            if parent == child
+                || matches!(
+                    nodes.kind(parent),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
+            {
                 return None;
             }
             if is_loop(&nodes.kind(parent)) {
@@ -769,16 +937,25 @@ impl FinderCtx<'_, '_, '_> {
     /// `t[k]` of a register holding the tracer's argument tuple
     /// (`t = [a, X, j]` reaching the read): the tuple's element `k`.
     pub(crate) fn tuple_slot(&self, expression: &Expression<'_>) -> Option<NodeId> {
-        let Expression::ComputedMemberExpression(member) = expression.without_parentheses() else { return None };
+        let Expression::ComputedMemberExpression(member) = expression.without_parentheses() else {
+            return None;
+        };
         self.tuple_member_slot(member)
     }
 
-    pub(crate) fn tuple_member_slot(&self, member: &oxc_ast::ast::ComputedMemberExpression<'_>) -> Option<NodeId> {
+    pub(crate) fn tuple_member_slot(
+        &self,
+        member: &oxc_ast::ast::ComputedMemberExpression<'_>,
+    ) -> Option<NodeId> {
         let index = integer(&member.expression)?;
-        let Expression::Identifier(_) = member.object.without_parentheses() else { return None };
+        let Expression::Identifier(_) = member.object.without_parentheses() else {
+            return None;
+        };
         let tuple = self.expression_node(&member.object)?;
         let (value, _) = self.identifier_value(tuple)?;
-        let AstKind::ArrayExpression(array) = self.parse.nodes.kind(value) else { return None };
+        let AstKind::ArrayExpression(array) = self.parse.nodes.kind(value) else {
+            return None;
+        };
         let element = array.elements.get(index as usize)?.as_expression()?;
         // A tuple is only read by literal index: a binding whose elements
         // are stored or which is used as a list (`s[1] = true`, `s.push`) is
@@ -788,7 +965,10 @@ impl FinderCtx<'_, '_, '_> {
         // The store of the tuple: a register reused for other values
         // before or after is judged only where the tuple can reach.
         let store = nodes.parent_id(value);
-        if !matches!(nodes.kind(store), AstKind::AssignmentExpression(_) | AstKind::VariableDeclarator(_)) {
+        if !matches!(
+            nodes.kind(store),
+            AstKind::AssignmentExpression(_) | AstKind::VariableDeclarator(_)
+        ) {
             return None;
         }
         for reference in self.parse.scoping.get_resolved_references(symbol) {
@@ -797,7 +977,9 @@ impl FinderCtx<'_, '_, '_> {
                 if let Some((_, stores)) = self.reaching(read) {
                     let sees = stores.iter().any(|reaching| match reaching {
                         flow::Store::Entry => true,
-                        flow::Store::Assign(node) | flow::Store::Declare(node) | flow::Store::Other(node) => *node == store,
+                        flow::Store::Assign(node)
+                        | flow::Store::Declare(node)
+                        | flow::Store::Other(node) => *node == store,
                     });
                     if !sees {
                         continue;
@@ -806,18 +988,28 @@ impl FinderCtx<'_, '_, '_> {
             }
             let parent = nodes.parent_id(read);
             match nodes.kind(parent) {
-                AstKind::ComputedMemberExpression(element) if element.object.span() == nodes.kind(read).span() => {
+                AstKind::ComputedMemberExpression(element)
+                    if element.object.span() == nodes.kind(read).span() =>
+                {
                     if integer(&element.expression).is_none() {
                         return None;
                     }
                     let target = nodes.parent_id(parent);
                     match nodes.kind(target) {
-                        AstKind::AssignmentExpression(assignment) if assignment.left.span() == element.span => return None,
+                        AstKind::AssignmentExpression(assignment)
+                            if assignment.left.span() == element.span =>
+                        {
+                            return None
+                        }
                         AstKind::UpdateExpression(_) => return None,
                         _ => {}
                     }
                 }
-                AstKind::StaticMemberExpression(member) if member.object.span() == nodes.kind(read).span() => return None,
+                AstKind::StaticMemberExpression(member)
+                    if member.object.span() == nodes.kind(read).span() =>
+                {
+                    return None
+                }
                 _ => {}
             }
         }
@@ -830,9 +1022,23 @@ impl FinderCtx<'_, '_, '_> {
         let mut symbol = symbol;
         for _ in 0..4 {
             let declaration = self.parse.scoping.symbol_declaration(symbol);
-            let AstKind::VariableDeclarator(declarator) = self.parse.nodes.kind(declaration) else { break };
-            let Some(source) = declarator.init.as_ref().and_then(|init| self.identifier_name_symbol(init)) else { break };
-            if source == symbol || self.parse.scoping.get_resolved_references(symbol).any(|reference| reference.is_write()) {
+            let AstKind::VariableDeclarator(declarator) = self.parse.nodes.kind(declaration) else {
+                break;
+            };
+            let Some(source) = declarator
+                .init
+                .as_ref()
+                .and_then(|init| self.identifier_name_symbol(init))
+            else {
+                break;
+            };
+            if source == symbol
+                || self
+                    .parse
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|reference| reference.is_write())
+            {
                 break;
             }
             symbol = source;
@@ -843,8 +1049,10 @@ impl FinderCtx<'_, '_, '_> {
     /// The binding an operand names, directly or through an argument
     /// tuple slot ([`Self::tuple_slot`]).
     fn operand_symbol(&self, expression: &Expression<'_>) -> Option<SymbolId> {
-        self.identifier_name_symbol(expression)
-            .or_else(|| self.tuple_slot(expression).and_then(|node| self.reference_symbol(node)))
+        self.identifier_name_symbol(expression).or_else(|| {
+            self.tuple_slot(expression)
+                .and_then(|node| self.reference_symbol(node))
+        })
     }
 
     /// `++x` / `x++` (`Some(true)`) or `--x` / `x--` (`Some(false)`) of
@@ -856,12 +1064,17 @@ impl FinderCtx<'_, '_, '_> {
         // `t` through parentheses and `Number(t)`: the binding copied.
         let copied = |expression: &Expression<'_>| -> Option<SymbolId> {
             match expression.without_parentheses() {
-                Expression::CallExpression(call) if call.arguments.len() == 1 => match call.callee.without_parentheses() {
-                    Expression::Identifier(callee) if callee.name == "Number" && self.identifier_symbol(callee).is_none() => {
-                        self.identifier_name_symbol(call.arguments[0].as_expression()?)
+                Expression::CallExpression(call) if call.arguments.len() == 1 => {
+                    match call.callee.without_parentheses() {
+                        Expression::Identifier(callee)
+                            if callee.name == "Number"
+                                && self.identifier_symbol(callee).is_none() =>
+                        {
+                            self.identifier_name_symbol(call.arguments[0].as_expression()?)
+                        }
+                        _ => None,
                     }
-                    _ => None,
-                },
+                }
                 other => self.identifier_name_symbol(other),
             }
         };
@@ -869,15 +1082,22 @@ impl FinderCtx<'_, '_, '_> {
         // Also `Number(t - 1)` (the tracer's numeric copy of the step).
         let stepped = |expression: &Expression<'_>| -> Option<(SymbolId, bool)> {
             let expression = match expression.without_parentheses() {
-                Expression::CallExpression(call) if call.arguments.len() == 1 => match call.callee.without_parentheses() {
-                    Expression::Identifier(callee) if callee.name == "Number" && self.identifier_symbol(callee).is_none() => {
-                        call.arguments[0].as_expression()?
+                Expression::CallExpression(call) if call.arguments.len() == 1 => {
+                    match call.callee.without_parentheses() {
+                        Expression::Identifier(callee)
+                            if callee.name == "Number"
+                                && self.identifier_symbol(callee).is_none() =>
+                        {
+                            call.arguments[0].as_expression()?
+                        }
+                        _ => return None,
                     }
-                    _ => return None,
-                },
+                }
                 other => other,
             };
-            let Expression::BinaryExpression(binary) = expression.without_parentheses() else { return None };
+            let Expression::BinaryExpression(binary) = expression.without_parentheses() else {
+                return None;
+            };
             let up = match binary.operator {
                 BinaryOperator::Addition => true,
                 BinaryOperator::Subtraction => false,
@@ -891,15 +1111,22 @@ impl FinderCtx<'_, '_, '_> {
         for id in self.nodes_within(span) {
             match self.parse.nodes.kind(id) {
                 AstKind::UpdateExpression(update) => {
-                    let oxc_ast::ast::SimpleAssignmentTarget::AssignmentTargetIdentifier(target) = &update.argument else {
+                    let oxc_ast::ast::SimpleAssignmentTarget::AssignmentTargetIdentifier(target) =
+                        &update.argument
+                    else {
                         continue;
                     };
                     if let Some(target) = self.identifier_symbol(target) {
-                        steps.push((target, update.operator == oxc_ast::ast::UpdateOperator::Increment));
+                        steps.push((
+                            target,
+                            update.operator == oxc_ast::ast::UpdateOperator::Increment,
+                        ));
                     }
                 }
                 AstKind::VariableDeclarator(declarator) => {
-                    let (oxc_ast::ast::BindingPattern::BindingIdentifier(identifier), Some(init)) = (&declarator.id, &declarator.init) else {
+                    let (oxc_ast::ast::BindingPattern::BindingIdentifier(identifier), Some(init)) =
+                        (&declarator.id, &declarator.init)
+                    else {
                         continue;
                     };
                     if let Some(target) = identifier.symbol_id.get() {
@@ -907,14 +1134,28 @@ impl FinderCtx<'_, '_, '_> {
                     }
                 }
                 AstKind::AssignmentExpression(assignment) => {
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else { continue };
-                    let Some(target) = self.identifier_symbol(target) else { continue };
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
+                        continue;
+                    };
+                    let Some(target) = self.identifier_symbol(target) else {
+                        continue;
+                    };
                     match assignment.operator {
-                        AssignmentOperator::Addition | AssignmentOperator::Subtraction if integer(&assignment.right) == Some(1) => {
-                            steps.push((target, assignment.operator == AssignmentOperator::Addition));
+                        AssignmentOperator::Addition | AssignmentOperator::Subtraction
+                            if integer(&assignment.right) == Some(1) =>
+                        {
+                            steps.push((
+                                target,
+                                assignment.operator == AssignmentOperator::Addition,
+                            ));
                         }
                         AssignmentOperator::Assign => {
-                            assigned.push((target, stepped(&assignment.right), copied(&assignment.right)));
+                            assigned.push((
+                                target,
+                                stepped(&assignment.right),
+                                copied(&assignment.right),
+                            ));
                         }
                         _ => {}
                     }
@@ -926,12 +1167,20 @@ impl FinderCtx<'_, '_, '_> {
         // in the loop; `x = c` where `c` is only ever assigned `x ± 1`.
         let only_copy_of = |copy: SymbolId, of: SymbolId| {
             // Initialisers to a constant (`let i = 0`) are not loop stores.
-            let mut stores = assigned.iter().filter(|(target, step, source)| *target == copy && (step.is_some() || source.is_some())).peekable();
-            stores.peek().is_some() && stores.all(|(_, step, source)| step.is_none() && *source == Some(of))
+            let mut stores = assigned
+                .iter()
+                .filter(|(target, step, source)| {
+                    *target == copy && (step.is_some() || source.is_some())
+                })
+                .peekable();
+            stores.peek().is_some()
+                && stores.all(|(_, step, source)| step.is_none() && *source == Some(of))
         };
         let only_step_of = |stepper: SymbolId, of: SymbolId| -> Option<bool> {
             let mut found = None;
-            for (target, step, _) in assigned.iter().filter(|(target, step, source)| *target == stepper && (step.is_some() || source.is_some())) {
+            for (target, step, _) in assigned.iter().filter(|(target, step, source)| {
+                *target == stepper && (step.is_some() || source.is_some())
+            }) {
                 let _ = target;
                 let (source, up) = (*step)?;
                 if source != of || found.is_some_and(|known| known != up) {
@@ -946,7 +1195,9 @@ impl FinderCtx<'_, '_, '_> {
                 continue;
             }
             match (step, source) {
-                (Some((from, up)), _) if *from == symbol || only_copy_of(*from, symbol) => steps.push((symbol, *up)),
+                (Some((from, up)), _) if *from == symbol || only_copy_of(*from, symbol) => {
+                    steps.push((symbol, *up))
+                }
                 (None, Some(from)) if *from != symbol => {
                     if let Some(up) = only_step_of(*from, symbol) {
                         steps.push((symbol, up));
@@ -980,7 +1231,10 @@ impl FinderCtx<'_, '_, '_> {
         // Every definition of `j` is `n - 1` inside the loop (one `n`); a
         // declaration without initializer outside it is allowed.
         let minus_one_of = |value: &Expression<'_>| match value.without_parentheses() {
-            Expression::BinaryExpression(minus) if minus.operator == BinaryOperator::Subtraction && integer(&minus.right) == Some(1) => {
+            Expression::BinaryExpression(minus)
+                if minus.operator == BinaryOperator::Subtraction
+                    && integer(&minus.right) == Some(1) =>
+            {
                 self.identifier_name_symbol(&minus.left)
             }
             _ => None,
@@ -990,7 +1244,9 @@ impl FinderCtx<'_, '_, '_> {
         let minus_one = |value: &Expression<'_>| {
             minus_one_of(value).or_else(|| {
                 let copied = self.identifier_name_symbol(value)?;
-                let declaration = nodes.kind(self.parse.scoping.symbol_declaration(copied)).span();
+                let declaration = nodes
+                    .kind(self.parse.scoping.symbol_declaration(copied))
+                    .span();
                 if !inside(declaration) {
                     return None;
                 }
@@ -1008,7 +1264,9 @@ impl FinderCtx<'_, '_, '_> {
                 (None, _) => false,
             }
         };
-        if let AstKind::VariableDeclarator(declarator) = nodes.kind(self.parse.scoping.symbol_declaration(index)) {
+        if let AstKind::VariableDeclarator(declarator) =
+            nodes.kind(self.parse.scoping.symbol_declaration(index))
+        {
             if let Some(init) = &declarator.init {
                 if !inside(declarator.span) || !agree(minus_one(init)) {
                     return None;
@@ -1020,7 +1278,9 @@ impl FinderCtx<'_, '_, '_> {
                 continue;
             }
             let parent = nodes.parent_id(reference.node_id());
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else { return None };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else {
+                return None;
+            };
             if assignment.operator != oxc_ast::ast::AssignmentOperator::Assign
                 || !inside(assignment.span)
                 || !agree(minus_one(&assignment.right))
@@ -1033,7 +1293,9 @@ impl FinderCtx<'_, '_, '_> {
             Expression::CallExpression(call) => {
                 matches!(call.callee.without_parentheses(), Expression::Identifier(callee) if callee.name == "Number")
                     && call.arguments.len() == 1
-                    && call.arguments[0].as_expression().is_some_and(|argument| self.identifier_name_symbol(argument) == Some(index))
+                    && call.arguments[0].as_expression().is_some_and(|argument| {
+                        self.identifier_name_symbol(argument) == Some(index)
+                    })
             }
             other => self.identifier_name_symbol(other) == Some(index),
         };
@@ -1049,7 +1311,8 @@ impl FinderCtx<'_, '_, '_> {
             }
             match nodes.kind(parent) {
                 AstKind::AssignmentExpression(assignment)
-                    if assignment.operator == oxc_ast::ast::AssignmentOperator::Assign && takes_index(&assignment.right) =>
+                    if assignment.operator == oxc_ast::ast::AssignmentOperator::Assign
+                        && takes_index(&assignment.right) =>
                 {
                     steps += 1
                 }
@@ -1068,7 +1331,9 @@ impl FinderCtx<'_, '_, '_> {
         }
         let symbol = self.identifier_name_symbol(expression)?;
         let nodes = self.parse.nodes;
-        let AstKind::VariableDeclarator(declarator) = nodes.kind(self.parse.scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) =
+            nodes.kind(self.parse.scoping.symbol_declaration(symbol))
+        else {
             return None;
         };
         let value = integer(declarator.init.as_ref()?)?;
@@ -1078,7 +1343,8 @@ impl FinderCtx<'_, '_, '_> {
             }
             match nodes.kind(nodes.parent_id(reference.node_id())) {
                 AstKind::AssignmentExpression(assignment)
-                    if assignment.operator == oxc_ast::ast::AssignmentOperator::Assign && integer(&assignment.right) == Some(value) => {}
+                    if assignment.operator == oxc_ast::ast::AssignmentOperator::Assign
+                        && integer(&assignment.right) == Some(value) => {}
                 _ => return None,
             }
         }
@@ -1087,10 +1353,19 @@ impl FinderCtx<'_, '_, '_> {
 
     /// The initializer of a `let`/`const` binding that is never written again.
     fn single_init(&self, symbol: SymbolId) -> Option<&Expression<'_>> {
-        if self.parse.scoping.get_resolved_references(symbol).any(|reference| reference.is_write()) {
+        if self
+            .parse
+            .scoping
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
-        let AstKind::VariableDeclarator(declarator) = self.parse.nodes.kind(self.parse.scoping.symbol_declaration(symbol)) else {
+        let AstKind::VariableDeclarator(declarator) = self
+            .parse
+            .nodes
+            .kind(self.parse.scoping.symbol_declaration(symbol))
+        else {
             return None;
         };
         declarator.init.as_ref()
@@ -1099,8 +1374,13 @@ impl FinderCtx<'_, '_, '_> {
     /// The binding `symbol` copies when it is declared from a plain read of
     /// another binding and never written (`let t = acc`); else `symbol`.
     fn copied_binding(&self, symbol: SymbolId) -> SymbolId {
-        match self.single_init(symbol).map(|init| init.without_parentheses()) {
-            Some(Expression::Identifier(identifier)) => self.identifier_symbol(identifier).unwrap_or(symbol),
+        match self
+            .single_init(symbol)
+            .map(|init| init.without_parentheses())
+        {
+            Some(Expression::Identifier(identifier)) => {
+                self.identifier_symbol(identifier).unwrap_or(symbol)
+            }
             _ => symbol,
         }
     }
@@ -1114,22 +1394,32 @@ impl FinderCtx<'_, '_, '_> {
                     return array
                         .elements
                         .iter()
-                        .map(|element| match element.as_expression()?.without_parentheses() {
-                            Expression::StringLiteral(literal) => Some(literal.value.to_string()),
-                            // A numeric candidate (`(grid: 0)`), as written.
-                            Expression::NumericLiteral(literal) if literal.value.fract() == 0.0 => {
-                                Some(format!("{}", literal.value as i64))
-                            }
-                            _ => None,
-                        })
+                        .map(
+                            |element| match element.as_expression()?.without_parentheses() {
+                                Expression::StringLiteral(literal) => {
+                                    Some(literal.value.to_string())
+                                }
+                                // A numeric candidate (`(grid: 0)`), as written.
+                                Expression::NumericLiteral(literal)
+                                    if literal.value.fract() == 0.0 =>
+                                {
+                                    Some(format!("{}", literal.value as i64))
+                                }
+                                _ => None,
+                            },
+                        )
                         .collect();
                 }
                 // `[a, L][k]`: the literal element `k`.
                 AstKind::ComputedMemberExpression(element) => {
-                    let (Expression::ArrayExpression(array), Some(index)) = (element.object.without_parentheses(), integer(&element.expression)) else {
+                    let (Expression::ArrayExpression(array), Some(index)) = (
+                        element.object.without_parentheses(),
+                        integer(&element.expression),
+                    ) else {
                         return None;
                     };
-                    node = self.expression_node(array.elements.get(index as usize)?.as_expression()?)?;
+                    node =
+                        self.expression_node(array.elements.get(index as usize)?.as_expression()?)?;
                 }
                 AstKind::IdentifierReference(_) => {
                     // A list binding: its declaration (lists are not
@@ -1177,10 +1467,19 @@ impl FinderCtx<'_, '_, '_> {
                     continue;
                 }
                 let call = nodes.parent_id(parent);
-                let AstKind::CallExpression(call_expression) = nodes.kind(call) else { continue };
-                let [argument] = call_expression.arguments.as_slice() else { return None };
-                let Some(argument) = argument.as_expression() else { return None };
-                if matches!(argument.without_parentheses(), Expression::BooleanLiteral(_)) {
+                let AstKind::CallExpression(call_expression) = nodes.kind(call) else {
+                    continue;
+                };
+                let [argument] = call_expression.arguments.as_slice() else {
+                    return None;
+                };
+                let Some(argument) = argument.as_expression() else {
+                    return None;
+                };
+                if matches!(
+                    argument.without_parentheses(),
+                    Expression::BooleanLiteral(_)
+                ) {
                     continue;
                 }
                 // The argument reads `L[i]`, `i` the ascending loop index.
@@ -1192,17 +1491,31 @@ impl FinderCtx<'_, '_, '_> {
                     // loop (`k = L[i]; list.push(test(k))`).
                     let id = match nodes.kind(id) {
                         AstKind::IdentifierReference(_) => match self.identifier_value(id) {
-                            Some((value, _)) if matches!(nodes.kind(value), AstKind::ComputedMemberExpression(_)) => value,
+                            Some((value, _))
+                                if matches!(
+                                    nodes.kind(value),
+                                    AstKind::ComputedMemberExpression(_)
+                                ) =>
+                            {
+                                value
+                            }
                             _ => continue,
                         },
                         _ => id,
                     };
-                    let AstKind::ComputedMemberExpression(element) = nodes.kind(id) else { continue };
-                    let Some(index) = self.identifier_name_symbol(&element.expression) else { continue };
+                    let AstKind::ComputedMemberExpression(element) = nodes.kind(id) else {
+                        continue;
+                    };
+                    let Some(index) = self.identifier_name_symbol(&element.expression) else {
+                        continue;
+                    };
                     if self.step_of(index, nodes.kind(looped).span()) != Some(true) {
                         continue;
                     }
-                    if let Some(list) = self.expression_node(&element.object).and_then(|object| self.string_list(object)) {
+                    if let Some(list) = self
+                        .expression_node(&element.object)
+                        .and_then(|object| self.string_list(object))
+                    {
                         items = Some(list);
                     }
                 }
@@ -1215,7 +1528,9 @@ impl FinderCtx<'_, '_, '_> {
             if !reference.is_write() {
                 continue;
             }
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else {
+                continue;
+            };
             match assignment.right.without_parentheses() {
                 // `list = []` before the fill.
                 Expression::ArrayExpression(array) if array.elements.is_empty() => {}
@@ -1244,24 +1559,37 @@ impl FinderCtx<'_, '_, '_> {
     /// `helper(…, L)` where the helper returns `param.map(…)` of the
     /// string-list argument `L`: the items of `L`.
     fn mapped_items(&self, value: &Expression<'_>) -> Option<Vec<String>> {
-        let Expression::CallExpression(call) = value.without_parentheses() else { return None };
+        let Expression::CallExpression(call) = value.without_parentheses() else {
+            return None;
+        };
         self.mapped_call(call)
     }
 
     fn mapped_call(&self, call: &oxc_ast::ast::CallExpression<'_>) -> Option<Vec<String>> {
         let helper = self.identifier_name_symbol(&call.callee)?;
-        let (position, items) = call.arguments.iter().enumerate().find_map(|(position, argument)| {
-            let node = self.expression_node(argument.as_expression()?)?;
-            self.string_list(node).map(|items| (position, items))
-        })?;
+        let (position, items) =
+            call.arguments
+                .iter()
+                .enumerate()
+                .find_map(|(position, argument)| {
+                    let node = self.expression_node(argument.as_expression()?)?;
+                    self.string_list(node).map(|items| (position, items))
+                })?;
         if self.maps_parameter(helper, position) {
             return Some(items);
         }
         // A register callee (`f = helper; f = f(w, "q", [...])`): the
         // binding its reaching definition copies.
         let callee = self.expression_node(&call.callee)?;
-        let (value, Updates::Or(ors)) = self.identifier_value(callee)? else { return None };
-        if !ors.is_empty() || !matches!(self.parse.nodes.kind(value), AstKind::IdentifierReference(_)) {
+        let (value, Updates::Or(ors)) = self.identifier_value(callee)? else {
+            return None;
+        };
+        if !ors.is_empty()
+            || !matches!(
+                self.parse.nodes.kind(value),
+                AstKind::IdentifierReference(_)
+            )
+        {
             return None;
         }
         let copied = self.reference_symbol(value)?;
@@ -1277,14 +1605,20 @@ impl FinderCtx<'_, '_, '_> {
             let declaration = self.parse.scoping.symbol_declaration(symbol);
             let function = match nodes.kind(declaration) {
                 AstKind::Function(_) => declaration,
-                AstKind::VariableDeclarator(declarator) => match declarator.init.as_ref().map(|init| init.without_parentheses()) {
-                    Some(Expression::Identifier(identifier)) => match self.identifier_symbol(identifier) {
-                        Some(next) => {
-                            symbol = next;
-                            continue;
+                AstKind::VariableDeclarator(declarator) => match declarator
+                    .init
+                    .as_ref()
+                    .map(|init| init.without_parentheses())
+                {
+                    Some(Expression::Identifier(identifier)) => {
+                        match self.identifier_symbol(identifier) {
+                            Some(next) => {
+                                symbol = next;
+                                continue;
+                            }
+                            None => return false,
                         }
-                        None => return false,
-                    },
+                    }
                     Some(init) => match self.expression_node(init) {
                         Some(node) => node,
                         None => return false,
@@ -1294,21 +1628,41 @@ impl FinderCtx<'_, '_, '_> {
                 _ => return false,
             };
             let (params, body) = match nodes.kind(function) {
-                AstKind::Function(function) => (&function.params, function.body.as_ref().map(|body| body.span)),
+                AstKind::Function(function) => (
+                    &function.params,
+                    function.body.as_ref().map(|body| body.span),
+                ),
                 AstKind::ArrowFunctionExpression(arrow) => (&arrow.params, Some(arrow.body.span)),
                 _ => return false,
             };
-            let Some(parameter) = params.items.get(position) else { return false };
-            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern else { return false };
-            let Some(parameter) = identifier.symbol_id.get() else { return false };
+            let Some(parameter) = params.items.get(position) else {
+                return false;
+            };
+            let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &parameter.pattern
+            else {
+                return false;
+            };
+            let Some(parameter) = identifier.symbol_id.get() else {
+                return false;
+            };
             let Some(body) = body else { return false };
             return self.nodes_within(body).into_iter().any(|id| {
-                let AstKind::ReturnStatement(statement) = nodes.kind(id) else { return false };
-                let Some(Expression::CallExpression(call)) = statement.argument.as_ref().map(|argument| argument.without_parentheses()) else {
+                let AstKind::ReturnStatement(statement) = nodes.kind(id) else {
                     return false;
                 };
-                let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else { return false };
-                member.property.name == "map" && self.identifier_name_symbol(&member.object) == Some(parameter)
+                let Some(Expression::CallExpression(call)) = statement
+                    .argument
+                    .as_ref()
+                    .map(|argument| argument.without_parentheses())
+                else {
+                    return false;
+                };
+                let Expression::StaticMemberExpression(member) = call.callee.without_parentheses()
+                else {
+                    return false;
+                };
+                member.property.name == "map"
+                    && self.identifier_name_symbol(&member.object) == Some(parameter)
             });
         }
         false
@@ -1322,7 +1676,9 @@ impl FinderCtx<'_, '_, '_> {
             AstKind::IdentifierReference(_) => self.identifier_value(node)?.0,
             _ => node,
         };
-        let AstKind::BinaryExpression(shift) = nodes.kind(node) else { return None };
+        let AstKind::BinaryExpression(shift) = nodes.kind(node) else {
+            return None;
+        };
         if shift.operator != BinaryOperator::ShiftLeft {
             return None;
         }
@@ -1348,15 +1704,22 @@ impl FinderCtx<'_, '_, '_> {
             _ => value,
         };
         let value = match nodes.kind(value) {
-            AstKind::ComputedMemberExpression(member) => self.tuple_member_slot(member).unwrap_or(value),
+            AstKind::ComputedMemberExpression(member) => {
+                self.tuple_member_slot(member).unwrap_or(value)
+            }
             _ => value,
         };
         let value = self.loop_value(value);
         // `acc` or, at an in-loop flush, `acc | t` (`t = X[j] << c`).
         let value = match nodes.kind(value) {
             AstKind::BinaryExpression(binary) if binary.operator == BinaryOperator::BitwiseOR => {
-                let left = self.tuple_slot(&binary.left).or_else(|| self.expression_node(&binary.left)).ok_or("unresolved operand")?;
-                let right = self.expression_node(&binary.right).ok_or("unresolved operand")?;
+                let left = self
+                    .tuple_slot(&binary.left)
+                    .or_else(|| self.expression_node(&binary.left))
+                    .ok_or("unresolved operand")?;
+                let right = self
+                    .expression_node(&binary.right)
+                    .ok_or("unresolved operand")?;
                 if self.shift_term(right).is_some() {
                     left
                 } else if self.shift_term(left).is_some() {
@@ -1368,7 +1731,10 @@ impl FinderCtx<'_, '_, '_> {
             _ => value,
         };
         // A per-iteration copy (`let t = acc; … (t | x) …`) reads the accumulator.
-        let accumulator = self.reference_symbol(value).map(|symbol| self.copied_binding(self.copy_root(symbol))).ok_or("not an accumulator")?;
+        let accumulator = self
+            .reference_symbol(value)
+            .map(|symbol| self.copied_binding(self.copy_root(symbol)))
+            .ok_or("not an accumulator")?;
         let read_at = nodes.kind(value).span().start;
         let read_loop = self.enclosing_loop(value);
         // The nearest packing update before the read.
@@ -1378,7 +1744,9 @@ impl FinderCtx<'_, '_, '_> {
                 continue;
             }
             let parent = nodes.parent_id(reference.node_id());
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) else {
+                continue;
+            };
             // Before the read, or anywhere in the loop around an in-loop
             // flush (`if (c === 8) write(acc | t) else acc = acc | t`).
             let same_loop = read_loop.is_some() && self.enclosing_loop(parent) == read_loop;
@@ -1387,9 +1755,14 @@ impl FinderCtx<'_, '_, '_> {
             }
             let shifted = match (assignment.operator, assignment.right.without_parentheses()) {
                 (oxc_ast::ast::AssignmentOperator::BitwiseOR, right) => Some(right),
-                (oxc_ast::ast::AssignmentOperator::Assign, Expression::BinaryExpression(binary))
-                    if binary.operator == BinaryOperator::BitwiseOR
-                        && self.operand_symbol(&binary.left).map(|left| self.copied_binding(self.copy_root(left))) == Some(accumulator) =>
+                (
+                    oxc_ast::ast::AssignmentOperator::Assign,
+                    Expression::BinaryExpression(binary),
+                ) if binary.operator == BinaryOperator::BitwiseOR
+                    && self
+                        .operand_symbol(&binary.left)
+                        .map(|left| self.copied_binding(self.copy_root(left)))
+                        == Some(accumulator) =>
                 {
                     Some(binary.right.without_parentheses())
                 }
@@ -1401,14 +1774,22 @@ impl FinderCtx<'_, '_, '_> {
             else {
                 continue;
             };
-            let Some((element, counter)) = self.shift_term(shifted) else { continue };
-            let rank = if same_loop { u32::MAX } else { assignment.span.end };
+            let Some((element, counter)) = self.shift_term(shifted) else {
+                continue;
+            };
+            let rank = if same_loop {
+                u32::MAX
+            } else {
+                assignment.span.end
+            };
             if best.is_none_or(|(end, _, _, _)| rank > end) {
                 best = Some((rank, parent, element, counter));
             }
         }
         let (_, update, element, counter) = best.ok_or("no packing update")?;
-        let looped = self.enclosing_loop(update).ok_or("packing update outside a loop")?;
+        let looped = self
+            .enclosing_loop(update)
+            .ok_or("packing update outside a loop")?;
         let loop_span = nodes.kind(looped).span();
         if self.reassigned_after(accumulator, loop_span, value) {
             return Err("accumulator reassigned after the packing loop".into());
@@ -1420,12 +1801,19 @@ impl FinderCtx<'_, '_, '_> {
             let declaration = self.parse.scoping.symbol_declaration(counter);
             match nodes.kind(declaration) {
                 AstKind::VariableDeclarator(declarator)
-                    if !self.parse.scoping.get_resolved_references(counter).any(|reference| reference.is_write()) =>
+                    if !self
+                        .parse
+                        .scoping
+                        .get_resolved_references(counter)
+                        .any(|reference| reference.is_write()) =>
                 {
-                    declarator.init.as_ref().and_then(|init| match init.without_parentheses() {
-                        Expression::Identifier(_) => self.identifier_name_symbol(init),
-                        _ => None,
-                    })
+                    declarator
+                        .init
+                        .as_ref()
+                        .and_then(|init| match init.without_parentheses() {
+                            Expression::Identifier(_) => self.identifier_name_symbol(init),
+                            _ => None,
+                        })
                 }
                 _ => None,
             }
@@ -1506,12 +1894,16 @@ impl FinderCtx<'_, '_, '_> {
             AstKind::ComputedMemberExpression(member) => member,
             AstKind::IdentifierReference(_) => {
                 let copied = self.reference_symbol(element).and_then(|symbol| {
-                    let declaration = nodes.kind(self.parse.scoping.symbol_declaration(symbol)).span();
+                    let declaration = nodes
+                        .kind(self.parse.scoping.symbol_declaration(symbol))
+                        .span();
                     if declaration.start < loop_span.start || declaration.end > loop_span.end {
                         return None;
                     }
                     match self.single_init(symbol)?.without_parentheses() {
-                        Expression::ComputedMemberExpression(member) => self.node_with_span(member.span),
+                        Expression::ComputedMemberExpression(member) => {
+                            self.node_with_span(member.span)
+                        }
                         _ => None,
                     }
                 });
@@ -1522,14 +1914,18 @@ impl FinderCtx<'_, '_, '_> {
             }
             _ => return Err("packed value is not a list element".into()),
         };
-        let list = self.operand_symbol(&member.object).ok_or("list is not a binding")?;
+        let list = self
+            .operand_symbol(&member.object)
+            .ok_or("list is not a binding")?;
         // `X[i]`, also `X[i - 1]` / `X[i + 1]` (an offset keeps the direction).
         let index = self
             .operand_symbol(&member.expression)
             .or_else(|| match member.expression.without_parentheses() {
                 Expression::BinaryExpression(offset)
-                    if matches!(offset.operator, BinaryOperator::Addition | BinaryOperator::Subtraction)
-                        && self.constant_integer(&offset.right).is_some() =>
+                    if matches!(
+                        offset.operator,
+                        BinaryOperator::Addition | BinaryOperator::Subtraction
+                    ) && self.constant_integer(&offset.right).is_some() =>
                 {
                     self.identifier_name_symbol(&offset.left)
                 }
@@ -1584,10 +1980,20 @@ impl FinderCtx<'_, '_, '_> {
     /// Tokens inside `node` (no definitions followed).
     fn tokens_in(&self, node: NodeId, depth: usize, out: &mut Vec<(String, usize)>) {
         let slice = self.slice_of(node, 0);
-        for map in [&slice.members, &slice.arguments, &slice.strings, &slice.globals] {
+        for map in [
+            &slice.members,
+            &slice.arguments,
+            &slice.strings,
+            &slice.globals,
+        ] {
             out.extend(map.keys().map(|name| (name.clone(), depth)));
         }
-        out.extend(slice.calls.keys().map(|(method, _, _)| (method.clone(), depth)));
+        out.extend(
+            slice
+                .calls
+                .keys()
+                .map(|(method, _, _)| (method.clone(), depth)),
+        );
     }
 
     /// Tokens inside `node` but outside the function literals it contains
@@ -1597,19 +2003,29 @@ impl FinderCtx<'_, '_, '_> {
         let inside = self.nodes_within(nodes.kind(node).span());
         let functions: Vec<Span> = inside
             .iter()
-            .filter(|id| matches!(nodes.kind(**id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)))
+            .filter(|id| {
+                matches!(
+                    nodes.kind(**id),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
+            })
             .map(|id| nodes.kind(*id).span())
             .collect();
         let generated = |name: &str| name.starts_with('$');
         for id in inside {
             let span = nodes.kind(id).span();
-            if functions.iter().any(|function| function.start <= span.start && span.end <= function.end) {
+            if functions
+                .iter()
+                .any(|function| function.start <= span.start && span.end <= function.end)
+            {
                 continue;
             }
             let name = match nodes.kind(id) {
                 AstKind::StaticMemberExpression(member) => Some(member.property.name.to_string()),
                 AstKind::StringLiteral(literal) => Some(literal.value.to_string()),
-                AstKind::IdentifierReference(identifier) if self.identifier_symbol(identifier).is_none() => {
+                AstKind::IdentifierReference(identifier)
+                    if self.identifier_symbol(identifier).is_none() =>
+                {
                     Some(identifier.name.to_string())
                 }
                 _ => None,
@@ -1634,7 +2050,9 @@ impl FinderCtx<'_, '_, '_> {
                     None => true,
                     Some((value, _)) => matches!(
                         nodes.kind(value),
-                        AstKind::BooleanLiteral(_) | AstKind::NullLiteral(_) | AstKind::NumericLiteral(_)
+                        AstKind::BooleanLiteral(_)
+                            | AstKind::NullLiteral(_)
+                            | AstKind::NumericLiteral(_)
                     ),
                 };
                 match self.reference_symbol(base) {
@@ -1643,11 +2061,15 @@ impl FinderCtx<'_, '_, '_> {
                 }
             }
             AstKind::ComputedMemberExpression(member) => {
-                let (Expression::Identifier(_), Some(index)) = (member.object.without_parentheses(), integer(&member.expression))
-                else {
+                let (Expression::Identifier(_), Some(index)) = (
+                    member.object.without_parentheses(),
+                    integer(&member.expression),
+                ) else {
                     return Vec::new();
                 };
-                let Some(object) = self.expression_node(&member.object) else { return Vec::new() };
+                let Some(object) = self.expression_node(&member.object) else {
+                    return Vec::new();
+                };
                 match self.reference_symbol(object) {
                     Some(symbol) => (symbol, Some(index)),
                     None => return Vec::new(),
@@ -1664,7 +2086,11 @@ impl FinderCtx<'_, '_, '_> {
                 Some(index) => {
                     let parent = nodes.parent_id(node);
                     match nodes.kind(parent) {
-                        AstKind::ComputedMemberExpression(member) if integer(&member.expression) == Some(index) => parent,
+                        AstKind::ComputedMemberExpression(member)
+                            if integer(&member.expression) == Some(index) =>
+                        {
+                            parent
+                        }
                         _ => continue,
                     }
                 }
@@ -1679,7 +2105,10 @@ impl FinderCtx<'_, '_, '_> {
                 if let AstKind::AssignmentExpression(assignment) = nodes.kind(parent) {
                     let left = assignment.left.span();
                     let target_span = nodes.kind(target).span();
-                    if left.start <= target_span.start && target_span.end <= left.end && assignment.operator.is_assign() {
+                    if left.start <= target_span.start
+                        && target_span.end <= left.end
+                        && assignment.operator.is_assign()
+                    {
                         out.push(parent);
                     }
                     break;
@@ -1700,7 +2129,9 @@ impl FinderCtx<'_, '_, '_> {
         let nodes = self.parse.nodes;
         let mut out = Vec::new();
         for store in self.state_stores(base) {
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(store) else {
+                continue;
+            };
             if let Some(right) = self.expression_node(&assignment.right) {
                 self.tokens_in(right, 1, &mut out);
             }
@@ -1714,37 +2145,54 @@ impl FinderCtx<'_, '_, '_> {
                 }
                 match nodes.kind(parent) {
                     AstKind::IfStatement(statement) => {
-                        let inside_test = statement.test.span().start <= nodes.kind(child).span().start
+                        let inside_test = statement.test.span().start
+                            <= nodes.kind(child).span().start
                             && nodes.kind(child).span().end <= statement.test.span().end;
                         if !inside_test {
                             if let Some(test) = self.expression_node(&statement.test) {
                                 self.tokens_in(test, depth, &mut out);
                                 // `if (r)` on a register: what `r` was set
                                 // to (`r = s.indexOf("#<Navigator>") >= 0`).
-                                if let Some(register) = self.identifier_name_symbol(&statement.test) {
+                                if let Some(register) = self.identifier_name_symbol(&statement.test)
+                                {
                                     let root = self.flow_root(parent);
                                     let before = statement.span.start;
                                     // `const r = …; if (r)`: the declared value.
-                                    let declaration = self.parse.scoping.symbol_declaration(register);
-                                    if let AstKind::VariableDeclarator(declarator) = nodes.kind(declaration) {
-                                        if declarator.span.start < before && self.flow_root(declaration) == root {
-                                            if let Some(value) =
-                                                declarator.init.as_ref().and_then(|init| self.expression_node(init))
+                                    let declaration =
+                                        self.parse.scoping.symbol_declaration(register);
+                                    if let AstKind::VariableDeclarator(declarator) =
+                                        nodes.kind(declaration)
+                                    {
+                                        if declarator.span.start < before
+                                            && self.flow_root(declaration) == root
+                                        {
+                                            if let Some(value) = declarator
+                                                .init
+                                                .as_ref()
+                                                .and_then(|init| self.expression_node(init))
                                             {
                                                 self.tokens_in(value, depth + 1, &mut out);
                                             }
                                         }
                                     }
-                                    for reference in self.parse.scoping.get_resolved_references(register) {
-                                        if !reference.is_write() || nodes.kind(reference.node_id()).span().start >= before {
+                                    for reference in
+                                        self.parse.scoping.get_resolved_references(register)
+                                    {
+                                        if !reference.is_write()
+                                            || nodes.kind(reference.node_id()).span().start
+                                                >= before
+                                        {
                                             continue;
                                         }
                                         let write = nodes.parent_id(reference.node_id());
                                         if self.flow_root(write) != root {
                                             continue;
                                         }
-                                        if let AstKind::AssignmentExpression(stored) = nodes.kind(write) {
-                                            if let Some(value) = self.expression_node(&stored.right) {
+                                        if let AstKind::AssignmentExpression(stored) =
+                                            nodes.kind(write)
+                                        {
+                                            if let Some(value) = self.expression_node(&stored.right)
+                                            {
                                                 self.tokens_in(value, depth + 1, &mut out);
                                             }
                                         }
@@ -1781,7 +2229,10 @@ impl FinderCtx<'_, '_, '_> {
             if parent == child {
                 return None;
             }
-            if matches!(nodes.kind(parent), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)) {
+            if matches!(
+                nodes.kind(parent),
+                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+            ) {
                 return Some(parent);
             }
             child = parent;
@@ -1801,7 +2252,9 @@ impl FinderCtx<'_, '_, '_> {
         };
         let symbol = symbol.or_else(|| match nodes.kind(nodes.parent_id(function)) {
             AstKind::VariableDeclarator(declarator) => match &declarator.id {
-                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => identifier.symbol_id.get(),
+                oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) => {
+                    identifier.symbol_id.get()
+                }
                 _ => None,
             },
             _ => None,
@@ -1835,7 +2288,9 @@ impl FinderCtx<'_, '_, '_> {
                         continue;
                     }
                     AstKind::VariableDeclarator(declarator) => {
-                        if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) = &declarator.id {
+                        if let oxc_ast::ast::BindingPattern::BindingIdentifier(identifier) =
+                            &declarator.id
+                        {
                             if let Some(holder) = identifier.symbol_id.get() {
                                 out.extend(self.argument_uses(holder, declarator.span.end));
                             }
@@ -1843,7 +2298,10 @@ impl FinderCtx<'_, '_, '_> {
                         break;
                     }
                     AstKind::AssignmentExpression(assignment) => {
-                        if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left {
+                        if let oxc_ast::ast::AssignmentTarget::AssignmentTargetIdentifier(
+                            identifier,
+                        ) = &assignment.left
+                        {
                             if let Some(holder) = self.identifier_symbol(identifier) {
                                 out.extend(self.argument_uses(holder, assignment.span.end));
                             }
@@ -1873,7 +2331,12 @@ impl FinderCtx<'_, '_, '_> {
                 let parent = nodes.parent_id(node);
                 let span = nodes.kind(node).span();
                 match nodes.kind(parent) {
-                    AstKind::CallExpression(call) if call.arguments.iter().any(|argument| argument.span() == span) => {
+                    AstKind::CallExpression(call)
+                        if call
+                            .arguments
+                            .iter()
+                            .any(|argument| argument.span() == span) =>
+                    {
                         Some((span.start, parent))
                     }
                     AstKind::NewExpression(_) => Some((span.start, parent)),
@@ -1909,9 +2372,10 @@ impl FinderCtx<'_, '_, '_> {
     fn record_label(&self, base: NodeId) -> Option<(String, Option<u32>)> {
         let nodes = self.parse.nodes;
         let (mut node, index) = match nodes.kind(base) {
-            AstKind::ComputedMemberExpression(member) if integer(&member.expression).is_some() => {
-                (self.expression_node(&member.object)?, integer(&member.expression))
-            }
+            AstKind::ComputedMemberExpression(member) if integer(&member.expression).is_some() => (
+                self.expression_node(&member.object)?,
+                integer(&member.expression),
+            ),
             _ => (base, None),
         };
         for _ in 0..TERM_HOPS {
@@ -1935,18 +2399,26 @@ impl FinderCtx<'_, '_, '_> {
     /// skipped); for `rec.k[i]` the `i`-th element when the value is an array
     /// literal.
     fn record_values(&self, base: NodeId, scope: &Scope) -> Vec<(NodeId, Option<u32>)> {
-        let Some((label, index)) = self.record_label(base) else { return Vec::new() };
+        let Some((label, index)) = self.record_label(base) else {
+            return Vec::new();
+        };
         let labels: Vec<&str> = scope.labels.iter().map(String::as_str).collect();
         let mut out = Vec::new();
         for record in self.records_with_keys(&labels) {
             let span = self.parse.nodes.kind(record.node).span();
-            if !scope.spans.iter().any(|outer| outer.start <= span.start && span.end <= outer.end) {
+            if !scope
+                .spans
+                .iter()
+                .any(|outer| outer.start <= span.start && span.end <= outer.end)
+            {
                 continue;
             }
             if !self.record_fits(&record, scope) {
                 continue;
             }
-            let Some(mut value) = record.values.get(&label).copied() else { continue };
+            let Some(mut value) = record.values.get(&label).copied() else {
+                continue;
+            };
             if self.read_key(value).as_deref() == Some(label.as_str()) {
                 continue;
             }
@@ -1999,7 +2471,12 @@ fn probes(namer: Namer, flags: &[String]) -> Vec<(String, Vec<String>)> {
             .collect(),
         Namer::Probes(table) => table
             .iter()
-            .map(|(flag, probes)| (flag.to_string(), probes.iter().map(|probe| probe.to_string()).collect()))
+            .map(|(flag, probes)| {
+                (
+                    flag.to_string(),
+                    probes.iter().map(|probe| probe.to_string()).collect(),
+                )
+            })
             .collect(),
         Namer::Loop => Vec::new(),
     }
@@ -2021,7 +2498,12 @@ fn evidence_map(ctx: &FinderCtx, base: NodeId, scope: &Scope) -> Vec<BTreeMap<St
         let entry = out.entry(name.to_string()).or_insert(depth);
         *entry = (*entry).min(depth);
     }
-    for map in [&slice.members, &slice.arguments, &slice.strings, &slice.globals] {
+    for map in [
+        &slice.members,
+        &slice.arguments,
+        &slice.strings,
+        &slice.globals,
+    ] {
         for (name, depth) in map {
             keep(&mut out, name, *depth);
         }
@@ -2050,9 +2532,15 @@ fn evidence_map(ctx: &FinderCtx, base: NodeId, scope: &Scope) -> Vec<BTreeMap<St
         AstKind::BooleanLiteral(literal) => Some(literal.value),
         _ => None,
     };
-    if candidates.iter().all(|(value, index)| index.is_none() && literal(*value).is_some()) {
+    if candidates
+        .iter()
+        .all(|(value, index)| index.is_none() && literal(*value).is_some())
+    {
         let mut map = out;
-        for (value, _) in candidates.iter().filter(|(value, _)| literal(*value) == Some(true)) {
+        for (value, _) in candidates
+            .iter()
+            .filter(|(value, _)| literal(*value) == Some(true))
+        {
             if let Some(function) = ctx.enclosing_function(*value) {
                 for site in ctx.function_uses(function) {
                     let mut tokens = Vec::new();
@@ -2070,7 +2558,12 @@ fn evidence_map(ctx: &FinderCtx, base: NodeId, scope: &Scope) -> Vec<BTreeMap<St
         .map(|(value, index)| {
             let mut map = out.clone();
             let stored = ctx.slice_of(value, NAME_HOPS);
-            for source in [&stored.members, &stored.arguments, &stored.strings, &stored.globals] {
+            for source in [
+                &stored.members,
+                &stored.arguments,
+                &stored.strings,
+                &stored.globals,
+            ] {
                 for (name, depth) in source {
                     keep(&mut map, name, depth + 1);
                 }
@@ -2094,7 +2587,12 @@ fn evidence_map(ctx: &FinderCtx, base: NodeId, scope: &Scope) -> Vec<BTreeMap<St
 /// The flags whose probes `base` reads at the smallest depth (see
 /// [`Namer::Probes`]); a `!x` probe requires that `x` is not read at the
 /// flag's depth or nearer.
-fn nearest_flags(ctx: &FinderCtx, base: NodeId, scope: &Scope, probes: &[(String, Vec<String>)]) -> Vec<String> {
+fn nearest_flags(
+    ctx: &FinderCtx,
+    base: NodeId,
+    scope: &Scope,
+    probes: &[(String, Vec<String>)],
+) -> Vec<String> {
     // With several candidate record constructions, every candidate must name
     // the same flag.
     let mut names: Option<Vec<String>> = None;
@@ -2140,7 +2638,10 @@ fn nearest_in(evidence: &BTreeMap<String, usize>, probes: &[(String, Vec<String>
         .max()
         .unwrap_or(0);
     let mut out: Vec<String> = Vec::new();
-    for (_, _, flag) in scored.into_iter().filter(|(depth, count, _)| *depth == best && *count == specific) {
+    for (_, _, flag) in scored
+        .into_iter()
+        .filter(|(depth, count, _)| *depth == best && *count == specific)
+    {
         if !out.contains(flag) {
             out.push(flag.clone());
         }
@@ -2163,7 +2664,8 @@ struct Target {
 pub(crate) fn bound_packed_fields(signal: &str, binding: &FieldBinding) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for (_, _, name) in binding.entries() {
-        let packed = packed_field(signal, name).is_some() || crate::signals::flags::rules::is_packed(signal, name);
+        let packed = packed_field(signal, name).is_some()
+            || crate::signals::flags::rules::is_packed(signal, name);
         if packed && !out.iter().any(|known| known == name) {
             out.push(name.to_string());
         }
@@ -2239,15 +2741,24 @@ pub(crate) fn apply_flags(
                 for inner in flag_leaf_offsets(node) {
                     let leaf = leaves
                         .get(offset + inner)
-                        .and_then(|index| view.emissions().get(emission.emission)?.leaves.get(*index))
+                        .and_then(|index| {
+                            view.emissions().get(emission.emission)?.leaves.get(*index)
+                        })
                         .ok_or_else(|| format!("flags {field}: leaf not found"))?;
                     let value = ctx
                         .caller_value_node(leaf)
                         .ok_or_else(|| format!("flags {field}: value not found"))?;
                     // A constant byte (`m ^ 0`): no bits at this site.
-                    let Some(value) = ctx.site_value(value) else { continue };
-                    if let Some(PackedField { namer: Namer::Loop, .. }) = packed_field(signal, &field) {
-                        let stream = ctx.loop_stream(value).map_err(|reason| format!("flags {field}: {reason}"))?;
+                    let Some(value) = ctx.site_value(value) else {
+                        continue;
+                    };
+                    if let Some(PackedField {
+                        namer: Namer::Loop, ..
+                    }) = packed_field(signal, &field)
+                    {
+                        let stream = ctx
+                            .loop_stream(value)
+                            .map_err(|reason| format!("flags {field}: {reason}"))?;
                         let inside = ctx.flush_site(leaf.write.site(), stream.looped);
                         // Flush bytes (inside the loop): stream positions; the
                         // tail byte: positions from the last full byte on.
@@ -2271,7 +2782,9 @@ pub(crate) fn apply_flags(
                         loops.push((message, key.clone(), field.clone(), bits));
                         continue;
                     }
-                    let terms = ctx.packed_terms(value).map_err(|reason| format!("flags {field}: {reason}"));
+                    let terms = ctx
+                        .packed_terms(value)
+                        .map_err(|reason| format!("flags {field}: {reason}"));
                     sites.push(terms?);
                 }
             }
@@ -2297,10 +2810,14 @@ pub(crate) fn apply_flags(
             _ => field_flags(signal, packed),
         }
         .ok_or_else(|| format!("flags {field}: no card flags list"))?;
-        let bits: BTreeMap<String, u32> =
-            bits.into_iter().map(|(item, bit)| (loops::card_item(&item, &flags), bit)).collect();
+        let bits: BTreeMap<String, u32> = bits
+            .into_iter()
+            .map(|(item, bit)| (loops::card_item(&item, &flags), bit))
+            .collect();
         if let Some(missing) = bits.keys().find(|name| !flags.contains(name)) {
-            return Err(format!("flags {field}: probed item {missing} is not a card flag"));
+            return Err(format!(
+                "flags {field}: probed item {missing} is not a card flag"
+            ));
         }
         match loop_bits.get(&(message, key.clone())) {
             Some((_, previous)) if *previous != bits => {
@@ -2315,7 +2832,8 @@ pub(crate) fn apply_flags(
         binding.set_flags(message, key, bits);
     }
     // Stage 2: name the terms.
-    let mut receiver_members: BTreeMap<(SymbolId, Option<NodeId>), BTreeSet<String>> = BTreeMap::new();
+    let mut receiver_members: BTreeMap<(SymbolId, Option<NodeId>), BTreeSet<String>> =
+        BTreeMap::new();
     for target in &targets {
         for term in target.sites.iter().flatten() {
             if let Some((receiver, member)) = term.base.and_then(|base| ctx.receiver_member(base)) {
@@ -2323,7 +2841,13 @@ pub(crate) fn apply_flags(
             }
         }
     }
-    let slot = loops::slot_scope(ctx, view, targets.iter().flat_map(|target| target.sites.iter().flatten()));
+    let slot = loops::slot_scope(
+        ctx,
+        view,
+        targets
+            .iter()
+            .flat_map(|target| target.sites.iter().flatten()),
+    );
     // Per target, per site: bit -> name (`None`: a constant bit).
     let mut named: Vec<Vec<BTreeMap<u32, Option<String>>>> = Vec::new();
     let mut used: BTreeSet<String> = BTreeSet::new();
@@ -2331,7 +2855,8 @@ pub(crate) fn apply_flags(
     let mut all_flags: Vec<String> = Vec::new();
     for target in &targets {
         let packed = packed_field(signal, &target.field).ok_or("packed field")?;
-        let flags = field_flags(signal, packed).ok_or_else(|| format!("flags {}: no card flags list", target.field))?;
+        let flags = field_flags(signal, packed)
+            .ok_or_else(|| format!("flags {}: no card flags list", target.field))?;
         for flag in &flags {
             if !all_flags.contains(flag) {
                 all_flags.push(flag.clone());
@@ -2397,12 +2922,17 @@ pub(crate) fn apply_flags(
         .enumerate()
         .flat_map(|(index, sites)| {
             let field = targets[index].field.as_str();
-            sites
-                .iter()
-                .flat_map(move |site| site.iter().filter(|(_, name)| name.is_none()).map(move |(bit, _)| (field, *bit)))
+            sites.iter().flat_map(move |site| {
+                site.iter()
+                    .filter(|(_, name)| name.is_none())
+                    .map(move |(bit, _)| (field, *bit))
+            })
         })
         .collect();
-    let leftover: Vec<&String> = all_flags.iter().filter(|flag| !used.contains(*flag)).collect();
+    let leftover: Vec<&String> = all_flags
+        .iter()
+        .filter(|flag| !used.contains(*flag))
+        .collect();
     let constant_name = match (constants.len(), leftover.as_slice()) {
         (0, _) => None,
         (1, [only]) => Some((*only).clone()),
@@ -2433,13 +2963,20 @@ pub(crate) fn apply_flags(
             match &bits {
                 None => bits = Some(site_bits),
                 Some(first) if *first == site_bits => {}
-                Some(_) => return Err(format!("flags {}: write sites disagree on the bits", target.field)),
+                Some(_) => {
+                    return Err(format!(
+                        "flags {}: write sites disagree on the bits",
+                        target.field
+                    ))
+                }
             }
         }
         let bits = bits.unwrap_or_default();
         // One boolean is packed once per message.
         for name in bits.keys() {
-            if let Some(other) = claimed.insert((target.message, name.clone()), target.field.clone()) {
+            if let Some(other) =
+                claimed.insert((target.message, name.clone()), target.field.clone())
+            {
                 return Err(format!("flags: {name} on {other} and {}", target.field));
             }
         }
@@ -2501,7 +3038,9 @@ fn by_receiver(
         .iter()
         .filter(|name| {
             let prefix = name.split_once('.').map_or("", |(prefix, _)| prefix);
-            members.iter().all(|member| flags.contains(format!("{prefix}.{member}").as_str()))
+            members
+                .iter()
+                .all(|member| flags.contains(format!("{prefix}.{member}").as_str()))
         })
         .cloned()
         .collect()
@@ -2532,14 +3071,19 @@ mod tests {
             match packed.flags_from {
                 [_, ..] => {
                     for from in packed.flags_from {
-                        let flags = card_flags(packed.signal, from)
-                            .unwrap_or_else(|| panic!("{}.{from}: card has no flags list", packed.signal));
+                        let flags = card_flags(packed.signal, from).unwrap_or_else(|| {
+                            panic!("{}.{from}: card has no flags list", packed.signal)
+                        });
                         assert!(!flags.is_empty(), "{}.{from}: empty flags", packed.signal);
                     }
                     if let Namer::Probes(table) = packed.namer {
                         let flags = field_flags(packed.signal, packed).unwrap_or_default();
                         for (flag, _) in table {
-                            assert!(flags.iter().any(|f| f == flag), "{}: {flag} not on card", packed.signal);
+                            assert!(
+                                flags.iter().any(|f| f == flag),
+                                "{}: {flag} not on card",
+                                packed.signal
+                            );
                         }
                     }
                 }
@@ -2548,7 +3092,8 @@ mod tests {
                         if let Namer::Loop = packed.namer {
                             for field in packed.fields {
                                 assert!(
-                                    card_flags(packed.signal, field).is_some_and(|flags| !flags.is_empty()),
+                                    card_flags(packed.signal, field)
+                                        .is_some_and(|flags| !flags.is_empty()),
                                     "{}.{field}: card has no flags list",
                                     packed.signal
                                 );
@@ -2558,10 +3103,15 @@ mod tests {
                         panic!("{}: a card namer needs flags_from", packed.signal);
                     };
                     for field in packed.fields {
-                        let flags = card_flags(packed.signal, field)
-                            .unwrap_or_else(|| panic!("{}.{field}: card has no flags list", packed.signal));
+                        let flags = card_flags(packed.signal, field).unwrap_or_else(|| {
+                            panic!("{}.{field}: card has no flags list", packed.signal)
+                        });
                         for (flag, _) in table {
-                            assert!(flags.iter().any(|f| f == flag), "{}.{field}: {flag} not on card", packed.signal);
+                            assert!(
+                                flags.iter().any(|f| f == flag),
+                                "{}.{field}: {flag} not on card",
+                                packed.signal
+                            );
                         }
                     }
                 }

@@ -1,17 +1,28 @@
 //! `NullDerefTypeErrorFields`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
+use crate::signals::catalog::card::{Card, CardBody, CardField};
 use crate::signals::extract::contracts::SourceClass;
 use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, flag_bytes::*};
-use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
-const ERROR_FIELDS: &[&str] = &["stacktrace", "message", "name", "number", "stack", "description"];
+const ERROR_FIELDS: &[&str] = &[
+    "stacktrace",
+    "message",
+    "name",
+    "number",
+    "stack",
+    "description",
+];
 
 /// `NullDerefTypeErrorFields`. Card: [`CARD`].
-pub(crate) fn recognize_null_deref_type_error_fields(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_null_deref_type_error_fields(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let direct = |transform: &str| {
         view.leaves().any(|leaf| {
             leaf.transforms == [transform] && leaf.classes == [SourceClass::CaughtError]
@@ -22,9 +33,19 @@ pub(crate) fn recognize_null_deref_type_error_fields(view: &SlotView, ctx: &Find
     // values may carry polluted provenance (register reuse), so only one of
     // the legacy properties must be read directly.
     let shaped = view.emissions().iter().all(|emission| {
-        let plain = emission.leaves.iter().filter(|leaf| leaf.choice_depth == 0 && leaf.repeat_depth == 0);
-        let plain_strings = plain.clone().filter(|leaf| leaf.op == LeafOp::String).count();
-        let chosen = emission.leaves.iter().filter(|leaf| leaf.choice_depth == 1 && leaf.repeat_depth == 0).count();
+        let plain = emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.choice_depth == 0 && leaf.repeat_depth == 0);
+        let plain_strings = plain
+            .clone()
+            .filter(|leaf| leaf.op == LeafOp::String)
+            .count();
+        let chosen = emission
+            .leaves
+            .iter()
+            .filter(|leaf| leaf.choice_depth == 1 && leaf.repeat_depth == 0)
+            .count();
         plain.count() == 2 && plain_strings == 2 && chosen == 8 && emission.leaves.len() == 10
     });
     if view.emissions().is_empty() || !(shaped && direct(".message") && direct(".name")) {

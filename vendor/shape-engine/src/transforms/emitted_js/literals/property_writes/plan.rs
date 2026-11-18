@@ -229,11 +229,11 @@ fn object_preseed(
 /// ordinary.
 fn write_text(source: &str, call: &CandidateCall) -> String {
     let key = &call.key;
-    let receiver = &source
-        [call.receiver_expr_span.start as usize..call.receiver_expr_span.end as usize];
+    let receiver =
+        &source[call.receiver_expr_span.start as usize..call.receiver_expr_span.end as usize];
     let key_source = &source[key.span.start as usize..key.span.end as usize];
-    let value = &source[call.descriptor.value_span.start as usize
-        ..call.descriptor.value_span.end as usize];
+    let value =
+        &source[call.descriptor.value_span.start as usize..call.descriptor.value_span.end as usize];
     let value = if call.descriptor.value_needs_parentheses {
         format!("({value})")
     } else {
@@ -257,9 +257,10 @@ fn skip_reason(
     } else {
         match &plan.literal {
             AllocationLiteral::Array { .. } => {
-                if key.array_index.is_some_and(|array_index| {
-                    array_index as usize >= MAX_PRESEED_ARRAY_ELEMENTS
-                }) {
+                if key
+                    .array_index
+                    .is_some_and(|array_index| array_index as usize >= MAX_PRESEED_ARRAY_ELEMENTS)
+                {
                     (
                         PropertyWriteSkipReason::PreseedLimit,
                         format!(
@@ -323,7 +324,6 @@ fn preseed_edit(
             group.preseeded_keys = object_preseed.len();
         }
     }
-
 }
 
 pub(super) fn build_array_literal(

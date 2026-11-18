@@ -78,7 +78,16 @@ const NULL_COMPONENTS: &[CardField] = &[
 
 impl CardField {
     const fn leaf(name: &'static str, kind: CardFieldKind, meaning: &'static str) -> CardField {
-        CardField { name, kind, meaning, repeat: None, flags: &[], boolean: false, null_marker: false, null_components: &[] }
+        CardField {
+            name,
+            kind,
+            meaning,
+            repeat: None,
+            flags: &[],
+            boolean: false,
+            null_marker: false,
+            null_components: &[],
+        }
     }
 
     pub const fn number(name: &'static str, meaning: &'static str) -> CardField {
@@ -90,17 +99,26 @@ impl CardField {
     }
 
     pub const fn boolean(name: &'static str, meaning: &'static str) -> CardField {
-        CardField { boolean: true, ..Self::byte(name, meaning) }
+        CardField {
+            boolean: true,
+            ..Self::byte(name, meaning)
+        }
     }
 
     pub const fn null(name: &'static str, meaning: &'static str) -> CardField {
-        CardField { null_marker: true, ..Self::byte(name, meaning) }
+        CardField {
+            null_marker: true,
+            ..Self::byte(name, meaning)
+        }
     }
 
     /// Certify the null-byte alternatives of a number or string field. Do not
     /// use for fields that also encode non-null tags (e.g. "unchanged").
     pub const fn nullable(self) -> CardField {
-        CardField { null_marker: true, ..self }
+        CardField {
+            null_marker: true,
+            ..self
+        }
     }
 
     /// This scalar's missing alternative may be a two-byte marker record.
@@ -122,7 +140,10 @@ impl CardField {
     }
 
     pub const fn repeat(self, each: &'static str) -> CardField {
-        CardField { repeat: Some(each), ..self }
+        CardField {
+            repeat: Some(each),
+            ..self
+        }
     }
 
     pub const fn flags(self, flags: &'static [&'static str]) -> CardField {
@@ -151,7 +172,9 @@ impl Card {
     pub fn messages(&self) -> Vec<(Option<&'static str>, &'static [CardField])> {
         match self.body {
             CardBody::Fields(fields) => vec![(None, fields)],
-            CardBody::Messages(messages) => messages.iter().map(|m| (Some(m.when), m.fields)).collect(),
+            CardBody::Messages(messages) => {
+                messages.iter().map(|m| (Some(m.when), m.fields)).collect()
+            }
         }
     }
 

@@ -324,7 +324,10 @@ pub(super) fn role<'p>(
 // A complete port-protocol definition is a naming claim, never a composable
 // algorithm/readiness fact. Preserve all accepted042 role behavior.
 fn helper_role_claim(claims: &[Proposal]) -> Option<&str> {
-    if claims.iter().any(|p| p.evaluator == browser::persistent_id_migration::PROTOCOL_EVALUATOR) {
+    if claims
+        .iter()
+        .any(|p| p.evaluator == browser::persistent_id_migration::PROTOCOL_EVALUATOR)
+    {
         return None;
     }
     let first = claims.first()?;
@@ -1394,7 +1397,9 @@ pub(super) fn proves_method_interceptor(
     function: &oxc_ast::ast::Function<'_>,
     body: &oxc_ast::ast::FunctionBody<'_>,
 ) -> bool {
-    crate::signals::analysis::roles::function_interceptor::proves_method_interceptor(model, site, function, body)
+    crate::signals::analysis::roles::function_interceptor::proves_method_interceptor(
+        model, site, function, body,
+    )
 }
 
 #[cfg(test)]
@@ -1402,18 +1407,38 @@ mod migration_protocol_export_tests {
     use super::*;
 
     fn claim(name: &str, evaluator: &str) -> Proposal {
-        Proposal { name: name.into(), evaluator: evaluator.into(), confidence: Confidence::Medium,
-            evidence: Vec::new(), explanation: Vec::new() }
+        Proposal {
+            name: name.into(),
+            evaluator: evaluator.into(),
+            confidence: Confidence::Medium,
+            evidence: Vec::new(),
+            explanation: Vec::new(),
+        }
     }
 
     #[test]
     fn protocol_definition_never_supplies_composable_helper_fact() {
         let evaluator = browser::persistent_id_migration::PROTOCOL_EVALUATOR;
-        assert_eq!(helper_role_claim(&[claim("runPersistentIdMigrationProtocol", evaluator)]), None);
+        assert_eq!(
+            helper_role_claim(&[claim("runPersistentIdMigrationProtocol", evaluator)]),
+            None
+        );
         // Even a misnamed protocol proposal cannot authorize numeric consumers.
         assert_eq!(helper_role_claim(&[claim("writeNumber", evaluator)]), None);
-        assert_eq!(helper_role_claim(&[claim("writeNumber", "thread_posthost_numeric"), claim("writeNumber", evaluator)]), None);
-        assert_eq!(helper_role_claim(&[claim("writeNumber", "thread_posthost_numeric")]), Some("writeNumber"));
-        assert_eq!(helper_role_claim(&[claim("writeNumber", "inherited_structural_label")]), None);
+        assert_eq!(
+            helper_role_claim(&[
+                claim("writeNumber", "thread_posthost_numeric"),
+                claim("writeNumber", evaluator)
+            ]),
+            None
+        );
+        assert_eq!(
+            helper_role_claim(&[claim("writeNumber", "thread_posthost_numeric")]),
+            Some("writeNumber")
+        );
+        assert_eq!(
+            helper_role_claim(&[claim("writeNumber", "inherited_structural_label")]),
+            None
+        );
     }
 }

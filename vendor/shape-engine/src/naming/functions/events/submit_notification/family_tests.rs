@@ -197,7 +197,9 @@ fn compact_alpha_and_inert_declaration_permutation() {
         "/tests/fixtures/submit-forwarding/captured-submit-compact.js"
     ));
     check(
-        &compact_submit.replace("$AY", "cursor").replace("$AZ", "predicate"),
+        &compact_submit
+            .replace("$AY", "cursor")
+            .replace("$AZ", "predicate"),
         &["$THREAD_5_61777"],
     );
 }

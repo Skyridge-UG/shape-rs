@@ -1,13 +1,18 @@
 //! `ComputedStyleProperties`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
 use crate::signals::analysis::property_census::*;
+use crate::signals::analysis::{
+    bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp,
+    SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `ComputedStyleProperties`. Card: [`CARD`].
-pub(crate) fn recognize_computed_style_properties(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_computed_style_properties(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     let ops = top_level_ops(view);
     (census.calls("getComputedStyle")

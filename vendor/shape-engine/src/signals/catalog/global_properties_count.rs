@@ -1,30 +1,40 @@
 //! `GlobalPropertiesCount`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `GlobalPropertiesCount`. Card: [`CARD`].
 pub(crate) fn recognize_global_properties_count(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let census = census(view, ctx);
     let counts_names = view.leaves().all(|leaf| {
         leaf.transforms.first().map(String::as_str) == Some(".length")
-            && leaf.transforms.iter().any(|t| t == "Object.getOwnPropertyNames")
+            && leaf
+                .transforms
+                .iter()
+                .any(|t| t == "Object.getOwnPropertyNames")
     });
     // The counted object is the global realm by the value's own provenance;
     // without that, a Math or console probe in the producer means the count
     // may be of that namespace.
     let counts_global = view.leaves().all(|leaf| {
-        leaf.apis.iter().any(|api| matches!(api.as_str(), "window" | "self" | "global"))
-            && !leaf.apis.iter().any(|api| api.rsplit('.').next().is_some_and(|last| last == "Math" || last == "console"))
+        leaf.apis
+            .iter()
+            .any(|api| matches!(api.as_str(), "window" | "self" | "global"))
+            && !leaf.apis.iter().any(|api| {
+                api.rsplit('.')
+                    .next()
+                    .is_some_and(|last| last == "Math" || last == "console")
+            })
     });
     (one_number(view)
         && counts_names
         && census.calls("getOwnPropertyNames")
         && (counts_global || (!probes(view, &census, "Math") && !probes(view, &census, "console"))))
-        .then(|| Claim::new(["Object.getOwnPropertyNames(global).length", "one count"]))
+    .then(|| Claim::new(["Object.getOwnPropertyNames(global).length", "one count"]))
 }
 
 pub(crate) fn bind_global_properties_count(

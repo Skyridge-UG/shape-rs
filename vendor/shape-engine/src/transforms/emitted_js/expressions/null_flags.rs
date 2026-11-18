@@ -3,6 +3,7 @@
 //! effects stay at their original stores; only inert flag stores disappear.
 use super::super::index::SpanIndex;
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::{ast::*, AstKind};
 use oxc_ast_visit::{walk, Visit};
@@ -10,7 +11,6 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::{operator::AssignmentOperator, scope::ScopeFlags};
 use std::collections::{BTreeMap, BTreeSet};
-use crate::transforms::emitted_js::support::unwrap;
 
 fn null_test<'s, 'a>(e: &'s Expression<'a>) -> Option<(&'s Expression<'a>, bool)> {
     let Expression::BinaryExpression(b) = unwrap(e) else {

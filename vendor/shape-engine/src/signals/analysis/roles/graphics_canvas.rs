@@ -48,12 +48,12 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::AssignmentOperator;
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::analysis;
 use crate::signals::extract::bindings::{
     numeric_index, object_members_of, property_key_name, ParameterSlots,
 };
 use crate::signals::schema::Confidence;
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 // ---------------------------------------------------------------------------
 // Roles
@@ -118,15 +118,27 @@ const MEDIA_CODEC_PROBE_STRINGS: &str = "media_codec_probe_strings";
 const SLICE_ARRAY_LIKE: &str = "slice_array_like";
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn alias(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::FunctionAlias }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::FunctionAlias,
+    }
 }
 
 const fn main(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -156,9 +168,15 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     function(FONT_PROBE_ERROR, "forwardCanvasProbeError"),
     function(MEDIA_CODEC_PROBE, "emitMediaCodecProbe"),
     function(MEDIA_CODEC_PRIMARY_HASH, "emitPrimaryMediaCodecHash"),
-    function(MEDIA_CODEC_PRIMARY_ERROR, "forwardPrimaryMediaCodecHashError"),
+    function(
+        MEDIA_CODEC_PRIMARY_ERROR,
+        "forwardPrimaryMediaCodecHashError",
+    ),
     function(MEDIA_CODEC_FALLBACK_HASH, "emitFallbackMediaCodecHash"),
-    function(MEDIA_CODEC_FALLBACK_ERROR, "forwardFallbackMediaCodecHashError"),
+    function(
+        MEDIA_CODEC_FALLBACK_ERROR,
+        "forwardFallbackMediaCodecHashError",
+    ),
     function(WEBRTC_CANDIDATES, "emitWebrtcIceCandidates"),
     function(WEBRTC_CANDIDATE_ERROR, "forwardWebrtcCandidateError"),
     function(CANVAS_FEATURE_COLLECTOR, "collectCanvasAndFeatureSignals"),
@@ -174,8 +192,14 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     function(CANVAS_TEXT_SAMPLE, "sampleCanvasTextShadow"),
     function(CANVAS_QUEUE_ERROR, "forwardCanvasQueueError"),
     function(CANVAS_QUEUE_DIGEST, "emitCanvasPixelRecordDigest"),
-    function(BROWSER_FINGERPRINT_COLLECTOR, "createBrowserFingerprintCollector"),
-    function(BROWSER_FINGERPRINT_CLOSURE, "collectBrowserFingerprintSignals"),
+    function(
+        BROWSER_FINGERPRINT_COLLECTOR,
+        "createBrowserFingerprintCollector",
+    ),
+    function(
+        BROWSER_FINGERPRINT_CLOSURE,
+        "collectBrowserFingerprintSignals",
+    ),
     function(EMOJI_CHANNEL_SAMPLER, "sampleEmojiGlyphChannel"),
     function(EMOJI_RENDER_PROBE, "emitEmojiRenderProbe"),
     function(GLYPH_RENDER_PROBE, "emitGlyphRenderProbe"),
@@ -232,7 +256,10 @@ fn target_member<'e, 'a>(
 }
 
 fn call_arguments<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 fn string_value<'e>(expression: &'e Expression<'_>) -> Option<&'e str> {
@@ -256,7 +283,11 @@ struct MethodCall<'e, 'a> {
 fn method_call<'e, 'a>(call: &'e CallExpression<'a>) -> Option<MethodCall<'e, 'a>> {
     let arguments = call_arguments(call);
     let (object, name) = member_of(&call.callee)?;
-    Some(MethodCall { receiver: object, name, arguments })
+    Some(MethodCall {
+        receiver: object,
+        name,
+        arguments,
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -340,26 +371,33 @@ impl<'a> Index<'a> {
             let owner = if parent == id {
                 None
             } else {
-                self.fn_of_node.get(&parent).copied().or(self.owner[parent.index()])
+                self.fn_of_node
+                    .get(&parent)
+                    .copied()
+                    .or(self.owner[parent.index()])
             };
             self.owner[position] = owner;
             let func = match node.kind() {
                 AstKind::Function(function) => Some((function.span, FnNode::Function(function))),
-                AstKind::ArrowFunctionExpression(arrow) => {
-                    Some((arrow.span, FnNode::Arrow(arrow)))
-                }
+                AstKind::ArrowFunctionExpression(arrow) => Some((arrow.span, FnNode::Arrow(arrow))),
                 _ => None,
             };
             if let Some((span, func)) = func {
                 let index = self.fns.len();
-                let is_declaration = matches!(func, FnNode::Function(function) if function.is_declaration());
+                let is_declaration =
+                    matches!(func, FnNode::Function(function) if function.is_declaration());
                 let symbol = match func {
                     FnNode::Function(function) => {
                         function.id.as_ref().and_then(|id| id.symbol_id.get())
                     }
                     FnNode::Arrow(_) => None,
                 };
-                self.fns.push(Unit { node: id, span, parent: owner, is_declaration });
+                self.fns.push(Unit {
+                    node: id,
+                    span,
+                    parent: owner,
+                    is_declaration,
+                });
                 self.own.push(Own::default());
                 self.fn_of_node.insert(id, index);
                 if let Some(owner) = owner {
@@ -402,14 +440,19 @@ impl<'a> Index<'a> {
             {
                 if let AssignmentTarget::AssignmentTargetIdentifier(identifier) = &assignment.left {
                     if let Some(symbol) = analysis::identifier_symbol(identifier, self.scoping) {
-                        self.values.entry(symbol).or_default().push(&assignment.right);
+                        self.values
+                            .entry(symbol)
+                            .or_default()
+                            .push(&assignment.right);
                         *self.assigned.entry(symbol).or_default() += 1;
                         self.assignments.entry(symbol).or_default().push(assignment);
                     }
                 }
                 if let Some(owner) = owner {
                     if let Some((object, name)) = target_member(&assignment.left) {
-                        self.own[owner].member_writes.push((object, name, &assignment.right));
+                        self.own[owner]
+                            .member_writes
+                            .push((object, name, &assignment.right));
                         self.own[owner].members.insert(name.to_string());
                         self.own[owner].written_keys.insert(name.to_string());
                     }
@@ -444,7 +487,8 @@ impl<'a> Index<'a> {
                 if let Expression::StringLiteral(literal) = &found.expression {
                     own.members.insert(literal.value.to_string());
                 } else {
-                    own.computed_members.push((&found.object, &found.expression));
+                    own.computed_members
+                        .push((&found.object, &found.expression));
                 }
             }
             AstKind::IdentifierReference(identifier) => {
@@ -472,8 +516,9 @@ impl<'a> Index<'a> {
     /// A host member path rooted at an unbound global: `String.fromCharCode`.
     fn path(&self, expression: &Expression<'a>) -> Option<String> {
         match strip(expression) {
-            Expression::Identifier(identifier) => (self.symbol(expression).is_none())
-                .then(|| identifier.name.to_string()),
+            Expression::Identifier(identifier) => {
+                (self.symbol(expression).is_none()).then(|| identifier.name.to_string())
+            }
             _ => {
                 let (object, name) = member_of(expression)?;
                 Some(format!("{}.{name}", self.path(object)?))
@@ -539,7 +584,10 @@ impl<'a> Index<'a> {
         let symbol = self.symbol(expression)?;
         if let Some(index) = self.decl_fn.get(&symbol).copied() {
             let immutable = self.scoping.symbol_declarations(symbol).count() == 1
-                && !self.scoping.get_resolved_references(symbol).any(|r| r.is_write());
+                && !self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|r| r.is_write());
             return immutable.then_some(index);
         }
         self.function_of_depth(self.single_origin(symbol)?, depth - 1)
@@ -588,7 +636,10 @@ impl<'a> Index<'a> {
 
     /// Whether a binding is declared outside `f` (a captured MAIN value).
     fn declared_outside(&self, symbol: SymbolId, f: usize) -> bool {
-        let declaration = self.nodes.get_node(self.scoping.symbol_declaration(symbol)).span();
+        let declaration = self
+            .nodes
+            .get_node(self.scoping.symbol_declaration(symbol))
+            .span();
         let span = self.fns[f].span;
         declaration.start < span.start || declaration.end > span.end
     }
@@ -736,7 +787,10 @@ impl Out {
         let mut roles_by_span: BTreeMap<(u32, u32), BTreeSet<&'static str>> = BTreeMap::new();
         for (role, start, end) in &self.seen {
             *spans.entry(*role).or_default() += 1;
-            roles_by_span.entry((*start, *end)).or_default().insert(*role);
+            roles_by_span
+                .entry((*start, *end))
+                .or_default()
+                .insert(*role);
         }
         let mut claims = self.claims;
         claims.retain(|claim| {
@@ -744,15 +798,15 @@ impl Out {
                 FinderClaim::Function { function_span, .. } => {
                     (function_span.start, function_span.end)
                 }
-                FinderClaim::MainBinding { identifier_span, .. } => {
-                    (identifier_span.start, identifier_span.end)
-                }
-                FinderClaim::ClassBinding { class_span, .. } => {
-                    (class_span.start, class_span.end)
-                }
+                FinderClaim::MainBinding {
+                    identifier_span, ..
+                } => (identifier_span.start, identifier_span.end),
+                FinderClaim::ClassBinding { class_span, .. } => (class_span.start, class_span.end),
             };
             spans.get(claim.role()) == Some(&1)
-                && roles_by_span.get(&span).is_some_and(|roles| roles.len() == 1)
+                && roles_by_span
+                    .get(&span)
+                    .is_some_and(|roles| roles.len() == 1)
         });
         claims
     }
@@ -805,14 +859,12 @@ fn emoji_canvas(ix: &Index<'_>, out: &mut Out) {
             continue;
         }
         let sampler = own.calls.iter().find_map(|call| {
-            ix.callback_arguments(call)
-                .into_iter()
-                .find(|callback| {
-                    let nested = &ix.own[*callback];
-                    nested.members.contains("getImageData")
-                        && nested.members.contains("getContext")
-                        && nested.members.contains("fillText")
-                })
+            ix.callback_arguments(call).into_iter().find(|callback| {
+                let nested = &ix.own[*callback];
+                nested.members.contains("getImageData")
+                    && nested.members.contains("getContext")
+                    && nested.members.contains("fillText")
+            })
         });
         let teardown = ix.returned_function(f);
         let Some(sampler) = sampler else {
@@ -821,9 +873,11 @@ fn emoji_canvas(ix: &Index<'_>, out: &mut Out) {
         let Some(teardown) = teardown else {
             continue;
         };
-        if !ix.own[teardown].calls.iter().any(|call| {
-            method_call(call).is_some_and(|method| method.name == "empty")
-        }) {
+        if !ix.own[teardown]
+            .calls
+            .iter()
+            .any(|call| method_call(call).is_some_and(|method| method.name == "empty"))
+        {
             continue;
         }
         // The queue's `onEmpty` callback hands the accumulated samples to the
@@ -831,11 +885,17 @@ fn emoji_canvas(ix: &Index<'_>, out: &mut Out) {
         let emitter = ix
             .forwarded_callbacks(f)
             .into_iter()
-            .chain(ix.own[f].calls.iter().flat_map(|call| ix.callback_arguments(call)))
+            .chain(
+                ix.own[f]
+                    .calls
+                    .iter()
+                    .flat_map(|call| ix.callback_arguments(call)),
+            )
             .find(|callback| {
-                ix.own[*callback].calls.iter().any(|call| {
-                    ix.slot(&call.callee, f) == Some(3)
-                })
+                ix.own[*callback]
+                    .calls
+                    .iter()
+                    .any(|call| ix.slot(&call.callee, f) == Some(3))
             });
         out.function_with_alias(
             ix,
@@ -882,10 +942,14 @@ fn webgl_probe(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
                         .arguments
                         .first()
                         .and_then(|argument| string_value(argument))
-                        .is_some_and(|name| name.starts_with("webgl") || name.starts_with("experimental-webgl"))
+                        .is_some_and(|name| {
+                            name.starts_with("webgl") || name.starts_with("experimental-webgl")
+                        })
             })
         });
-        if !gets_webgl || !own.members.contains("readPixels") || !own.members.contains("createShader")
+        if !gets_webgl
+            || !own.members.contains("readPixels")
+            || !own.members.contains("createShader")
         {
             continue;
         }
@@ -963,9 +1027,10 @@ fn font_metrics_probe(ix: &Index<'_>, out: &mut Out) {
             continue;
         }
         let Some((queue_span, runner)) = own.calls.iter().find_map(|call| {
-            let callback = ix.callback_arguments(call).into_iter().find(|callback| {
-                ix.own[*callback].members.contains("measureText")
-            })?;
+            let callback = ix
+                .callback_arguments(call)
+                .into_iter()
+                .find(|callback| ix.own[*callback].members.contains("measureText"))?;
             Some((call.span, callback))
         }) else {
             continue;
@@ -992,7 +1057,8 @@ fn font_metrics_probe(ix: &Index<'_>, out: &mut Out) {
             if ix.symbol(method.receiver) != Some(queue) {
                 continue;
             }
-            let Some(callback) = method.arguments.first().and_then(|arg| ix.function_of(arg)) else {
+            let Some(callback) = method.arguments.first().and_then(|arg| ix.function_of(arg))
+            else {
                 continue;
             };
             match method.name {
@@ -1024,9 +1090,8 @@ fn seeded_font_metrics(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
         // The probe creates a canvas and subscribes an observer to a fork-joined
         // observable built from the font family list.
         let subscribes = own.calls.iter().any(|call| {
-            method_call(call).is_some_and(|method| {
-                method.name == "subscribe" && !method.arguments.is_empty()
-            })
+            method_call(call)
+                .is_some_and(|method| method.name == "subscribe" && !method.arguments.is_empty())
         });
         let creates_canvas = own.calls.iter().any(|call| {
             method_call(call).is_some_and(|method| {
@@ -1097,9 +1162,11 @@ fn seeded_font_metrics(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
             let Some(family) = method.arguments.first().and_then(|arg| ix.function_of(arg)) else {
                 continue;
             };
-            if !ix.own[family].calls.iter().any(|call| {
-                method_call(call).is_some_and(|method| method.name == "pipe")
-            }) {
+            if !ix.own[family]
+                .calls
+                .iter()
+                .any(|call| method_call(call).is_some_and(|method| method.name == "pipe"))
+            {
                 continue;
             }
             out.function(
@@ -1145,11 +1212,13 @@ fn seeded_font_metrics(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
 fn media_codec_probe(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
     for f in 0..ix.fns.len() {
         let own = &ix.own[f];
-        let asks_codecs = own.calls.iter().any(|call| {
-            method_call(call).is_some_and(|method| method.name == "canPlayType")
-        });
+        let asks_codecs = own
+            .calls
+            .iter()
+            .any(|call| method_call(call).is_some_and(|method| method.name == "canPlayType"));
         if !asks_codecs
-            || (!own.members.contains("featurePolicy") && !own.members.contains("getAllowlistForFeature"))
+            || (!own.members.contains("featurePolicy")
+                && !own.members.contains("getAllowlistForFeature"))
         {
             continue;
         }
@@ -1179,8 +1248,16 @@ fn media_codec_probe(ix: &Index<'_>, out: &mut Out, proven: &mut Proven) {
                 continue;
             }
             let fallback = ix.inside_catch(call.node_id.get());
-            let value_role = if fallback { MEDIA_CODEC_FALLBACK_HASH } else { MEDIA_CODEC_PRIMARY_HASH };
-            let error_role = if fallback { MEDIA_CODEC_FALLBACK_ERROR } else { MEDIA_CODEC_PRIMARY_ERROR };
+            let value_role = if fallback {
+                MEDIA_CODEC_FALLBACK_HASH
+            } else {
+                MEDIA_CODEC_PRIMARY_HASH
+            };
+            let error_role = if fallback {
+                MEDIA_CODEC_FALLBACK_ERROR
+            } else {
+                MEDIA_CODEC_PRIMARY_ERROR
+            };
             if let Some(value) = ix.function_of(value) {
                 out.function(
                     ix,
@@ -1220,9 +1297,10 @@ fn webrtc_candidates(ix: &Index<'_>, out: &mut Out) {
             let own = &ix.own[*f];
             own.members.contains("ip")
                 && own.members.contains("candidate")
-                && own.calls.iter().any(|call| {
-                    method_call(call).is_some_and(|method| method.name == "next")
-                })
+                && own
+                    .calls
+                    .iter()
+                    .any(|call| method_call(call).is_some_and(|method| method.name == "next"))
         })
         .collect();
     for candidate in candidates {
@@ -1241,7 +1319,10 @@ fn webrtc_candidates(ix: &Index<'_>, out: &mut Out) {
             else {
                 continue;
             };
-            if let Some(error) = arguments.get(position + 1).and_then(|arg| ix.function_of(arg)) {
+            if let Some(error) = arguments
+                .get(position + 1)
+                .and_then(|arg| ix.function_of(arg))
+            {
                 out.function(
                     ix,
                     WEBRTC_CANDIDATE_ERROR,
@@ -1360,10 +1441,15 @@ fn closure_draws_canvas(ix: &Index<'_>, closure: usize) -> bool {
         own.calls.iter().any(|call| {
             method_call(call).is_some_and(|method| {
                 method.name == "getContext"
-                    && method.arguments.first().and_then(|argument| string_value(argument))
+                    && method
+                        .arguments
+                        .first()
+                        .and_then(|argument| string_value(argument))
                         == Some("2d")
             })
-        }) || CANVAS_DRAW_MEMBERS.iter().any(|name| own.members.contains(*name))
+        }) || CANVAS_DRAW_MEMBERS
+            .iter()
+            .any(|name| own.members.contains(*name))
     })
 }
 
@@ -1393,9 +1479,9 @@ fn claim_canvas_closure(ix: &Index<'_>, out: &mut Out, closure: usize, queue: Sy
                 nested,
                 "starts a canvas image probe: creates a 5x5 canvas and an Image whose src is the data URL",
             );
-            if let Some(handler) = onload.filter(|handler| {
-                ix.own[*handler].members.contains("drawImage")
-            }) {
+            if let Some(handler) =
+                onload.filter(|handler| ix.own[*handler].members.contains("drawImage"))
+            {
                 out.function(
                     ix,
                     IMAGE_LOAD_HANDLER,
@@ -1404,9 +1490,11 @@ fn claim_canvas_closure(ix: &Index<'_>, out: &mut Out, closure: usize, queue: Sy
                 );
             }
         }
-        let records_samples = own.calls.iter().any(|call| {
-            method_call(call).is_some_and(|method| method.name == "some")
-        }) && own.members.contains("push")
+        let records_samples = own
+            .calls
+            .iter()
+            .any(|call| method_call(call).is_some_and(|method| method.name == "some"))
+            && own.members.contains("push")
             && own.members.contains("length");
         if records_samples {
             out.function(
@@ -1470,13 +1558,13 @@ fn claim_canvas_task(ix: &Index<'_>, out: &mut Out, task: usize) {
         || own.members.contains("shadowBlur")
         || own.members.contains("shadowOffsetX");
     let has_path = own.calls.iter().any(|call| {
-        method_call(call).is_some_and(|method| {
-            matches!(method.name, "moveTo" | "lineTo" | "closePath" | "fill")
-        })
+        method_call(call)
+            .is_some_and(|method| matches!(method.name, "moveTo" | "lineTo" | "closePath" | "fill"))
     });
-    let has_data_url = own.calls.iter().any(|call| {
-        method_call(call).is_some_and(|method| method.name == "toDataURL")
-    });
+    let has_data_url = own
+        .calls
+        .iter()
+        .any(|call| method_call(call).is_some_and(|method| method.name == "toDataURL"));
     let has_fill = own.members.contains("fillRect") || own.members.contains("fillStyle");
     let (role, evidence) = if has_text {
         (
@@ -1521,9 +1609,11 @@ fn browser_fingerprint_collector(ix: &Index<'_>, out: &mut Out, proven: &mut Pro
         let Some(cleanup) = single_registration(ix, f) else {
             continue;
         };
-        if !ix.own[cleanup].calls.iter().any(|call| {
-            method_call(call).is_some_and(|method| method.name == "empty")
-        }) {
+        if !ix.own[cleanup]
+            .calls
+            .iter()
+            .any(|call| method_call(call).is_some_and(|method| method.name == "empty"))
+        {
             continue;
         }
         if !ix.fns[f].is_declaration {
@@ -1697,8 +1787,7 @@ fn is_glyph_sample_table(ix: &Index<'_>, symbol: SymbolId) -> bool {
         if string_value(first).is_none() {
             return false;
         }
-        let Some(Expression::ArrayExpression(points)) =
-            row.elements[1].as_expression().map(strip)
+        let Some(Expression::ArrayExpression(points)) = row.elements[1].as_expression().map(strip)
         else {
             return false;
         };
@@ -1714,9 +1803,9 @@ fn is_glyph_sample_table(ix: &Index<'_>, symbol: SymbolId) -> bool {
             };
             pair.elements.len() == 2
                 && pair.elements.iter().all(|element| {
-                    element.as_expression().is_some_and(|value| {
-                        matches!(strip(value), Expression::NumericLiteral(_))
-                    })
+                    element
+                        .as_expression()
+                        .is_some_and(|value| matches!(strip(value), Expression::NumericLiteral(_)))
                 })
         })
     })
@@ -1750,9 +1839,9 @@ fn is_emoji_probe_table(ix: &Index<'_>, symbol: SymbolId) -> bool {
             return false;
         }
         row.elements[1..].iter().all(|element| {
-            element.as_expression().is_some_and(|value| {
-                matches!(strip(value), Expression::NumericLiteral(_))
-            })
+            element
+                .as_expression()
+                .is_some_and(|value| matches!(strip(value), Expression::NumericLiteral(_)))
         })
     })
 }
@@ -1766,9 +1855,9 @@ fn is_numeric_array(ix: &Index<'_>, symbol: SymbolId) -> bool {
     };
     !array.elements.is_empty()
         && array.elements.iter().all(|element| {
-            element.as_expression().is_some_and(|value| {
-                matches!(strip(value), Expression::NumericLiteral(_))
-            })
+            element
+                .as_expression()
+                .is_some_and(|value| matches!(strip(value), Expression::NumericLiteral(_)))
         })
 }
 
@@ -1781,7 +1870,9 @@ fn is_string_array(ix: &Index<'_>, symbol: SymbolId) -> bool {
     };
     !array.elements.is_empty()
         && array.elements.iter().all(|element| {
-            element.as_expression().is_some_and(|value| string_value(value).is_some())
+            element
+                .as_expression()
+                .is_some_and(|value| string_value(value).is_some())
         })
 }
 
@@ -1797,7 +1888,10 @@ fn is_host_reference_array(ix: &Index<'_>, symbol: SymbolId) -> bool {
     array.elements.len() >= 5
         && array.elements.iter().all(|element| {
             element.as_expression().is_some_and(|value| {
-                !matches!(strip(value), Expression::StringLiteral(_) | Expression::NumericLiteral(_))
+                !matches!(
+                    strip(value),
+                    Expression::StringLiteral(_) | Expression::NumericLiteral(_)
+                )
             })
         })
 }
@@ -2009,7 +2103,8 @@ fn main_bindings(ix: &Index<'_>, out: &mut Out, proven: &Proven) {
                 symbol,
                 "single MAIN alias of the media-feature prober called by the browser-fingerprint closure",
             );
-        }    }
+        }
+    }
 }
 
 /// The alias is called with one non-function argument and the result is

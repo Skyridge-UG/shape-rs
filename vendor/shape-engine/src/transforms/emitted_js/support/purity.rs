@@ -13,7 +13,8 @@
 //! retained.
 
 use oxc_ast::ast::{
-    ArrayExpressionElement, BinaryOperator, Expression, ObjectPropertyKind, PropertyKey, UnaryOperator,
+    ArrayExpressionElement, BinaryOperator, Expression, ObjectPropertyKind, PropertyKey,
+    UnaryOperator,
 };
 
 /// The primitive kind of a literal-only expression. Used to allow arithmetic
@@ -52,7 +53,10 @@ pub(crate) fn expression_is_pure(expression: &Expression<'_>) -> bool {
                 ObjectPropertyKind::ObjectProperty(property) => {
                     // A computed literal key converts without running code.
                     (!property.computed
-                        || matches!(property.key, PropertyKey::StringLiteral(_) | PropertyKey::NumericLiteral(_)))
+                        || matches!(
+                            property.key,
+                            PropertyKey::StringLiteral(_) | PropertyKey::NumericLiteral(_)
+                        ))
                         && expression_is_pure(&property.value)
                 }
             })

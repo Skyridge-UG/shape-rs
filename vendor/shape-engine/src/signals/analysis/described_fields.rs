@@ -21,17 +21,22 @@ use std::collections::BTreeSet;
 
 use oxc_semantic::SymbolId;
 
-use super::layout_nodes::{leaf_kinds, kind_code, node_leaf_count, same_fields};
+use super::layout_nodes::{kind_code, leaf_kinds, node_leaf_count, same_fields};
 use super::value_facts::{self, slot_facts, Desc, SlotFacts};
-use super::{BindRefusal, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView, WriteSite};
+use super::{
+    BindRefusal, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView, WriteSite,
+};
 
 /// A record value that is a clock reading: a call with no host member read
 /// besides the clock alias (`elapsed()`, `context.timeElapsedSinceInit()`).
 pub(crate) fn is_clock_value(meaning: &Desc) -> bool {
     (meaning.program_call || !meaning.calls.is_empty() || meaning.has_call("now"))
-        && !["pageX", "pageY", "clientX", "clientY", "keyCode", "which", "key", "force", "button", "length"]
-            .iter()
-            .any(|member| meaning.has_member(member))
+        && ![
+            "pageX", "pageY", "clientX", "clientY", "keyCode", "which", "key", "force", "button",
+            "length",
+        ]
+        .iter()
+        .any(|member| meaning.has_member(member))
 }
 
 /// The shape class of one layout field.
@@ -78,18 +83,27 @@ impl Field {
                     _ => Vec::new(),
                 },
             ),
-            LayoutNode::Record { fields } => (Shape::Record, fields.iter().map(Field::skeleton).collect()),
+            LayoutNode::Record { fields } => {
+                (Shape::Record, fields.iter().map(Field::skeleton).collect())
+            }
             LayoutNode::Choice { .. } => (Shape::Choice, Vec::new()),
             _ => (Shape::Other, Vec::new()),
         };
         let arms = match &field.node {
-            LayoutNode::Choice { arms } if arms.iter().any(|arm| matches!(arm.node, LayoutNode::Record { .. })) => arms
-                .iter()
-                .map(|arm| match &arm.node {
-                    LayoutNode::Record { fields } => fields.iter().map(Field::skeleton).collect(),
-                    _ => Vec::new(),
-                })
-                .collect(),
+            LayoutNode::Choice { arms }
+                if arms
+                    .iter()
+                    .any(|arm| matches!(arm.node, LayoutNode::Record { .. })) =>
+            {
+                arms.iter()
+                    .map(|arm| match &arm.node {
+                        LayoutNode::Record { fields } => {
+                            fields.iter().map(Field::skeleton).collect()
+                        }
+                        _ => Vec::new(),
+                    })
+                    .collect()
+            }
             _ => Vec::new(),
         };
         Self {
@@ -114,14 +128,22 @@ impl Field {
             .collect();
         match live.len() {
             0 if !self.kinds.is_empty() => Some(LeafKind::Byte),
-            1 => self.kinds.iter().find(|(_, literal)| !literal).map(|(kind, _)| *kind),
+            1 => self
+                .kinds
+                .iter()
+                .find(|(_, literal)| !literal)
+                .map(|(kind, _)| *kind),
             _ => None,
         }
     }
 
     /// The backward slices of every `CHOICE` guard test above the field's
     /// write sites, merged.
-    pub(crate) fn guard_slice(&self, ctx: &FinderCtx, hops: usize) -> crate::signals::analysis::write_sites::ValueSlice {
+    pub(crate) fn guard_slice(
+        &self,
+        ctx: &FinderCtx,
+        hops: usize,
+    ) -> crate::signals::analysis::write_sites::ValueSlice {
         let mut out = crate::signals::analysis::write_sites::ValueSlice::default();
         for site in self.sites.iter().flatten() {
             for guard in &site.guards {
@@ -143,7 +165,12 @@ impl Field {
                     continue;
                 }
                 if let Some(value) = ctx.caller_write_value_node(site) {
-                    out.extend(ctx.slice_of(value, hops).symbols.into_iter().map(|(symbol, _)| symbol));
+                    out.extend(
+                        ctx.slice_of(value, hops)
+                            .symbols
+                            .into_iter()
+                            .map(|(symbol, _)| symbol),
+                    );
                 }
             }
         }
@@ -169,7 +196,12 @@ impl Field {
     /// every leaf is a literal).
     pub(crate) fn merged(&self) -> Desc {
         let mut desc = Desc::default();
-        let live: Vec<&Desc> = self.occurrences.iter().flatten().filter(|d| !d.literal_only()).collect();
+        let live: Vec<&Desc> = self
+            .occurrences
+            .iter()
+            .flatten()
+            .filter(|d| !d.literal_only())
+            .collect();
         let chosen: Vec<&Desc> = if live.is_empty() {
             self.occurrences.iter().flatten().collect()
         } else {
@@ -188,7 +220,11 @@ impl Field {
             .map(|leaves| {
                 let mut desc = Desc::default();
                 let live: Vec<&Desc> = leaves.iter().filter(|d| !d.literal_only()).collect();
-                let chosen: Vec<&Desc> = if live.is_empty() { leaves.iter().collect() } else { live };
+                let chosen: Vec<&Desc> = if live.is_empty() {
+                    leaves.iter().collect()
+                } else {
+                    live
+                };
                 for one in chosen {
                     desc.merge(one.clone());
                 }
@@ -214,11 +250,19 @@ impl Field {
 }
 
 /// Append one emission's leaf descriptions and sites to `fields`; false when they do not cover the layout.
-pub(crate) fn add_occurrence(fields: &mut [Field], nodes: &[crate::signals::analysis::LayoutField], descs: &[Desc], sites: &[WriteSite]) -> bool {
+pub(crate) fn add_occurrence(
+    fields: &mut [Field],
+    nodes: &[crate::signals::analysis::LayoutField],
+    descs: &[Desc],
+    sites: &[WriteSite],
+) -> bool {
     let mut cursor = 0;
     for (field, node) in fields.iter_mut().zip(nodes) {
         let count = node_leaf_count(&node.node);
-        let (Some(slice), Some(writes)) = (descs.get(cursor..cursor + count), sites.get(cursor..cursor + count)) else {
+        let (Some(slice), Some(writes)) = (
+            descs.get(cursor..cursor + count),
+            sites.get(cursor..cursor + count),
+        ) else {
             return false;
         };
         cursor += count;
@@ -238,9 +282,11 @@ pub(crate) fn add_occurrence(fields: &mut [Field], nodes: &[crate::signals::anal
                 let mut start = 0;
                 for (arm, fields) in arms.iter().zip(field.arms.iter_mut()) {
                     let count = node_leaf_count(&arm.node);
-                    if let (LayoutNode::Record { fields: inner }, Some(part), Some(part_sites)) =
-                        (&arm.node, slice.get(start..start + count), writes.get(start..start + count))
-                    {
+                    if let (LayoutNode::Record { fields: inner }, Some(part), Some(part_sites)) = (
+                        &arm.node,
+                        slice.get(start..start + count),
+                        writes.get(start..start + count),
+                    ) {
                         add_occurrence(fields, inner, part, part_sites);
                     }
                     start += count;
@@ -255,7 +301,9 @@ pub(crate) fn add_occurrence(fields: &mut [Field], nodes: &[crate::signals::anal
 /// Record fields with every record-armed choice replaced by one field per
 /// arm position (the arms' fields at that position, merged), and for each
 /// expanded field the keys it stands for: `(choice key, arm keys)`.
-pub(crate) fn expand_arms(fields: &[Field]) -> Option<(Vec<Field>, Vec<Option<(String, Vec<String>)>>)> {
+pub(crate) fn expand_arms(
+    fields: &[Field],
+) -> Option<(Vec<Field>, Vec<Option<(String, Vec<String>)>>)> {
     let mut out = Vec::new();
     let mut origin = Vec::new();
     for field in fields {
@@ -292,7 +340,10 @@ pub(crate) fn expand_arms(fields: &[Field]) -> Option<(Vec<Field>, Vec<Option<(S
                 None => Shape::Other,
             };
             out.push(merged);
-            origin.push(Some((field.key.clone(), parts.iter().map(|part| part.key.clone()).collect())));
+            origin.push(Some((
+                field.key.clone(),
+                parts.iter().map(|part| part.key.clone()).collect(),
+            )));
         }
     }
     Some((out, origin))
@@ -308,7 +359,11 @@ pub(crate) struct Binder<'l> {
 
 impl<'l> Binder<'l> {
     /// The fields of every message of `layout` with their leaf descriptions.
-    pub(crate) fn new(view: &SlotView, layout: &'l SignalLayout, ctx: &FinderCtx) -> Result<Self, BindRefusal> {
+    pub(crate) fn new(
+        view: &SlotView,
+        layout: &'l SignalLayout,
+        ctx: &FinderCtx,
+    ) -> Result<Self, BindRefusal> {
         let facts = slot_facts(view, ctx);
         let mut messages: Vec<Vec<Field>> = layout
             .messages
@@ -320,34 +375,38 @@ impl<'l> Binder<'l> {
                 continue;
             };
             for (part_index, (_, part)) in emission.parts.iter().enumerate() {
-                let count: usize = part.fields.iter().map(|field| node_leaf_count(&field.node)).sum();
+                let count: usize = part
+                    .fields
+                    .iter()
+                    .map(|field| node_leaf_count(&field.node))
+                    .sum();
                 // A part's leaves: one run of the emission, or (after a split
                 // choice) its arm's run followed by the shared trailing items.
                 let indices = emission.part_leaves(part_index);
                 if indices.len() != count {
                     break;
                 }
-                let Some(part_descs) = indices.iter().map(|leaf| descs.get(*leaf).cloned()).collect::<Option<Vec<Desc>>>()
+                let Some(part_descs) = indices
+                    .iter()
+                    .map(|leaf| descs.get(*leaf).cloned())
+                    .collect::<Option<Vec<Desc>>>()
                 else {
                     break;
                 };
                 let slice = part_descs.as_slice();
-                let Some(message) = layout
-                    .messages
-                    .iter()
-                    .position(|message| {
-                        message.mask == part.mask
-                            && part.when.iter().all(|when| message.when.contains(when))
-                            && same_fields(&message.fields, &part.fields)
-                    })
-                else {
+                let Some(message) = layout.messages.iter().position(|message| {
+                    message.mask == part.mask
+                        && part.when.iter().all(|when| message.when.contains(when))
+                        && same_fields(&message.fields, &part.fields)
+                }) else {
                     continue;
                 };
-                let Some(sites) = view
-                    .emissions()
-                    .get(emission.emission)
-                    .and_then(|leaves| indices.iter().map(|leaf| leaves.leaves.get(*leaf).map(|leaf| leaf.write.clone())).collect::<Option<Vec<WriteSite>>>())
-                else {
+                let Some(sites) = view.emissions().get(emission.emission).and_then(|leaves| {
+                    indices
+                        .iter()
+                        .map(|leaf| leaves.leaves.get(*leaf).map(|leaf| leaf.write.clone()))
+                        .collect::<Option<Vec<WriteSite>>>()
+                }) else {
                     continue;
                 };
                 add_occurrence(&mut messages[message], &part.fields, slice, &sites);
@@ -379,13 +438,19 @@ impl<'l> Binder<'l> {
     /// record of a statistics signal) takes the names of a fully named
     /// message with the same field shapes, position by position, when every
     /// field it could name itself agrees.
-    pub(crate) fn top(&mut self, mut classify: impl FnMut(&Field) -> Option<&'static str>) -> Result<(), BindRefusal> {
+    pub(crate) fn top(
+        &mut self,
+        mut classify: impl FnMut(&Field) -> Option<&'static str>,
+    ) -> Result<(), BindRefusal> {
         self.top_at(|_, fields, index| classify(&fields[index]))
     }
 
     /// [`Self::top`] with the field's message and position (`classify(message,
     /// fields, index)`, messages in order, fields in order).
-    pub(crate) fn top_at(&mut self, mut classify: impl FnMut(usize, &[Field], usize) -> Option<&'static str>) -> Result<(), BindRefusal> {
+    pub(crate) fn top_at(
+        &mut self,
+        mut classify: impl FnMut(usize, &[Field], usize) -> Option<&'static str>,
+    ) -> Result<(), BindRefusal> {
         let mut named: Vec<Vec<Option<&'static str>>> = Vec::new();
         for (message, fields) in self.messages.iter().enumerate() {
             let mut used = BTreeSet::new();
@@ -394,14 +459,18 @@ impl<'l> Binder<'l> {
                 let name = classify(message, fields, index);
                 if let Some(name) = name {
                     if !used.insert(name) {
-                        return Err(BindRefusal::new(format!("message {message}: two fields classify as {name}")));
+                        return Err(BindRefusal::new(format!(
+                            "message {message}: two fields classify as {name}"
+                        )));
                     }
                 }
                 names.push(name);
             }
             named.push(names);
         }
-        let complete: Vec<usize> = (0..named.len()).filter(|m| named[*m].iter().all(Option::is_some)).collect();
+        let complete: Vec<usize> = (0..named.len())
+            .filter(|m| named[*m].iter().all(Option::is_some))
+            .collect();
         for message in 0..named.len() {
             if named[message].iter().all(Option::is_some) {
                 continue;
@@ -417,8 +486,14 @@ impl<'l> Binder<'l> {
             let donor = complete.iter().copied().find(|other| {
                 let others = &self.messages[*other];
                 others.len() == fields.len()
-                    && others.iter().zip(fields).all(|(a, b)| a.shape == b.shape && a.kind() == b.kind())
-                    && named[*other].iter().zip(&named[message]).all(|(a, b)| b.is_none() || a == b)
+                    && others
+                        .iter()
+                        .zip(fields)
+                        .all(|(a, b)| a.shape == b.shape && a.kind() == b.kind())
+                    && named[*other]
+                        .iter()
+                        .zip(&named[message])
+                        .all(|(a, b)| b.is_none() || a == b)
             });
             if let Some(donor) = donor {
                 named[message] = named[donor].clone();
@@ -436,9 +511,16 @@ impl<'l> Binder<'l> {
 
     /// Name every top-level field from each occurrence separately; all
     /// occurrences with a name must agree.
-    pub(crate) fn top_each(&mut self, classify: impl Fn(&Desc) -> Option<&'static str>) -> Result<(), BindRefusal> {
+    pub(crate) fn top_each(
+        &mut self,
+        classify: impl Fn(&Desc) -> Option<&'static str>,
+    ) -> Result<(), BindRefusal> {
         self.top(|field| {
-            let names: BTreeSet<&'static str> = field.per_occurrence().iter().filter_map(&classify).collect();
+            let names: BTreeSet<&'static str> = field
+                .per_occurrence()
+                .iter()
+                .filter_map(&classify)
+                .collect();
             match names.len() {
                 1 => names.into_iter().next(),
                 _ => None,
@@ -462,15 +544,20 @@ impl<'l> Binder<'l> {
                 let Some(class) = section(field) else {
                     continue;
                 };
-                let Some((_, count, list)) = table.iter().find(|(name, _, _)| *name == class) else {
+                let Some((_, count, list)) = table.iter().find(|(name, _, _)| *name == class)
+                else {
                     continue;
                 };
                 if !used.insert(class) {
-                    return Err(BindRefusal::new(format!("message {message}: two {class} sections")));
+                    return Err(BindRefusal::new(format!(
+                        "message {message}: two {class} sections"
+                    )));
                 }
                 self.binding.insert(message, field.key.clone(), *list);
                 if let Some(previous) = index.checked_sub(1).and_then(|i| fields.get(i)) {
-                    if previous.shape == Shape::Scalar(LeafKind::Number) && previous.merged().has_member("length") {
+                    if previous.shape == Shape::Scalar(LeafKind::Number)
+                        && previous.merged().has_member("length")
+                    {
                         self.binding.insert(message, previous.key.clone(), *count);
                     }
                 }
@@ -480,7 +567,10 @@ impl<'l> Binder<'l> {
     }
 
     /// Name the record fields of every list of records.
-    pub(crate) fn records(&mut self, mut each: impl FnMut(&mut Records, &SlotFacts) -> Result<(), BindRefusal>) -> Result<(), BindRefusal> {
+    pub(crate) fn records(
+        &mut self,
+        mut each: impl FnMut(&mut Records, &SlotFacts) -> Result<(), BindRefusal>,
+    ) -> Result<(), BindRefusal> {
         let Binder {
             messages,
             binding,
@@ -516,7 +606,10 @@ impl<'l> Binder<'l> {
         if unbound.is_empty() {
             Ok(self.binding)
         } else {
-            Err(BindRefusal::new(format!("no card name for field(s) {}", unbound.join(", "))))
+            Err(BindRefusal::new(format!(
+                "no card name for field(s) {}",
+                unbound.join(", ")
+            )))
         }
     }
 }
@@ -530,7 +623,10 @@ pub(crate) struct Records<'b> {
 
 impl Records<'_> {
     /// Name record fields by `classify` alone.
-    pub(crate) fn name_by_kind(&mut self, classify: impl Fn(&Field) -> Option<&'static str>) -> Result<(), BindRefusal> {
+    pub(crate) fn name_by_kind(
+        &mut self,
+        classify: impl Fn(&Field) -> Option<&'static str>,
+    ) -> Result<(), BindRefusal> {
         let names: Vec<Option<&'static str>> = self.fields.iter().map(&classify).collect();
         self.apply(&names)
     }
@@ -541,7 +637,9 @@ impl Records<'_> {
         for (field, name) in self.fields.iter().zip(names) {
             if let Some(name) = name {
                 if !used.insert(*name) {
-                    return Err(BindRefusal::new(format!("record fields: two fields classify as {name}")));
+                    return Err(BindRefusal::new(format!(
+                        "record fields: two fields classify as {name}"
+                    )));
                 }
                 self.binding.insert(self.message, field.key.clone(), *name);
             }
@@ -592,12 +690,14 @@ impl Records<'_> {
             }
             .apply(&names);
         }
-        let (expanded, origin) =
-            expand_arms(fields).ok_or_else(|| BindRefusal::new("a record choice has arms of different widths"))?;
+        let (expanded, origin) = expand_arms(fields)
+            .ok_or_else(|| BindRefusal::new("a record choice has arms of different widths"))?;
         let names = label_names_in(&expanded, facts, classify, nested)?;
         let distinct: BTreeSet<&str> = names.iter().flatten().copied().collect();
         if names.iter().any(Option::is_none) || distinct.len() != names.len() {
-            return Err(BindRefusal::new("record fields under a choice: unnamed or duplicate"));
+            return Err(BindRefusal::new(
+                "record fields under a choice: unnamed or duplicate",
+            ));
         }
         let mut choice_names: Vec<(String, Vec<&'static str>)> = Vec::new();
         for (name, origin) in names.iter().flatten().zip(&origin) {
@@ -614,7 +714,13 @@ impl Records<'_> {
                 }
             }
         }
-        for (field, name) in expanded.iter().zip(&names).zip(&origin).filter(|(_, origin)| origin.is_none()).map(|(pair, _)| pair) {
+        for (field, name) in expanded
+            .iter()
+            .zip(&names)
+            .zip(&origin)
+            .filter(|(_, origin)| origin.is_none())
+            .map(|(pair, _)| pair)
+        {
             if let Some(name) = name {
                 self.binding.insert(self.message, field.key.clone(), *name);
             }
@@ -631,7 +737,11 @@ impl Records<'_> {
     }
 
     /// Name the record fields of every list nested in this record.
-    pub(crate) fn nested(&mut self, facts: &SlotFacts, classify: impl Fn(&Field, &Desc) -> Option<&'static str>) -> Result<(), BindRefusal> {
+    pub(crate) fn nested(
+        &mut self,
+        facts: &SlotFacts,
+        classify: impl Fn(&Field, &Desc) -> Option<&'static str>,
+    ) -> Result<(), BindRefusal> {
         for field in self.fields {
             if field.children.is_empty() {
                 continue;
@@ -664,26 +774,52 @@ fn label_names_in(
     let mut best: Option<Vec<Option<&'static str>>> = None;
     // Literals holding every label; those stored into the list the record
     // is read from (`ring.put({..})` / `ring.toArray()`) when any is.
-    let containers: BTreeSet<_> = fields.iter().flat_map(|field| field.merged().containers).collect();
+    let containers: BTreeSet<_> = fields
+        .iter()
+        .flat_map(|field| field.merged().containers)
+        .collect();
     let holding: Vec<&value_facts::RecordLiteral> = facts
         .literals
         .iter()
-        .filter(|literal| labels.iter().all(|label| literal.fields.contains_key(label)))
+        .filter(|literal| {
+            labels
+                .iter()
+                .all(|label| literal.fields.contains_key(label))
+        })
         .collect();
-    let (stored, rest): (Vec<&value_facts::RecordLiteral>, Vec<&value_facts::RecordLiteral>) = holding
+    let (stored, rest): (
+        Vec<&value_facts::RecordLiteral>,
+        Vec<&value_facts::RecordLiteral>,
+    ) = holding
         .iter()
         .copied()
         .partition(|literal| !literal.containers.is_disjoint(&containers));
-    let held_lists: BTreeSet<_> = facts.literals.iter().flat_map(|literal| literal.held.iter().copied()).collect();
-    let (inner, stored): (Vec<&value_facts::RecordLiteral>, Vec<&value_facts::RecordLiteral>) =
-        stored.into_iter().partition(|literal| !literal.containers.is_disjoint(&held_lists));
-    let (inner_rest, rest): (Vec<&value_facts::RecordLiteral>, Vec<&value_facts::RecordLiteral>) =
-        rest.into_iter().partition(|literal| !literal.containers.is_disjoint(&held_lists));
+    let held_lists: BTreeSet<_> = facts
+        .literals
+        .iter()
+        .flat_map(|literal| literal.held.iter().copied())
+        .collect();
+    let (inner, stored): (
+        Vec<&value_facts::RecordLiteral>,
+        Vec<&value_facts::RecordLiteral>,
+    ) = stored
+        .into_iter()
+        .partition(|literal| !literal.containers.is_disjoint(&held_lists));
+    let (inner_rest, rest): (
+        Vec<&value_facts::RecordLiteral>,
+        Vec<&value_facts::RecordLiteral>,
+    ) = rest
+        .into_iter()
+        .partition(|literal| !literal.containers.is_disjoint(&held_lists));
     let inner: Vec<&value_facts::RecordLiteral> = inner.into_iter().chain(inner_rest).collect();
     // The literals stored into the record's list first; the others only
     // when those name nothing. Item literals of a list held inside another
     // record come first for a nested list's records and last otherwise.
-    let tiers = if nested { [inner, stored, rest] } else { [stored, rest, inner] };
+    let tiers = if nested {
+        [inner, stored, rest]
+    } else {
+        [stored, rest, inner]
+    };
     for tier in tiers {
         let found = name_with(fields, &tier, classify, &mut best)?;
         if found.is_some() {
@@ -696,12 +832,24 @@ fn label_names_in(
                 let named: Vec<String> = fields
                     .iter()
                     .zip(&names)
-                    .map(|(field, name)| format!("{} (label {:?}) -> {}", field.key, field.own_label(), name.unwrap_or("?")))
+                    .map(|(field, name)| {
+                        format!(
+                            "{} (label {:?}) -> {}",
+                            field.key,
+                            field.own_label(),
+                            name.unwrap_or("?")
+                        )
+                    })
                     .collect();
-                format!("; best literal names {} (unnamed or duplicate)", named.join(", "))
+                format!(
+                    "; best literal names {} (unnamed or duplicate)",
+                    named.join(", ")
+                )
             })
             .unwrap_or_default();
-        BindRefusal::new(format!("no object literal names every record label {labels:?}{detail}"))
+        BindRefusal::new(format!(
+            "no object literal names every record label {labels:?}{detail}"
+        ))
     })
 }
 
@@ -720,7 +868,9 @@ pub(crate) fn name_with(
             .iter()
             .map(|field| {
                 let meaning = match (field.indexed_label(), field.own_label()) {
-                    (Some((label, index)), _) if literal.contains_key(&format!("{label}[{index}]")) => {
+                    (Some((label, index)), _)
+                        if literal.contains_key(&format!("{label}[{index}]")) =>
+                    {
                         literal[&format!("{label}[{index}]")].clone()
                     }
                     (_, Some(label)) => literal.get(&label).cloned().unwrap_or_default(),
@@ -731,7 +881,10 @@ pub(crate) fn name_with(
             .collect();
         let distinct: BTreeSet<&str> = names.iter().flatten().copied().collect();
         if names.iter().any(Option::is_none) || distinct.len() != names.len() {
-            if best.as_ref().is_none_or(|b| b.iter().flatten().count() < distinct.len()) {
+            if best
+                .as_ref()
+                .is_none_or(|b| b.iter().flatten().count() < distinct.len())
+            {
                 *best = Some(names);
             }
             continue;
@@ -739,7 +892,11 @@ pub(crate) fn name_with(
         match &found {
             None => found = Some(names),
             Some(previous) if *previous == names => {}
-            Some(_) => return Err(BindRefusal::new("record labels name differently in two literals")),
+            Some(_) => {
+                return Err(BindRefusal::new(
+                    "record labels name differently in two literals",
+                ))
+            }
         }
     }
     Ok(found)

@@ -21,8 +21,8 @@ use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 
 use super::super::index::SourceNames;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug)]
 pub(crate) struct SharedVmHelpers {

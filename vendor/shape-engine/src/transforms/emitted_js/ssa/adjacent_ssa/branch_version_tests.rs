@@ -65,10 +65,15 @@ fn readonly_argument_prefixes_allow_producers_but_getters_stay_ordered() {
 
 #[test]
 fn keeps_a_declaration_with_a_comment_outside_its_value() {
-    let result = super::inline_adjacent_ssa("function f() { let $SSA_1 = /* keep */ 3; return $SSA_1; }").unwrap();
+    let result =
+        super::inline_adjacent_ssa("function f() { let $SSA_1 = /* keep */ 3; return $SSA_1; }")
+            .unwrap();
     assert!(result.code.contains("/* keep */"), "{}", result.code);
     // A comment inside the value moves with it.
-    let result = super::inline_adjacent_ssa("function f(g) { let $SSA_1 = g(/* keep */ 3); return $SSA_1; }").unwrap();
+    let result = super::inline_adjacent_ssa(
+        "function f(g) { let $SSA_1 = g(/* keep */ 3); return $SSA_1; }",
+    )
+    .unwrap();
     assert_eq!(result.inlined_bindings, 1, "{}", result.code);
     assert!(result.code.contains("/* keep */"), "{}", result.code);
 }

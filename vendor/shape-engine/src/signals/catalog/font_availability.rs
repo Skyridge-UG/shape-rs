@@ -1,21 +1,22 @@
 //! `FontAvailability`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{layout_nodes::*, leaf_checks::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
 
 /// A number leaf, or a number-or-nothing choice (a loop that writes from
 /// its own condition: the nothing arm is the loop exit).
 fn is_number_or_loop_exit(node: &LayoutNode) -> bool {
     match node {
         LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Number,
-        LayoutNode::Choice { arms } => {
-            arms.len() == 2
-                && arms.iter().any(|arm| matches!(&arm.node, LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Number))
-                && arms.iter().any(|arm| matches!(arm.node, LayoutNode::Empty))
-        }
+        LayoutNode::Choice { arms } => arms.len() == 2
+            && arms.iter().any(
+                |arm| matches!(&arm.node, LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Number),
+            )
+            && arms.iter().any(|arm| matches!(arm.node, LayoutNode::Empty)),
         _ => false,
     }
 }
@@ -25,12 +26,13 @@ fn is_byte_or_nothing(node: &LayoutNode) -> bool {
     match node {
         LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Byte,
         LayoutNode::Choice { arms } => {
-            arms.iter().any(|arm| matches!(&arm.node, LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte))
-                && arms.iter().all(|arm| match &arm.node {
-                    LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Byte,
-                    LayoutNode::Empty => true,
-                    _ => false,
-                })
+            arms.iter().any(
+                |arm| matches!(&arm.node, LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte),
+            ) && arms.iter().all(|arm| match &arm.node {
+                LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Byte,
+                LayoutNode::Empty => true,
+                _ => false,
+            })
         }
         _ => false,
     }
@@ -60,23 +62,35 @@ pub(crate) fn bind_font_availability(
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
-        let pairs = count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let pairs =
+            count_array_pairs(fields).ok_or_else(|| refuse(SIGNAL, "repeat without a count"))?;
         let [(count, results)] = pairs.as_slice() else {
             return Err(refuse(SIGNAL, "expected one result repeat"));
         };
         let LayoutNode::Array { item } = &fields[*results].node else {
             return Err(refuse(SIGNAL, "results is not a repeat"));
         };
-        let rest: Vec<usize> = (0..fields.len()).filter(|i| i != count && i != results).collect();
+        let rest: Vec<usize> = (0..fields.len())
+            .filter(|i| i != count && i != results)
+            .collect();
         if !is_number_or_loop_exit(item) {
             if !is_byte_or_nothing(item) {
-                return Err(refuse(SIGNAL, "results repeat is neither numbers nor packed bytes"));
+                return Err(refuse(
+                    SIGNAL,
+                    "results repeat is neither numbers nor packed bytes",
+                ));
             }
-            let (tails, versions): (Vec<usize>, Vec<usize>) =
-                rest.iter().copied().partition(|index| is_byte_or_nothing(&fields[*index].node));
+            let (tails, versions): (Vec<usize>, Vec<usize>) = rest
+                .iter()
+                .copied()
+                .partition(|index| is_byte_or_nothing(&fields[*index].node));
             let ([tail], [version]) = (tails.as_slice(), versions.as_slice()) else {
-                return Err(refuse(SIGNAL, format!("message {message}: expected one partial byte and one version")));
+                return Err(refuse(
+                    SIGNAL,
+                    format!("message {message}: expected one partial byte and one version"),
+                ));
             };
             if !is_scalar(&fields[*version].node) {
                 return Err(refuse(SIGNAL, "family B version is not a scalar"));
@@ -88,7 +102,10 @@ pub(crate) fn bind_font_availability(
             continue;
         }
         let [a, b] = rest.as_slice() else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected four fields")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected four fields"),
+            ));
         };
         if !is_scalar(&fields[*a].node) || !is_scalar(&fields[*b].node) {
             return Err(refuse(SIGNAL, "version/seed are not scalars"));
@@ -97,7 +114,12 @@ pub(crate) fn bind_font_availability(
         let (seed, version) = match (pooled(*a), pooled(*b)) {
             (true, false) => (*a, *b),
             (false, true) => (*b, *a),
-            _ => return Err(refuse(SIGNAL, "cannot tell the shuffle seed from the list version")),
+            _ => {
+                return Err(refuse(
+                    SIGNAL,
+                    "cannot tell the shuffle seed from the list version",
+                ))
+            }
         };
         binding.insert(message, fields[*count].key.clone(), "fontCount");
         binding.insert(message, fields[*results].key.clone(), "fontResults");

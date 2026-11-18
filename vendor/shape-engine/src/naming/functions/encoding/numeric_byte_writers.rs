@@ -514,7 +514,8 @@ fn unsigned(model: &Model<'_, '_>, site: FunctionSite, function: &Function<'_>) 
 }
 
 fn global(model: &Model<'_, '_>, e: &Expression<'_>, name: &str) -> bool {
-    crate::naming::support::installer_events::global_path(model, e).is_some_and(|p| p.as_slice() == [name])
+    crate::naming::support::installer_events::global_path(model, e)
+        .is_some_and(|p| p.as_slice() == [name])
 }
 fn local_decl(model: &Model<'_, '_>, s: &Statement<'_>) -> Option<SymbolId> {
     plain_var(model, variable(s)?)
@@ -958,6 +959,18 @@ pub(in crate::naming) fn software_float_capture_ready(
     site: FunctionSite,
     table: SymbolId,
 ) -> Option<()> {
-    let stores = tag_stores(model, site, table, &[("FLOAT32", 236.0), ("DOUBLE64", 237.0)])?;
-    exposures_ready(model, site.binding_symbol?, &stores, &mut BTreeSet::new(), 0).then_some(())
+    let stores = tag_stores(
+        model,
+        site,
+        table,
+        &[("FLOAT32", 236.0), ("DOUBLE64", 237.0)],
+    )?;
+    exposures_ready(
+        model,
+        site.binding_symbol?,
+        &stores,
+        &mut BTreeSet::new(),
+        0,
+    )
+    .then_some(())
 }

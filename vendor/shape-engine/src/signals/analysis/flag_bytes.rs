@@ -11,7 +11,9 @@
 
 use super::buffer_writes::{self, slot_info, SlotInfo};
 use super::layout_nodes::{leaf_of, node_leaf_count, same_message};
-use super::{BindRefusal, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
+use super::{
+    BindRefusal, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView,
+};
 
 /// Top-level fields per emission (plain leaves plus non-byte choice arms).
 pub(crate) fn top_field_counts(layout_or_view: &SlotView) -> Vec<usize> {
@@ -68,13 +70,20 @@ pub(crate) fn byte_counts(view: &SlotView) -> Vec<usize> {
 
 /// Name the top-level fields of every message in order; every field must
 /// be a single byte.
-pub(crate) fn bind_bytes_in_order(layout: &SignalLayout, names: &[&str]) -> Result<FieldBinding, BindRefusal> {
+pub(crate) fn bind_bytes_in_order(
+    layout: &SignalLayout,
+    names: &[&str],
+) -> Result<FieldBinding, BindRefusal> {
     bind_flag_bytes(layout, names, false)
 }
 
 /// [`bind_bytes_in_order`]; with `constant_messages`, a message whose every
 /// byte is a literal (a gated "all flags clear" arm) is named the same way.
-pub(crate) fn bind_flag_bytes(layout: &SignalLayout, names: &[&str], constant_messages: bool) -> Result<FieldBinding, BindRefusal> {
+pub(crate) fn bind_flag_bytes(
+    layout: &SignalLayout,
+    names: &[&str],
+    constant_messages: bool,
+) -> Result<FieldBinding, BindRefusal> {
     if layout.messages.is_empty() {
         return Err(BindRefusal::new("no message layout"));
     }
@@ -90,13 +99,14 @@ pub(crate) fn bind_flag_bytes(layout: &SignalLayout, names: &[&str], constant_me
         // A closed gate writes `ks() ^ 0`: every byte constant, or (an arm
         // message of a split gate choice whose trailing byte is shared with
         // the open arm) some bytes constant.
-        let gate_arm = layout.messages.len() > 1 && message.when.iter().all(|when| when.contains(':'));
+        let gate_arm =
+            layout.messages.len() > 1 && message.when.iter().all(|when| when.contains(':'));
         let constant = constant_messages
             && (gate_arm
-                || message
-                    .fields
-                    .iter()
-                    .all(|field| leaf_of(&field.node).is_some_and(|leaf| leaf.kind == LeafKind::Byte && leaf.byte.is_some())));
+                || message.fields.iter().all(|field| {
+                    leaf_of(&field.node)
+                        .is_some_and(|leaf| leaf.kind == LeafKind::Byte && leaf.byte.is_some())
+                }));
         for (field, name) in message.fields.iter().zip(names) {
             match leaf_of(&field.node) {
                 Some(leaf) if leaf.kind == LeafKind::Byte && (leaf.byte.is_none() || constant) => {
@@ -219,12 +229,18 @@ pub(crate) fn emission_hints(
 }
 
 /// The memoized [`SlotInfo`] of `view` for a binder.
-pub(crate) fn slot_info_for_binder(view: &SlotView, ctx: &FinderCtx) -> Result<SlotInfo, BindRefusal> {
+pub(crate) fn slot_info_for_binder(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Result<SlotInfo, BindRefusal> {
     Ok(slot_info(view, ctx))
 }
 
 /// Bind messages whose every top-level field resolved to one card name.
-pub(crate) fn bind_named(layout: &SignalLayout, fields: &[Vec<Option<Hint>>]) -> Result<FieldBinding, BindRefusal> {
+pub(crate) fn bind_named(
+    layout: &SignalLayout,
+    fields: &[Vec<Option<Hint>>],
+) -> Result<FieldBinding, BindRefusal> {
     let mut binding = FieldBinding::new();
     for (index, (message, hints)) in layout.messages.iter().zip(fields).enumerate() {
         for (field, hint) in message.fields.iter().zip(hints) {

@@ -7,12 +7,21 @@ impl Plan<'_, '_> {
     /// and `mover` stores no property: with no getters, and a call changing
     /// only what it is given, the value may run after those reads.
     pub(super) fn crosses_reads(&self, range: Span, owner: u32, mover: &Candidate) -> bool {
-        let start = self.scan.effects.partition_point(|(s, _, _)| *s < range.start);
+        let start = self
+            .scan
+            .effects
+            .partition_point(|(s, _, _)| *s < range.start);
         // `mutations` is sorted: look each effect up instead of building a
         // set of the whole program's mutations per call.
         let mutated = |s: u32, e: u32| {
-            let at = self.scan.mutations.partition_point(|(ms, me, _)| (*ms, *me) < (s, e));
-            self.scan.mutations.get(at).is_some_and(|(ms, me, _)| (*ms, *me) == (s, e))
+            let at = self
+                .scan
+                .mutations
+                .partition_point(|(ms, me, _)| (*ms, *me) < (s, e));
+            self.scan
+                .mutations
+                .get(at)
+                .is_some_and(|(ms, me, _)| (*ms, *me) == (s, e))
         };
         if self.scan.effects[start..]
             .iter()
@@ -24,7 +33,12 @@ impl Plan<'_, '_> {
         // Member stores and calls are keyed by start: only those starting
         // inside the value can lie inside it.
         let inside = (mover.init.start, 0)..(mover.init.end, u32::MAX);
-        if self.scan.member_stores.range(inside.clone()).any(|((_, e), _)| *e <= mover.init.end) {
+        if self
+            .scan
+            .member_stores
+            .range(inside.clone())
+            .any(|((_, e), _)| *e <= mover.init.end)
+        {
             return false;
         }
         let mut names = BTreeSet::new();
@@ -38,14 +52,17 @@ impl Plan<'_, '_> {
                     names.insert(symbol);
                 }
                 None => {
-                    if !matches!(self.nodes.kind(reference.node_id()), AstKind::IdentifierReference(id) if is_constant_global(&id.name)) {
+                    if !matches!(self.nodes.kind(reference.node_id()), AstKind::IdentifierReference(id) if is_constant_global(&id.name))
+                    {
                         return false;
                     }
                 }
             }
         }
         // The names read must not change while the value runs either.
-        if !names.iter().all(|symbol| self.stable_in(*symbol, owner) || self.unwritable_by(*symbol, owner, mover)) {
+        if !names.iter().all(|symbol| {
+            self.stable_in(*symbol, owner) || self.unwritable_by(*symbol, owner, mover)
+        }) {
             return false;
         }
         self.scan
@@ -53,9 +70,15 @@ impl Plan<'_, '_> {
             .range(inside)
             .filter(|(_, e)| *e <= mover.init.end)
             .all(|(s, e)| {
-                !self.references_in(Span::new(*s, *e)).iter().any(|(reference, _)| {
-                    self.scoping.get_reference(*reference).symbol_id().is_some_and(|symbol| names.contains(&symbol))
-                })
+                !self
+                    .references_in(Span::new(*s, *e))
+                    .iter()
+                    .any(|(reference, _)| {
+                        self.scoping
+                            .get_reference(*reference)
+                            .symbol_id()
+                            .is_some_and(|symbol| names.contains(&symbol))
+                    })
             })
     }
 
@@ -70,11 +93,15 @@ impl Plan<'_, '_> {
             .contains(oxc_semantic::SymbolFlags::FunctionScopedVariable);
         (var || self.declared_before(symbol, mover.statement))
             && !self.argument_aliased(symbol)
-            && self.scoping.get_resolved_references(symbol).filter(|reference| reference.is_write()).all(|reference| {
-                let span = self.span_of(reference.node_id());
-                self.owner_of(reference.node_id()) == owner
-                    && !(mover.init.start <= span.start && span.end <= mover.init.end)
-            })
+            && self
+                .scoping
+                .get_resolved_references(symbol)
+                .filter(|reference| reference.is_write())
+                .all(|reference| {
+                    let span = self.span_of(reference.node_id());
+                    self.owner_of(reference.node_id()) == owner
+                        && !(mover.init.start <= span.start && span.end <= mover.init.end)
+                })
     }
 
     /// A binding no store can change: never written, not a VM slot or carry,
@@ -146,7 +173,10 @@ impl Plan<'_, '_> {
             return false;
         }
         let (body, suspends) = match self.nodes.kind(function) {
-            AstKind::Function(function) => (function.body.as_deref(), function.generator || function.r#async),
+            AstKind::Function(function) => (
+                function.body.as_deref(),
+                function.generator || function.r#async,
+            ),
             AstKind::ArrowFunctionExpression(arrow) => (Some(&*arrow.body), arrow.r#async),
             _ => return false,
         };
@@ -179,7 +209,9 @@ impl Plan<'_, '_> {
     /// declaration with an initializer, no store, not in a loop, and every
     /// reference in the declaring function (no other thread sees it).
     pub(super) fn internal_key(&self, symbol: SymbolId) -> bool {
-        if self.scoping.symbol_declarations(symbol).count() != 1 || self.scoping.symbol_is_mutated(symbol) {
+        if self.scoping.symbol_declarations(symbol).count() != 1
+            || self.scoping.symbol_is_mutated(symbol)
+        {
             return false;
         }
         let declaration = self.scoping.symbol_declaration(symbol);
@@ -194,7 +226,10 @@ impl Plan<'_, '_> {
             .nodes
             .ancestor_ids(declaration)
             .take_while(|id| {
-                !matches!(self.nodes.kind(*id), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_))
+                !matches!(
+                    self.nodes.kind(*id),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
             })
             .any(|id| is_loop(self.nodes.kind(id)));
         !in_loop
@@ -205,7 +240,13 @@ impl Plan<'_, '_> {
     }
 
     /// Rule 5: every read of a copy of `slot` sees the value it copied.
-    pub(super) fn snapshot_holds(&self, candidate: &Candidate, slot: SymbolId, reads: &[NodeId], owner: u32) -> bool {
+    pub(super) fn snapshot_holds(
+        &self,
+        candidate: &Candidate,
+        slot: SymbolId,
+        reads: &[NodeId],
+        owner: u32,
+    ) -> bool {
         let name = self.scoping.symbol_name(slot);
         if !(name.starts_with("$KEY_") || name.starts_with("$CARRY_")) {
             return false;
@@ -250,7 +291,11 @@ impl Plan<'_, '_> {
             })
         };
         let through_arguments = mentions_arguments(candidate.init);
-        let last = reads.iter().map(|read| self.span_of(*read).start).max().unwrap_or(0);
+        let last = reads
+            .iter()
+            .map(|read| self.span_of(*read).start)
+            .max()
+            .unwrap_or(0);
         let start = candidate.statement.end;
         let at = self.scan.mutations.partition_point(|(s, _, _)| *s < start);
         let read_spans: Vec<Span> = reads.iter().map(|read| self.span_of(*read)).collect();
@@ -260,7 +305,9 @@ impl Plan<'_, '_> {
             // A store or call around a read runs after the read: only work
             // completing before the last read can change it.
             .any(|(s, e, mutation_owner)| {
-                *mutation_owner == owner && *e <= last && !self.spares(*s, *e, &read_spans, &names, through_arguments)
+                *mutation_owner == owner
+                    && *e <= last
+                    && !self.spares(*s, *e, &read_spans, &names, through_arguments)
             })
         {
             return false;
@@ -273,8 +320,15 @@ impl Plan<'_, '_> {
                 let kind = self.nodes.kind(ancestor);
                 let span = kind.span();
                 is_loop(kind)
-                    && !(span.start <= candidate.statement.start && candidate.statement.end <= span.end)
-                    && !self.loop_keeps_property(span, owner, &read_spans, &names, through_arguments)
+                    && !(span.start <= candidate.statement.start
+                        && candidate.statement.end <= span.end)
+                    && !self.loop_keeps_property(
+                        span,
+                        owner,
+                        &read_spans,
+                        &names,
+                        through_arguments,
+                    )
             })
         })
     }
@@ -282,7 +336,10 @@ impl Plan<'_, '_> {
     /// An operator whose only untyped operand is one of the value's own
     /// reads: it converts the value it already converted where it was.
     pub(super) fn converts_only(&self, start: u32, end: u32, reads: &[Span]) -> bool {
-        self.scan.conversions.get(&(start, end)).is_some_and(|untyped| reads.contains(untyped))
+        self.scan
+            .conversions
+            .get(&(start, end))
+            .is_some_and(|untyped| reads.contains(untyped))
     }
 
     /// Work that cannot change a property read through `names`: the read's
@@ -290,15 +347,28 @@ impl Plan<'_, '_> {
     /// is handed none of the names (a call changes only what it is given;
     /// shape/'s redundant-memory rule copies reads across calls the same
     /// way).
-    pub(super) fn spares(&self, start: u32, end: u32, reads: &[Span], names: &[SymbolId], through_arguments: bool) -> bool {
+    pub(super) fn spares(
+        &self,
+        start: u32,
+        end: u32,
+        reads: &[Span],
+        names: &[SymbolId],
+        through_arguments: bool,
+    ) -> bool {
         if names.is_empty() && !through_arguments {
             return false;
         }
         if through_arguments {
             let text = &self.source[start as usize..end as usize];
             if text.match_indices("arguments").any(|(at, _)| {
-                !text[..at].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
-                    && !text[at + 9..].chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
+                !text[..at]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
+                    && !text[at + 9..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
             }) {
                 return false;
             }
@@ -310,9 +380,15 @@ impl Plan<'_, '_> {
             return stored.is_some_and(|stored| !names.contains(&stored));
         }
         self.scan.calls.contains(&(start, end))
-            && !self.references_in(Span::new(start, end)).iter().any(|(reference, _)| {
-                self.scoping.get_reference(*reference).symbol_id().is_some_and(|symbol| names.contains(&symbol))
-            })
+            && !self
+                .references_in(Span::new(start, end))
+                .iter()
+                .any(|(reference, _)| {
+                    self.scoping
+                        .get_reference(*reference)
+                        .symbol_id()
+                        .is_some_and(|symbol| names.contains(&symbol))
+                })
     }
 
     pub(super) fn loop_keeps_property(
@@ -323,7 +399,10 @@ impl Plan<'_, '_> {
         names: &[SymbolId],
         through_arguments: bool,
     ) -> bool {
-        let at = self.scan.mutations.partition_point(|(s, _, _)| *s < span.start);
+        let at = self
+            .scan
+            .mutations
+            .partition_point(|(s, _, _)| *s < span.start);
         !self.suspends_between(span.start, span.end, owner)
             && self.scan.mutations[at..]
                 .iter()
@@ -366,7 +445,10 @@ impl Plan<'_, '_> {
         let read_span = self.span_of(first);
         let (slot, store) = match self.nodes.parent_kind(first) {
             AstKind::VariableDeclarator(declarator)
-                if declarator.init.as_ref().is_some_and(|init| init.span() == read_span) =>
+                if declarator
+                    .init
+                    .as_ref()
+                    .is_some_and(|init| init.span() == read_span) =>
             {
                 let BindingPattern::BindingIdentifier(binding) = &declarator.id else {
                     return None;
@@ -391,7 +473,10 @@ impl Plan<'_, '_> {
                 let AstKind::ExpressionStatement(statement) = statement else {
                     return None;
                 };
-                (analysis::identifier_symbol(target, self.scoping)?, statement.span)
+                (
+                    analysis::identifier_symbol(target, self.scoping)?,
+                    statement.span,
+                )
             }
             _ => return None,
         };
@@ -399,8 +484,15 @@ impl Plan<'_, '_> {
         if !(name.starts_with("$KEY_") || name.starts_with("$CARRY_")) {
             return None;
         }
-        let rest: Vec<NodeId> = reads.iter().copied().filter(|read| *read != first).collect();
-        if rest.iter().any(|read| self.span_of(*read).start < store.end) {
+        let rest: Vec<NodeId> = reads
+            .iter()
+            .copied()
+            .filter(|read| *read != first)
+            .collect();
+        if rest
+            .iter()
+            .any(|read| self.span_of(*read).start < store.end)
+        {
             return None;
         }
         (self.next_door(candidate, first, composed)

@@ -8,8 +8,11 @@ const SMOKE_ALPHA: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0
 const BANDAI_ALPHA: &str = include_str!("../../../tools/bandai-alphabet.txt");
 
 fn decode(text: &str, alphabet: &str) -> Vec<u8> {
-    let map: std::collections::HashMap<char, u8> =
-        alphabet.chars().enumerate().map(|(i, c)| (c, i as u8)).collect();
+    let map: std::collections::HashMap<char, u8> = alphabet
+        .chars()
+        .enumerate()
+        .map(|(i, c)| (c, i as u8))
+        .collect();
     let mut out = Vec::new();
     let mut acc: u32 = 0;
     let mut bits = 0u32;
@@ -27,7 +30,12 @@ fn decode(text: &str, alphabet: &str) -> Vec<u8> {
 }
 
 fn head(bytes: &[u8], n: usize) -> String {
-    bytes.iter().take(n).map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")
+    bytes
+        .iter()
+        .take(n)
+        .map(|b| format!("{b:02X}"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 #[test]

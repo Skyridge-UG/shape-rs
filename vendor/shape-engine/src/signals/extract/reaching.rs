@@ -137,97 +137,131 @@ fn definitions_at_use<'a>(
     let mut cursor = use_node;
     let mut own_target = None;
     loop {
-    let (list, position) = statement_of(nodes, cursor)?;
-    let use_span = nodes.get_node(use_node).span();
-    let read_statement = &list[position];
-    let own_writes: Vec<Span> = writes
-        .iter()
-        .copied()
-        .filter(|write| within(read_statement.span(), *write)
-            && (cursor == use_node || write.start < use_span.end)
-            && Some(*write) != own_target
-            && !in_other_arm(nodes, use_node, read_statement.span(), *write))
-        .collect();
-    if !own_writes.is_empty() {
-        match plain_assignment(read_statement, symbol, scoping) {
-            Some((target, value)) if own_writes == [target] && within(value.span(), use_span) => { own_target = Some(target); }
-            _ => return Err("the read's own statement writes the local".to_string()),
-        }
-    }
-
-    let declaration_span = nodes.get_node(declaration).span();
-    // Values from arms of an `if` already passed that leave the local
-    // unwritten on some path: the earlier definition joins them.
-    let mut joined: Vec<ReachingDefinition<'a>> = Vec::new();
-    for statement in list[..position].iter().rev() {
-        let span = statement.span();
-        let writes_here: Vec<Span> = writes
+        let (list, position) = statement_of(nodes, cursor)?;
+        let use_span = nodes.get_node(use_node).span();
+        let read_statement = &list[position];
+        let own_writes: Vec<Span> = writes
             .iter()
             .copied()
-            .filter(|write| within(span, *write))
+            .filter(|write| {
+                within(read_statement.span(), *write)
+                    && (cursor == use_node || write.start < use_span.end)
+                    && Some(*write) != own_target
+                    && !in_other_arm(nodes, use_node, read_statement.span(), *write)
+            })
             .collect();
-        let declares_here = within(span, declaration_span);
-        if writes_here.is_empty() && !declares_here {
-            // Loops that do not write this binding cannot change its value.
-            // Captured writes and dynamic scope were rejected above; a loop
-            // that does write it is handled by the non-plain-write refusal.
-            continue;
-        }
-        if !declares_here && writes_only_in_exiting_handler(statement, &writes_here) {
-            // `try { … } catch { … v = x; …; return … }`: the handler never
-            // completes normally, so its writes cannot reach a later read.
-            continue;
-        }
-        if !writes_here.is_empty() {
-            match plain_assignment(statement, symbol, scoping) {
-                Some((target, value)) if writes_here == [target] && !declares_here => {
-                    joined.push(ReachingDefinition { value });
-                    return Ok(joined);
+        if !own_writes.is_empty() {
+            match plain_assignment(read_statement, symbol, scoping) {
+                Some((target, value))
+                    if own_writes == [target] && within(value.span(), use_span) =>
+                {
+                    own_target = Some(target);
                 }
-                _ if join && !declares_here && matches!(statement, Statement::IfStatement(_)) => {
-                    let (values, falls_through) = arm_definitions(statement, symbol, scoping, &writes_here)?;
-                    joined.extend(values.into_iter().map(|value| ReachingDefinition { value }));
-                    if falls_through {
-                        continue;
+                _ => return Err("the read's own statement writes the local".to_string()),
+            }
+        }
+
+        let declaration_span = nodes.get_node(declaration).span();
+        // Values from arms of an `if` already passed that leave the local
+        // unwritten on some path: the earlier definition joins them.
+        let mut joined: Vec<ReachingDefinition<'a>> = Vec::new();
+        for statement in list[..position].iter().rev() {
+            let span = statement.span();
+            let writes_here: Vec<Span> = writes
+                .iter()
+                .copied()
+                .filter(|write| within(span, *write))
+                .collect();
+            let declares_here = within(span, declaration_span);
+            if writes_here.is_empty() && !declares_here {
+                // Loops that do not write this binding cannot change its value.
+                // Captured writes and dynamic scope were rejected above; a loop
+                // that does write it is handled by the non-plain-write refusal.
+                continue;
+            }
+            if !declares_here && writes_only_in_exiting_handler(statement, &writes_here) {
+                // `try { … } catch { … v = x; …; return … }`: the handler never
+                // completes normally, so its writes cannot reach a later read.
+                continue;
+            }
+            if !writes_here.is_empty() {
+                match plain_assignment(statement, symbol, scoping) {
+                    Some((target, value)) if writes_here == [target] && !declares_here => {
+                        joined.push(ReachingDefinition { value });
+                        return Ok(joined);
                     }
-                    return Ok(joined);
+                    _ if join
+                        && !declares_here
+                        && matches!(statement, Statement::IfStatement(_)) =>
+                    {
+                        let (values, falls_through) =
+                            arm_definitions(statement, symbol, scoping, &writes_here)?;
+                        joined.extend(values.into_iter().map(|value| ReachingDefinition { value }));
+                        if falls_through {
+                            continue;
+                        }
+                        return Ok(joined);
+                    }
+                    _ => {
+                        return Err("the nearest write is not a plain `local = value` statement"
+                            .to_string())
+                    }
                 }
-                _ => return Err("the nearest write is not a plain `local = value` statement".to_string()),
+            }
+            return match declaration_value(statement, declaration_span) {
+                Some(value) => {
+                    joined.push(ReachingDefinition { value });
+                    Ok(joined)
+                }
+                None => {
+                    Err("the nearest definition declares the local without a value".to_string())
+                }
+            };
+        }
+        if !joined.is_empty() {
+            // An arm leaves the local unwritten and no definition precedes the
+            // `if` in its block: the value from outside is not looked for.
+            return Err(
+                "an arm leaves the local unwritten and no definition precedes it".to_string(),
+            );
+        }
+        // A nested block may read a definition in its enclosing statement list.
+        // Cross only a block/branch boundary with no other write to this binding
+        // in that containing statement; loop backedges that write it are refused.
+        loop {
+            let parent = nodes.parent_id(cursor);
+            if parent == cursor
+                || matches!(
+                    nodes.kind(parent),
+                    AstKind::FunctionBody(_)
+                        | AstKind::Program(_)
+                        | AstKind::Function(_)
+                        | AstKind::ArrowFunctionExpression(_)
+                )
+            {
+                return Err("no definition precedes the read in its block".to_string());
+            }
+            cursor = parent;
+            if matches!(
+                nodes.kind(cursor),
+                AstKind::ForStatement(_)
+                    | AstKind::ForInStatement(_)
+                    | AstKind::ForOfStatement(_)
+                    | AstKind::WhileStatement(_)
+                    | AstKind::DoWhileStatement(_)
+            ) && writes
+                .iter()
+                .any(|write| within(nodes.get_node(cursor).span(), *write))
+            {
+                return Err("an enclosing loop writes the local".to_string());
+            }
+            if matches!(
+                nodes.kind(cursor),
+                AstKind::BlockStatement(_) | AstKind::SwitchCase(_)
+            ) {
+                break;
             }
         }
-        return match declaration_value(statement, declaration_span) {
-            Some(value) => {
-                joined.push(ReachingDefinition { value });
-                Ok(joined)
-            }
-            None => Err("the nearest definition declares the local without a value".to_string()),
-        };
-    }
-    if !joined.is_empty() {
-        // An arm leaves the local unwritten and no definition precedes the
-        // `if` in its block: the value from outside is not looked for.
-        return Err("an arm leaves the local unwritten and no definition precedes it".to_string());
-    }
-    // A nested block may read a definition in its enclosing statement list.
-    // Cross only a block/branch boundary with no other write to this binding
-    // in that containing statement; loop backedges that write it are refused.
-    loop {
-        let parent = nodes.parent_id(cursor);
-        if parent == cursor || matches!(nodes.kind(parent),
-            AstKind::FunctionBody(_) | AstKind::Program(_) | AstKind::Function(_)
-            | AstKind::ArrowFunctionExpression(_)) {
-            return Err("no definition precedes the read in its block".to_string());
-        }
-        cursor = parent;
-        if matches!(nodes.kind(cursor), AstKind::ForStatement(_) | AstKind::ForInStatement(_)
-            | AstKind::ForOfStatement(_) | AstKind::WhileStatement(_) | AstKind::DoWhileStatement(_))
-            && writes.iter().any(|write| within(nodes.get_node(cursor).span(), *write)) {
-            return Err("an enclosing loop writes the local".to_string());
-        }
-        if matches!(nodes.kind(cursor), AstKind::BlockStatement(_) | AstKind::SwitchCase(_)) {
-            break;
-        }
-    }
     }
 }
 
@@ -253,7 +287,8 @@ fn arm_definitions<'a>(
             if writes_in(branch.test.span()) > 0 {
                 return Err("an `if` test writes the local".to_string());
             }
-            let (mut values, mut falls_through) = arm_definitions(&branch.consequent, symbol, scoping, writes)?;
+            let (mut values, mut falls_through) =
+                arm_definitions(&branch.consequent, symbol, scoping, writes)?;
             match &branch.alternate {
                 Some(alternate) => {
                     let (other, other_falls) = arm_definitions(alternate, symbol, scoping, writes)?;
@@ -276,10 +311,15 @@ fn arm_definitions<'a>(
             Ok((values, true))
         }
         _ => match plain_assignment(statement, symbol, scoping) {
-            Some((target, value)) if writes_in(statement.span()) == 1 && writes.contains(&target) => {
+            Some((target, value))
+                if writes_in(statement.span()) == 1 && writes.contains(&target) =>
+            {
                 Ok((vec![value], false))
             }
-            _ => Err("an arm writes the local other than as a plain `local = value` statement".to_string()),
+            _ => Err(
+                "an arm writes the local other than as a plain `local = value` statement"
+                    .to_string(),
+            ),
         },
     }
 }
@@ -303,7 +343,10 @@ fn in_other_arm(nodes: &AstNodes<'_>, use_node: NodeId, statement: Span, write: 
         let child_span = nodes.get_node(child).span();
         match nodes.kind(parent) {
             AstKind::IfStatement(branch) if within(parent_span, write) => {
-                let arms = [Some(branch.consequent.span()), branch.alternate.as_ref().map(|arm| arm.span())];
+                let arms = [
+                    Some(branch.consequent.span()),
+                    branch.alternate.as_ref().map(|arm| arm.span()),
+                ];
                 let own = arms.iter().flatten().find(|arm| within(**arm, child_span));
                 let other = arms.iter().flatten().find(|arm| !within(**arm, child_span));
                 if own.is_some() && other.is_some_and(|arm| within(*arm, write)) {
@@ -509,7 +552,9 @@ mod tests {
             .nodes()
             .iter()
             .filter_map(|node| match node.kind() {
-                AstKind::IdentifierReference(identifier) if identifier.name == "v" => Some(identifier),
+                AstKind::IdentifierReference(identifier) if identifier.name == "v" => {
+                    Some(identifier)
+                }
                 _ => None,
             })
             .filter(|identifier| {
@@ -520,8 +565,10 @@ mod tests {
             })
             .max_by_key(|identifier| identifier.span.start)
             .expect("a read of v");
-        value_at_use(semantic.scoping(), semantic.nodes(), read)
-            .map(|definition| source[definition.value.span().start as usize..definition.value.span().end as usize].to_string())
+        value_at_use(semantic.scoping(), semantic.nodes(), read).map(|definition| {
+            source[definition.value.span().start as usize..definition.value.span().end as usize]
+                .to_string()
+        })
     }
 
     #[test]
@@ -546,7 +593,9 @@ mod tests {
             .nodes()
             .iter()
             .filter_map(|node| match node.kind() {
-                AstKind::IdentifierReference(identifier) if identifier.name == "v" => Some(identifier),
+                AstKind::IdentifierReference(identifier) if identifier.name == "v" => {
+                    Some(identifier)
+                }
                 _ => None,
             })
             .filter(|identifier| {
@@ -560,7 +609,11 @@ mod tests {
         definitions_at_use(semantic.scoping(), semantic.nodes(), read, true).map(|definitions| {
             definitions
                 .iter()
-                .map(|definition| source[definition.value.span().start as usize..definition.value.span().end as usize].to_string())
+                .map(|definition| {
+                    source[definition.value.span().start as usize
+                        ..definition.value.span().end as usize]
+                        .to_string()
+                })
                 .collect()
         })
     }
@@ -574,7 +627,11 @@ mod tests {
             else { v = h.w | 0; } return v; }";
         assert_eq!(
             last_read_values(source),
-            Ok(vec!["h.w | 0".to_string(), "h.w | 0 | v << 1".to_string(), "h.w | 0".to_string()])
+            Ok(vec![
+                "h.w | 0".to_string(),
+                "h.w | 0 | v << 1".to_string(),
+                "h.w | 0".to_string()
+            ])
         );
         // The single-definition answer still refuses.
         assert!(last_read_value(source).is_err());
@@ -583,7 +640,10 @@ mod tests {
     #[test]
     fn an_unwritten_arm_joins_the_earlier_definition() {
         let source = "function f(g, t) { let v = g.a; if (t) { v = g.b; } return v; }";
-        assert_eq!(last_read_values(source), Ok(vec!["g.b".to_string(), "g.a".to_string()]));
+        assert_eq!(
+            last_read_values(source),
+            Ok(vec!["g.b".to_string(), "g.a".to_string()])
+        );
         let no_earlier = "function f(g, t) { let v; if (t) { v = g.b; } return v; }";
         assert!(last_read_values(no_earlier).is_err());
     }
@@ -592,15 +652,18 @@ mod tests {
     fn arm_writes_in_other_shapes_refuse() {
         let looped = "function f(g, t) { let v = g.a; if (t) { for (;;) { v = g.b; } } else { v = 1; } return v; }";
         assert!(last_read_values(looped).is_err());
-        let compound = "function f(g, t) { let v = g.a; if (t) { v += 1; } else { v = 1; } return v; }";
+        let compound =
+            "function f(g, t) { let v = g.a; if (t) { v += 1; } else { v = 1; } return v; }";
         assert!(last_read_values(compound).is_err());
-        let in_test = "function f(g, t) { let v = g.a; if (v = t) { v = 2; } else { v = 1; } return v; }";
+        let in_test =
+            "function f(g, t) { let v = g.a; if (v = t) { v = 2; } else { v = 1; } return v; }";
         assert!(last_read_values(in_test).is_err());
     }
 
     #[test]
     fn a_loop_around_both_arms_still_refuses() {
-        let source = "function f(g, w, p) { let v = g; for (;;) { if (p) { v = p + 1; } else { w(v); } } }";
+        let source =
+            "function f(g, w, p) { let v = g; for (;;) { if (p) { v = p + 1; } else { w(v); } } }";
         assert!(last_read_value(source).is_err());
         let test_write = "function f(g, w, p) { let v = g; if (v = p) { v = 1; } else { w(v); } }";
         assert!(last_read_value(test_write).is_err());
@@ -608,9 +671,11 @@ mod tests {
 
     #[test]
     fn falling_through_catch_writes_still_refuse() {
-        let source = "function f(g) { let v = 1; v = g; try { g(); } catch (e) { v = 2; } return v; }";
+        let source =
+            "function f(g) { let v = 1; v = g; try { g(); } catch (e) { v = 2; } return v; }";
         assert!(last_read_value(source).is_err());
-        let in_block = "function f(g) { let v = 1; v = g; try { v = 3; } catch (e) { return 0; } return v; }";
+        let in_block =
+            "function f(g) { let v = 1; v = g; try { v = 3; } catch (e) { return 0; } return v; }";
         assert!(last_read_value(in_block).is_err());
     }
 }

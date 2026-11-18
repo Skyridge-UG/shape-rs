@@ -60,7 +60,10 @@ impl Found<'_> {
             || function.generator
             || function.params.rest.is_some()
             || self.scoping.symbol_is_mutated(symbol)
-            || self.comments.iter().any(|c| function.span.start <= c.start && c.end <= function.span.end)
+            || self
+                .comments
+                .iter()
+                .any(|c| function.span.start <= c.start && c.end <= function.span.end)
         {
             return None;
         }
@@ -82,7 +85,11 @@ impl Found<'_> {
             written.push(mutated);
             parameters.push(parameter_symbol);
         }
-        let max_statements = if self.exact { usize::MAX - 1 } else { MAX_STATEMENTS };
+        let max_statements = if self.exact {
+            usize::MAX - 1
+        } else {
+            MAX_STATEMENTS
+        };
         let mut value = None;
         let (shape, pieces, member) = match body.statements.as_slice() {
             // An empty helper does nothing where it is a statement.
@@ -91,18 +98,24 @@ impl Found<'_> {
                 let argument = ret.argument.as_ref()?;
                 // Tuple returns belong to the tuple expansion; an array of
                 // literals (or none) is a plain factory.
-                if !self.exact && matches!(argument, Expression::ArrayExpression(array) if !array.elements.iter().all(|element| {
-                    matches!(
-                        element,
-                        ArrayExpressionElement::NumericLiteral(_)
-                            | ArrayExpressionElement::StringLiteral(_)
-                            | ArrayExpressionElement::BooleanLiteral(_)
-                            | ArrayExpressionElement::NullLiteral(_)
-                    )
-                })) {
+                if !self.exact
+                    && matches!(argument, Expression::ArrayExpression(array) if !array.elements.iter().all(|element| {
+                        matches!(
+                            element,
+                            ArrayExpressionElement::NumericLiteral(_)
+                                | ArrayExpressionElement::StringLiteral(_)
+                                | ArrayExpressionElement::BooleanLiteral(_)
+                                | ArrayExpressionElement::NullLiteral(_)
+                        )
+                    }))
+                {
                     return None;
                 }
-                (Shape::Expression, vec![argument.span()], argument.is_member_expression())
+                (
+                    Shape::Expression,
+                    vec![argument.span()],
+                    argument.is_member_expression(),
+                )
             }
             statements if statements.len() <= max_statements + 1 => {
                 let (last, rest) = statements.split_last()?;
@@ -112,9 +125,13 @@ impl Found<'_> {
                         Statement::ExpressionStatement(expression) => pieces.push(expression.span),
                         Statement::VariableDeclaration(declaration)
                             if self.exact
-                                && matches!(declaration.kind, VariableDeclarationKind::Let | VariableDeclarationKind::Const)
+                                && matches!(
+                                    declaration.kind,
+                                    VariableDeclarationKind::Let | VariableDeclarationKind::Const
+                                )
                                 && declaration.declarations.iter().all(|declarator| {
-                                    matches!(declarator.id, BindingPattern::BindingIdentifier(_)) && declarator.init.is_some()
+                                    matches!(declarator.id, BindingPattern::BindingIdentifier(_))
+                                        && declarator.init.is_some()
                                 }) =>
                         {
                             pieces.push(declaration.span)
@@ -142,14 +159,20 @@ impl Found<'_> {
             }
             _ => return None,
         };
-        let mut scan = BodyScan { bindings: self.exact.then(Vec::new), ..BodyScan::default() };
+        let mut scan = BodyScan {
+            bindings: self.exact.then(Vec::new),
+            ..BodyScan::default()
+        };
         scan.visit_function_body(body);
         if !scan.closed {
             return None;
         }
         let bindings = scan.bindings.unwrap_or_default();
-        let mut locals: Vec<(Span, usize)> =
-            bindings.iter().enumerate().map(|(index, (span, _))| (*span, index)).collect();
+        let mut locals: Vec<(Span, usize)> = bindings
+            .iter()
+            .enumerate()
+            .map(|(index, (span, _))| (*span, index))
+            .collect();
         let mut uses = Vec::new();
         let mut free = Vec::new();
         for (span, reference) in scan.references {
@@ -160,7 +183,10 @@ impl Found<'_> {
             }
             match target.and_then(|t| parameters.iter().position(|p| *p == t)) {
                 Some(index) => uses.push((span, index)),
-                None => free.push((self.source[span.start as usize..span.end as usize].to_string(), target)),
+                None => free.push((
+                    self.source[span.start as usize..span.end as usize].to_string(),
+                    target,
+                )),
             }
         }
         uses.sort_by_key(|(span, _)| span.start);
@@ -205,10 +231,9 @@ impl<'a> Visit<'a> for Found<'_> {
         if self.exact && function.is_declaration() {
             if let Some(id) = &function.id {
                 if (id.name.starts_with("$VMHELPER_") || id.name.starts_with("vm_sub_"))
-                    && id
-                        .symbol_id
-                        .get()
-                        .is_some_and(|symbol| self.scoping.get_resolved_reference_ids(symbol).is_empty())
+                    && id.symbol_id.get().is_some_and(|symbol| {
+                        self.scoping.get_resolved_reference_ids(symbol).is_empty()
+                    })
                 {
                     self.unused.push(function.span);
                 }
@@ -316,7 +341,8 @@ impl<'a> Visit<'a> for BodyScan {
         walk::walk_member_expression(self, member);
     }
     fn visit_assignment_expression(&mut self, assignment: &AssignmentExpression<'a>) {
-        self.effects.push((assignment.span.start, assignment.span.end));
+        self.effects
+            .push((assignment.span.start, assignment.span.end));
         if assignment.left.as_member_expression().is_none()
             || assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign
         {
@@ -330,8 +356,12 @@ impl<'a> Visit<'a> for BodyScan {
                         self.visit_expression(&computed.object);
                         self.visit_expression(&computed.expression);
                     }
-                    MemberExpression::StaticMemberExpression(member) => self.visit_expression(&member.object),
-                    MemberExpression::PrivateFieldExpression(member) => self.visit_expression(&member.object),
+                    MemberExpression::StaticMemberExpression(member) => {
+                        self.visit_expression(&member.object)
+                    }
+                    MemberExpression::PrivateFieldExpression(member) => {
+                        self.visit_expression(&member.object)
+                    }
                 }
                 self.visit_expression(&assignment.right);
                 return;
@@ -345,14 +375,20 @@ impl<'a> Visit<'a> for BodyScan {
         walk::walk_update_expression(self, update);
     }
     fn visit_unary_expression(&mut self, unary: &UnaryExpression<'a>) {
-        if !matches!(unary.operator, UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void) {
+        if !matches!(
+            unary.operator,
+            UnaryOperator::LogicalNot | UnaryOperator::Typeof | UnaryOperator::Void
+        ) {
             self.effects.push((unary.span.start, unary.span.end));
             self.code.push((unary.span.start, unary.span.end));
         }
         walk::walk_unary_expression(self, unary);
     }
     fn visit_binary_expression(&mut self, binary: &BinaryExpression<'a>) {
-        if !matches!(binary.operator, BinaryOperator::StrictEquality | BinaryOperator::StrictInequality) {
+        if !matches!(
+            binary.operator,
+            BinaryOperator::StrictEquality | BinaryOperator::StrictInequality
+        ) {
             self.effects.push((binary.span.start, binary.span.end));
             self.code.push((binary.span.start, binary.span.end));
         }
@@ -379,12 +415,16 @@ pub(super) fn read_only(expression: &Expression<'_>) -> bool {
         | Expression::ThisExpression(_) => true,
         Expression::ParenthesizedExpression(inner) => read_only(&inner.expression),
         Expression::StaticMemberExpression(member) => read_only(&member.object),
-        Expression::ComputedMemberExpression(member) => read_only(&member.object) && read_only(&member.expression),
+        Expression::ComputedMemberExpression(member) => {
+            read_only(&member.object) && read_only(&member.expression)
+        }
         Expression::UnaryExpression(unary) => {
             unary.operator != UnaryOperator::Delete && read_only(&unary.argument)
         }
         Expression::BinaryExpression(binary) => read_only(&binary.left) && read_only(&binary.right),
-        Expression::LogicalExpression(logical) => read_only(&logical.left) && read_only(&logical.right),
+        Expression::LogicalExpression(logical) => {
+            read_only(&logical.left) && read_only(&logical.right)
+        }
         Expression::ConditionalExpression(choice) => {
             read_only(&choice.test) && read_only(&choice.consequent) && read_only(&choice.alternate)
         }

@@ -1,10 +1,7 @@
 use super::*;
 use oxc_semantic::SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<SymbolId> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -19,9 +16,7 @@ pub(in crate::naming) fn immutable(
     (model.binding_writes(s) == 0 && model.scoping.symbol_redeclarations(s).is_empty()).then_some(s)
 }
 
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     let Expression::CallExpression(c) = e else {
         return None;
     };

@@ -189,25 +189,23 @@ impl Scan<'_, '_> {
             if snapshot.use_span != *span || effects.non_value_reads.contains(span) {
                 continue;
             }
-            let valid =
-                snapshot
-                    .dependencies
-                    .iter()
-                    .all(|(dependency, captured_version)| {
-                        values
-                            .get(dependency)
-                            .is_some_and(|value| value.version == *captured_version)
-                            && !effects.writes.contains(dependency)
-                            && self.scoping.find_binding(
-                                snapshot.use_scope,
-                                self.scoping.symbol_ident(*dependency),
-                            ) == Some(*dependency)
-                    });
+            let valid = snapshot
+                .dependencies
+                .iter()
+                .all(|(dependency, captured_version)| {
+                    values
+                        .get(dependency)
+                        .is_some_and(|value| value.version == *captured_version)
+                        && !effects.writes.contains(dependency)
+                        && self.scoping.find_binding(
+                            snapshot.use_scope,
+                            self.scoping.symbol_ident(*dependency),
+                        ) == Some(*dependency)
+                });
             if !valid {
                 continue;
             }
-            let value =
-                &self.source[snapshot.value.start as usize..snapshot.value.end as usize];
+            let value = &self.source[snapshot.value.start as usize..snapshot.value.end as usize];
             self.edits
                 .push(analysis::Edit::delete(snapshot.declaration));
             self.edits
@@ -297,9 +295,7 @@ impl Scan<'_, '_> {
     fn assigned(&self, statement: &Statement<'_>, values: &Values) -> Option<(SymbolId, Kind)> {
         match statement {
             Statement::ExpressionStatement(s) => match &s.expression {
-                Expression::AssignmentExpression(a)
-                    if a.operator == AssignmentOperator::Assign =>
-                {
+                Expression::AssignmentExpression(a) if a.operator == AssignmentOperator::Assign => {
                     match &a.left {
                         AssignmentTarget::AssignmentTargetIdentifier(id) => {
                             analysis::identifier_symbol(id, self.scoping).map(|symbol| {

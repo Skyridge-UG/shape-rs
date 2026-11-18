@@ -67,7 +67,11 @@ impl ContextCollector {
         }
     }
 
-    pub(super) fn scan_statements(&mut self, statements: &[Statement<'_>], allow_var: bool) -> usize {
+    pub(super) fn scan_statements(
+        &mut self,
+        statements: &[Statement<'_>],
+        allow_var: bool,
+    ) -> usize {
         let block_id = self.blocks.len();
         let mut statement_spans = Vec::with_capacity(statements.len());
         for (index, statement) in statements.iter().enumerate() {

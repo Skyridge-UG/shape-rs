@@ -1061,7 +1061,11 @@ fn seed_base(model: &Model<'_, '_>, expression: &Expression<'_>, seed: Symbol) -
     or.operator.as_str() == "|" && number(&or.right, 0.0) && symbol(model, &or.left) == Some(seed)
 }
 
-pub(in crate::naming) fn big_endian_header(model: &Model<'_, '_>, expression: &Expression<'_>, seed: Symbol) -> bool {
+pub(in crate::naming) fn big_endian_header(
+    model: &Model<'_, '_>,
+    expression: &Expression<'_>,
+    seed: Symbol,
+) -> bool {
     let Expression::ArrayExpression(array) = expression.without_parentheses() else {
         return false;
     };

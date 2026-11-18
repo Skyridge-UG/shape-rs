@@ -141,20 +141,32 @@ fn cleanup_thread_impl(
 }
 
 /// The main sweep, to a fixed point: null flags, branch facts, channels, literals, carries, snapshots and SSA; then loops.
-fn expression_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn expression_sweep(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     for _ in 0..24 {
-        let (code, null_flags) =
-            super::super::null_flags::eliminate_null_flags(&result.code, &protected, checked_captures)?;
+        let (code, null_flags) = super::super::null_flags::eliminate_null_flags(
+            &result.code,
+            &protected,
+            checked_captures,
+        )?;
         result.inlined_bindings += null_flags;
         let (code, branch_facts) = super::super::branch_facts::simplify_branch_facts(&code)?;
-        let (code, channels) = super::super::join_channels::normalize_join_channels(&code, &protected)?;
-        let (code, point_literals) =
-            super::super::point_literals::inline_property_keys(&code, &protected, checked_captures)?;
+        let (code, channels) =
+            super::super::join_channels::normalize_join_channels(&code, &protected)?;
+        let (code, point_literals) = super::super::point_literals::inline_property_keys(
+            &code,
+            &protected,
+            checked_captures,
+        )?;
         let (code, constants) = super::super::constant_values::fold_constant_values(&code)?;
         let (code, dense_arrays) =
             super::super::dense_arrays::fold_dense_arrays(&code, &protected, checked_captures)?;
         result.folded_arrays += dense_arrays;
-        let arrays = super::super::simplify_array_constructions(&code).map_err(|e| e.to_string())?;
+        let arrays =
+            super::super::simplify_array_constructions(&code).map_err(|e| e.to_string())?;
         result.folded_arrays += arrays.compacted_arrays;
         let dead_carry = remove_dead_carries(&arrays.code)?;
         let coalesced = coalesce_carry_copies(&dead_carry.code)?;
@@ -165,13 +177,16 @@ fn expression_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
             super::super::branch_value::fold_branch_assignments(&literal_joined.code)?;
         let folded = super::super::branch_value::fold_thread_branch_values(&code)?;
         let (code, self_assignments) = remove_carry_self_assignments(&folded.code)?;
-        let (code, repeated_tests) = super::super::conditional_values::collapse_repeated_tests(&code)?;
+        let (code, repeated_tests) =
+            super::super::conditional_values::collapse_repeated_tests(&code)?;
         let tuples = scalarize_literal_tuples(&code)?;
         let literal = inline_literal_ssa(&tuples.code)?;
         let (code, snapshots) = inline_snapshot_ssa(&literal.code, &protected)?;
-        let (code, copies) = super::super::snapshot_copies::merge_snapshot_copies(&code, &protected)?;
+        let (code, copies) =
+            super::super::snapshot_copies::merge_snapshot_copies(&code, &protected)?;
         let alias = super::super::alias_ssa::inline_alias_ssa_with_protected(&code, &protected)?;
-        let adjacent = super::super::adjacent_ssa::inline_thread_adjacent_ssa(&alias.code, &protected)?;
+        let adjacent =
+            super::super::adjacent_ssa::inline_thread_adjacent_ssa(&alias.code, &protected)?;
         // Preserve descriptor provenance until helper tuple/alias relays settle.
         let normalized = tuples.removed == 0
             && literal.inlined_bindings == 0
@@ -179,12 +194,16 @@ fn expression_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
             && alias.inlined_bindings == 0
             && adjacent.inlined_bindings == 0;
         let (code, objects, property_changes) = if normalized {
-            let literals =
-                super::super::property_writes::fold_descriptor_literals(&adjacent.code, &protected)?;
+            let literals = super::super::property_writes::fold_descriptor_literals(
+                &adjacent.code,
+                &protected,
+            )?;
             result.folded_arrays += literals.arrays;
-            let properties =
-                super::super::property_writes::simplify_thread_property_writes(&literals.code, &protected)
-                    .map_err(|e| e.to_string())?;
+            let properties = super::super::property_writes::simplify_thread_property_writes(
+                &literals.code,
+                &protected,
+            )
+            .map_err(|e| e.to_string())?;
             (
                 properties.code,
                 literals.constructions,
@@ -198,7 +217,8 @@ fn expression_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
         result.simplified_method_calls += methods;
         let (code, reused) = super::super::local_values::simplify_local_values(&code, &protected)?;
         let (code, early_dead) = super::super::dead_locals::remove_dead_locals(&code, &protected)?;
-        let (code, early_numeric) = super::super::numeric_coercions::simplify_numeric_coercions(&code)?;
+        let (code, early_numeric) =
+            super::super::numeric_coercions::simplify_numeric_coercions(&code)?;
         let (code, forwarded) = super::super::slot_forward::forward_ssa_slots(&code, &protected)?;
         let dead = remove_dead_ssa(&code)?;
         let (code, noop_reads) = super::super::dead_ssa::remove_noop_local_reads(&dead.code)?;
@@ -250,20 +270,28 @@ fn expression_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
             break;
         }
     }
-    let (code, loops) = super::super::structured_loops::reconstruct_loops(&result.code, &protected)?;
+    let (code, loops) =
+        super::super::structured_loops::reconstruct_loops(&result.code, &protected)?;
     result.code = code;
     result.reconstructed_loops = loops;
     Ok(())
 }
 
 /// Storage, once SSA structure has served the expression proofs: tail joins, handoffs, private arrays; then counters, inputs and blocks.
-fn storage_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn storage_sweep(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     // Preserve SSA structure until expression and descriptor reconstruction
     // finish. Reusing mutable storage earlier obstructs those proofs.
     for _ in 0..24 {
         let (code, branch_facts) = super::super::branch_facts::simplify_branch_facts(&result.code)?;
-        let (code, returns) =
-            super::super::return_joins::eliminate_thread_tail_joins(&code, &protected, checked_captures)?;
+        let (code, returns) = super::super::return_joins::eliminate_thread_tail_joins(
+            &code,
+            &protected,
+            checked_captures,
+        )?;
         // Consumer sinking can expose an assignment diamond for its existing
         // destination. Recover that immutable result before lifetime cleanup.
         let code = if returns != 0 {
@@ -272,7 +300,8 @@ fn storage_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, check
         } else {
             code
         };
-        let (code, cells) = super::super::carry_lifetimes::coalesce_local_handoffs(&code, &protected)?;
+        let (code, cells) =
+            super::super::carry_lifetimes::coalesce_local_handoffs(&code, &protected)?;
         let (code, array_reads) = super::super::private_array_reads::inline_private_array_reads(
             &code,
             &protected,
@@ -301,7 +330,8 @@ fn storage_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, check
     // ordered-argument proof can recognize their private Number counters.
     result.code = super::super::numeric_coercions::simplify_numeric_coercions(&result.code)?.0;
     let (code, blocks) = super::super::blocks::flatten_blocks(&result.code)?;
-    let (code, inputs) = super::super::argument_snapshots::inline_argument_snapshots(&code, &protected)?;
+    let (code, inputs) =
+        super::super::argument_snapshots::inline_argument_snapshots(&code, &protected)?;
     result.code = code;
     result.inlined_bindings += inputs;
     result.flattened_blocks = blocks;
@@ -309,14 +339,22 @@ fn storage_sweep(result: &mut ThreadCleanup, protected: &BTreeSet<String>, check
 }
 
 /// Chains the flattened continuations expose, under the same dependency and capture checks.
-fn late_propagation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn late_propagation(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     // Preserve the storage proofs already made in the original scopes, then
     // consume chains the flattened continuations expose using the same
     // dependency/capture checks. Single use alone never authorizes reordering.
     for _ in 0..24 {
-        let (prepared, tightened) =
-            super::super::declaration_lifetimes::tighten(&result.code, &protected, checked_captures)?;
-        let (code, argument_reads) = super::super::dead_ssa::remove_discarded_argument_reads(&prepared)?;
+        let (prepared, tightened) = super::super::declaration_lifetimes::tighten(
+            &result.code,
+            &protected,
+            checked_captures,
+        )?;
+        let (code, argument_reads) =
+            super::super::dead_ssa::remove_discarded_argument_reads(&prepared)?;
         let (code, empty_else) = super::super::empty_else::remove_empty_else_blocks(&code)?;
         let (mut code, null_flags) =
             super::super::null_flags::eliminate_null_flags(&code, &protected, checked_captures)?;
@@ -328,13 +366,18 @@ fn late_propagation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
             code = super::super::join_channels::normalize_join_channels(&code, &protected)?.0;
         }
         let (code, channel_arguments, channel_aliases) =
-            super::super::stable_channels::eliminate_stable_channels(&code, &protected, checked_captures)?;
+            super::super::stable_channels::eliminate_stable_channels(
+                &code,
+                &protected,
+                checked_captures,
+            )?;
         result.inlined_bindings += channel_arguments + channel_aliases;
         let (code, nullish) = super::super::nullish_syntax::recover_nullish_syntax(&code)?;
         let literal = inline_literal_ssa(&code)?;
         let (code, snapshots) = inline_snapshot_ssa(&literal.code, &protected)?;
         let alias = super::super::alias_ssa::inline_alias_ssa_with_protected(&code, &protected)?;
-        let (code, reused) = super::super::local_values::simplify_local_values(&alias.code, &protected)?;
+        let (code, reused) =
+            super::super::local_values::simplify_local_values(&alias.code, &protected)?;
         let adjacent = super::super::adjacent_ssa::inline_thread_adjacent_ssa(&code, &protected)?;
         let (code, methods) =
             super::super::method_calls::simplify_method_calls(&adjacent.code, &protected)?;
@@ -342,7 +385,8 @@ fn late_propagation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
         // Flattening and late propagation can expose a copy-out in the same
         // statement list. Rebuild semantic facts rather than relying on the
         // scopes or reference counts from the earlier storage phase.
-        let (code, cells) = super::super::carry_lifetimes::coalesce_local_handoffs(&code, &protected)?;
+        let (code, cells) =
+            super::super::carry_lifetimes::coalesce_local_handoffs(&code, &protected)?;
         // Removing snapshots may also make an allocation single-use, or make
         // a private array's complete use graph visible to its cell proof.
         // These are the same identity, capture and version checks used above;
@@ -354,8 +398,11 @@ fn late_propagation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
             &protected,
             checked_captures,
         )?;
-        let (code, tail_joins) =
-            super::super::return_joins::eliminate_thread_tail_joins(&code, &protected, checked_captures)?;
+        let (code, tail_joins) = super::super::return_joins::eliminate_thread_tail_joins(
+            &code,
+            &protected,
+            checked_captures,
+        )?;
         result.simplified_method_calls += methods;
         result.code = code;
         result.inlined_bindings += literal.inlined_bindings
@@ -393,14 +440,21 @@ fn late_propagation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, ch
     result.code = super::super::numeric_coercions::simplify_numeric_coercions(&result.code)?.0;
     result.code = super::super::empty_else::remove_empty_else_blocks(&result.code)?.0;
     result.code = super::super::dead_ssa::remove_discarded_argument_reads(&result.code)?.0;
-    result.code =
-        super::super::index_counters::recover_index_counters(&result.code, &protected, checked_captures)?
-            .0;
+    result.code = super::super::index_counters::recover_index_counters(
+        &result.code,
+        &protected,
+        checked_captures,
+    )?
+    .0;
     Ok(())
 }
 
 /// Short-lived, definitely assigned branch cells, after snapshots have claimed their storage.
-fn branch_cells(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn branch_cells(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     // Finish short-lived, definitely assigned branch cells only after existing
     // snapshots have claimed their storage. Rebuild facts between proposals.
     for _ in 0..24 {
@@ -409,9 +463,13 @@ fn branch_cells(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checke
             &protected,
             checked_captures,
         )?;
-        let (code, branches) =
-            super::super::branch_handoffs::coalesce_branch_handoffs(&code, &protected, checked_captures)?;
-        let (code, finished) = super::super::carry_lifetimes::finish_private_channels(&code, &protected)?;
+        let (code, branches) = super::super::branch_handoffs::coalesce_branch_handoffs(
+            &code,
+            &protected,
+            checked_captures,
+        )?;
+        let (code, finished) =
+            super::super::carry_lifetimes::finish_private_channels(&code, &protected)?;
         result.code = code;
         result.inlined_bindings += finished;
         result.inlined_bindings += branches + recycled;
@@ -425,7 +483,11 @@ fn branch_cells(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checke
 }
 
 /// Identity-unobserved literals, once slot and snapshot propagation settles.
-fn literal_relocation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn literal_relocation(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     // Relocate identity-unobserved literals only after slot and snapshot
     // propagation settles. Earlier reconstruction can hide producer provenance
     // and make the main sweep retain additional snapshots.
@@ -441,7 +503,8 @@ fn literal_relocation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, 
         let (code, fresh) =
             super::super::fresh_values::inline_fresh_values(&code, &protected, checked_captures)?;
         let adjacent = super::super::adjacent_ssa::inline_thread_adjacent_ssa(&code, &protected)?;
-        let (code, dead) = super::super::dead_locals::remove_dead_locals(&adjacent.code, &protected)?;
+        let (code, dead) =
+            super::super::dead_locals::remove_dead_locals(&adjacent.code, &protected)?;
         result.inlined_bindings += fresh + adjacent.inlined_bindings;
         result.code = code;
         if moved == 0 && folded == 0 && fresh == 0 && adjacent.inlined_bindings == 0 && dead == 0 {
@@ -452,7 +515,11 @@ fn literal_relocation(result: &mut ThreadCleanup, protected: &BTreeSet<String>, 
 }
 
 /// Unrelated ended live ranges, after producer reconstruction.
-fn recycling(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_captures: bool) -> Result<(), String> {
+fn recycling(
+    result: &mut ThreadCleanup,
+    protected: &BTreeSet<String>,
+    checked_captures: bool,
+) -> Result<(), String> {
     // Recycle unrelated ended live ranges only after producer reconstruction.
     // Doing this earlier hides the array/descriptor construction provenance.
     for _ in 0..24 {
@@ -461,8 +528,11 @@ fn recycling(result: &mut ThreadCleanup, protected: &BTreeSet<String>, checked_c
             &protected,
             checked_captures,
         )?;
-        let (code, points) =
-            super::super::point_literals::inline_point_literals(&code, &protected, checked_captures)?;
+        let (code, points) = super::super::point_literals::inline_point_literals(
+            &code,
+            &protected,
+            checked_captures,
+        )?;
         let (code, constants) = super::super::constant_values::fold_constant_values(&code)?;
         let (code, branches) = super::super::branch_facts::simplify_branch_facts(&code)?;
         let code = if branches != 0 {

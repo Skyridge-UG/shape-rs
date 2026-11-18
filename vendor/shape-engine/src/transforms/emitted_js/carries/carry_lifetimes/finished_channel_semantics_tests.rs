@@ -17,8 +17,7 @@ fn path_assignment_proof_preserves_undefined_old_reads_and_short_circuiting() {
     ] {
         for rhs in ["$CARRY_0+1", "[$CARRY_0,state]", "[$CARRY_0,$CARRY_0]"] {
             let source=format!("function f(flag){{let state=9;let $CARRY_0;{branch}state={rhs};return [state,state===state];}}");
-            let (code, _) =
-                super::finish_private_channels(&source, &Default::default()).unwrap();
+            let (code, _) = super::finish_private_channels(&source, &Default::default()).unwrap();
             fixtures.push((source, code));
         }
     }

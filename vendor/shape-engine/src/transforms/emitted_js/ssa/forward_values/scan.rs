@@ -27,9 +27,10 @@ impl<'s> Scan<'s> {
     /// The name a member chain starts from.
     pub(super) fn base_symbol(&self, expression: &Expression<'_>) -> Option<SymbolId> {
         match expression {
-            Expression::Identifier(identifier) => {
-                self.scoping().get_reference(identifier.reference_id()).symbol_id()
-            }
+            Expression::Identifier(identifier) => self
+                .scoping()
+                .get_reference(identifier.reference_id())
+                .symbol_id(),
             Expression::StaticMemberExpression(member) => self.base_symbol(&member.object),
             Expression::ComputedMemberExpression(member) => self.base_symbol(&member.object),
             _ => None,
@@ -59,7 +60,11 @@ impl<'s> Scan<'s> {
             entries.push(Statement {
                 span: statement.span(),
                 owner,
-                writes: if noop { Some(Vec::new()) } else { self.inert_writes(statement) },
+                writes: if noop {
+                    Some(Vec::new())
+                } else {
+                    self.inert_writes(statement)
+                },
             });
             if let Some(candidate) = self.candidate(statement, list, position) {
                 self.candidates.push(candidate);
@@ -75,7 +80,12 @@ impl<'s> Scan<'s> {
         self.lists.push(entries);
     }
 
-    pub(super) fn slot_store(&self, statement: &oxc_ast::ast::Statement<'_>, list: usize, position: usize) -> Option<SlotStore> {
+    pub(super) fn slot_store(
+        &self,
+        statement: &oxc_ast::ast::Statement<'_>,
+        list: usize,
+        position: usize,
+    ) -> Option<SlotStore> {
         let (target, value) = match statement {
             oxc_ast::ast::Statement::ExpressionStatement(expression) => {
                 let Expression::AssignmentExpression(assignment) = &expression.expression else {
@@ -87,10 +97,14 @@ impl<'s> Scan<'s> {
                 if assignment.operator != AssignmentOperator::Assign {
                     return None;
                 }
-                (analysis::identifier_symbol(target, self.scoping())?, &assignment.right)
+                (
+                    analysis::identifier_symbol(target, self.scoping())?,
+                    &assignment.right,
+                )
             }
             oxc_ast::ast::Statement::VariableDeclaration(declaration)
-                if declaration.kind == VariableDeclarationKind::Var && declaration.declarations.len() == 1 =>
+                if declaration.kind == VariableDeclarationKind::Var
+                    && declaration.declarations.len() == 1 =>
             {
                 let declarator = &declaration.declarations[0];
                 let BindingPattern::BindingIdentifier(binding) = &declarator.id else {
@@ -101,7 +115,9 @@ impl<'s> Scan<'s> {
             _ => return None,
         };
         let name = self.scoping().symbol_name(target);
-        if !(name.starts_with("$KEY_") || name.starts_with("$CARRY_")) || self.has_comment(statement.span()) {
+        if !(name.starts_with("$KEY_") || name.starts_with("$CARRY_"))
+            || self.has_comment(statement.span())
+        {
             return None;
         }
         let (kind, value_reference) = self.classify(value);
@@ -169,7 +185,8 @@ impl<'s> Scan<'s> {
             helper: None,
             pure: self.types.is_some_and(|types| types.pure(init)) && !primitives::allocates(init),
             fresh: self.types.is_some_and(|types| types.pure(init)) && primitives::allocates(init),
-            property_read: self.property_reads && self.types.is_some_and(|types| property_read(init, types)),
+            property_read: self.property_reads
+                && self.types.is_some_and(|types| property_read(init, types)),
             named: keeps_name(init),
         })
     }
@@ -196,7 +213,10 @@ impl<'s> Scan<'s> {
             }
             Expression::Identifier(identifier)
                 if identifier.reference_id.get().is_some_and(|reference| {
-                    self.scoping().get_reference(reference).symbol_id().is_none()
+                    self.scoping()
+                        .get_reference(reference)
+                        .symbol_id()
+                        .is_none()
                 }) && is_constant_global(&identifier.name) =>
             {
                 (InitKind::Word, None)
@@ -248,7 +268,10 @@ impl<'s> Scan<'s> {
         };
         if pattern.rest.is_some()
             || call.optional
-            || call.arguments.iter().any(|argument| argument.as_expression().is_none())
+            || call
+                .arguments
+                .iter()
+                .any(|argument| argument.as_expression().is_none())
         {
             return Vec::new();
         }
@@ -268,7 +291,10 @@ impl<'s> Scan<'s> {
             let Some(Some(parameter)) = helper.slots.get(index) else {
                 continue;
             };
-            let Some(argument) = call.arguments.get(*parameter).and_then(|a| a.as_expression())
+            let Some(argument) = call
+                .arguments
+                .get(*parameter)
+                .and_then(|a| a.as_expression())
             else {
                 continue;
             };
@@ -302,11 +328,13 @@ impl<'s> Scan<'s> {
         }
         // A pure shuffle of stable arguments: losing every slot loses the call.
         let removable = helper.shuffle
-            && call
-                .arguments
-                .iter()
-                .all(|argument| argument.as_expression().is_some_and(|e| self.classify(e).0 != InitKind::Computed));
-        self.groups.insert(statement.span().start, (named, removable));
+            && call.arguments.iter().all(|argument| {
+                argument
+                    .as_expression()
+                    .is_some_and(|e| self.classify(e).0 != InitKind::Computed)
+            });
+        self.groups
+            .insert(statement.span().start, (named, removable));
         candidates
     }
 
@@ -371,7 +399,7 @@ impl<'s> Scan<'s> {
                     pure: false,
                     fresh: false,
                     property_read: false,
-                        named: false,
+                    named: false,
                 })
             })
             .collect()
@@ -380,10 +408,10 @@ impl<'s> Scan<'s> {
     /// `arguments[n]` in a function whose arguments cannot change.
     pub(super) fn is_fixed_argument(&self, member: &ComputedMemberExpression<'_>) -> bool {
         matches!((&member.object, &member.expression), (Expression::Identifier(object), Expression::NumericLiteral(_))
-            if object.name == "arguments"
-                && object.reference_id.get().is_some_and(|reference| {
-                    self.scoping().get_reference(reference).symbol_id().is_none()
-                }))
+        if object.name == "arguments"
+            && object.reference_id.get().is_some_and(|reference| {
+                self.scoping().get_reference(reference).symbol_id().is_none()
+            }))
             && !member.optional
             && self.fixed_arguments.contains(&self.owner())
     }
@@ -401,24 +429,30 @@ impl<'s> Scan<'s> {
         !member.optional
             && analysis::identifier_symbol(object, self.scoping())
                 .and_then(|symbol| self.tuple_slots.get(&symbol))
-                .is_some_and(|length| index.value.fract() == 0.0 && index.value >= 0.0 && index.value < *length as f64)
+                .is_some_and(|length| {
+                    index.value.fract() == 0.0 && index.value >= 0.0 && index.value < *length as f64
+                })
     }
 
     /// The symbols a statement writes when all it does is store literals or
     /// identifiers into plain locals.
-    pub(super) fn inert_writes(&self, statement: &oxc_ast::ast::Statement<'_>) -> Option<Vec<SymbolId>> {
+    pub(super) fn inert_writes(
+        &self,
+        statement: &oxc_ast::ast::Statement<'_>,
+    ) -> Option<Vec<SymbolId>> {
         let scoping = self.scoping();
         let simple = |expression: &Expression<'_>| {
             self.types.is_some_and(|types| types.pure(expression))
                 || matches!(expression, Expression::ComputedMemberExpression(member) if self.is_fixed_argument(member))
                 || matches!(
-                expression,
-                Expression::StringLiteral(_)
-                    | Expression::BooleanLiteral(_)
-                    | Expression::NullLiteral(_)
-                    | Expression::NumericLiteral(_)
-                    | Expression::Identifier(_)
-            ) || matches!(expression, Expression::UnaryExpression(unary)
+                    expression,
+                    Expression::StringLiteral(_)
+                        | Expression::BooleanLiteral(_)
+                        | Expression::NullLiteral(_)
+                        | Expression::NumericLiteral(_)
+                        | Expression::Identifier(_)
+                )
+                || matches!(expression, Expression::UnaryExpression(unary)
                 if matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::Void)
                     && matches!(unary.argument, Expression::NumericLiteral(_)))
                 || property_path(expression)
@@ -444,8 +478,7 @@ impl<'s> Scan<'s> {
                 let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
                     return None;
                 };
-                if assignment.operator != AssignmentOperator::Assign || !simple(&assignment.right)
-                {
+                if assignment.operator != AssignmentOperator::Assign || !simple(&assignment.right) {
                     return None;
                 }
                 Some(vec![analysis::identifier_symbol(target, scoping)?])
@@ -552,9 +585,10 @@ impl<'a> Visit<'a> for Scan<'_> {
             && matches!(&call.callee, Expression::Identifier(callee)
                 if matches!(callee.name.as_str(), "Number" | "String" | "Boolean")
                     && self.scoping().get_reference(callee.reference_id()).symbol_id().is_none())
-            && call.arguments[0]
-                .as_expression()
-                .is_some_and(|argument| self.types.is_some_and(|types| types.type_of(argument).is_some()));
+            && call.arguments[0].as_expression().is_some_and(|argument| {
+                self.types
+                    .is_some_and(|types| types.type_of(argument).is_some())
+            });
         if converts {
             self.read_effect(call.span);
         } else {
@@ -565,7 +599,8 @@ impl<'a> Visit<'a> for Scan<'_> {
         // the call does.
         let method_object = match &call.callee {
             Expression::StaticMemberExpression(member)
-                if !member.optional && matches!(member.property.name.as_str(), "call" | "apply") =>
+                if !member.optional
+                    && matches!(member.property.name.as_str(), "call" | "apply") =>
             {
                 Some(&member.object)
             }
@@ -578,7 +613,9 @@ impl<'a> Visit<'a> for Scan<'_> {
             }
             _ => None,
         };
-        if let Some(object) = method_object.filter(|object| matches!(object, Expression::Identifier(_))) {
+        if let Some(object) =
+            method_object.filter(|object| matches!(object, Expression::Identifier(_)))
+        {
             self.visit_expression(object);
             for argument in &call.arguments {
                 self.visit_argument(argument);
@@ -606,7 +643,8 @@ impl<'a> Visit<'a> for Scan<'_> {
 
     fn visit_member_expression(&mut self, member: &MemberExpression<'a>) {
         // A fixed `arguments[n]` read is neither an effect nor a changing name.
-        if matches!(member, MemberExpression::ComputedMemberExpression(computed) if self.is_fixed_argument(computed)) {
+        if matches!(member, MemberExpression::ComputedMemberExpression(computed) if self.is_fixed_argument(computed))
+        {
             return;
         }
         // A built-in's named property reads a fixed value.
@@ -621,13 +659,17 @@ impl<'a> Visit<'a> for Scan<'_> {
     }
 
     fn visit_assignment_expression(&mut self, assignment: &AssignmentExpression<'a>) {
-        if matches!(assignment.left, AssignmentTarget::AssignmentTargetIdentifier(_)) {
+        if matches!(
+            assignment.left,
+            AssignmentTarget::AssignmentTargetIdentifier(_)
+        ) {
             self.read_effect(assignment.span);
         } else {
             self.effect(assignment.span);
             if let Some(member) = assignment.left.as_member_expression() {
                 let base = self.base_symbol(member.object());
-                self.member_stores.insert((assignment.span.start, assignment.span.end), base);
+                self.member_stores
+                    .insert((assignment.span.start, assignment.span.end), base);
             }
         }
         // `o[k] = v` evaluates `o` and `k`, then `v`, then stores: the target
@@ -654,7 +696,10 @@ impl<'a> Visit<'a> for Scan<'_> {
     }
 
     fn visit_update_expression(&mut self, update: &UpdateExpression<'a>) {
-        if matches!(update.argument, SimpleAssignmentTarget::AssignmentTargetIdentifier(_)) {
+        if matches!(
+            update.argument,
+            SimpleAssignmentTarget::AssignmentTargetIdentifier(_)
+        ) {
             self.read_effect(update.span);
         } else {
             self.effect(update.span);
@@ -692,8 +737,13 @@ impl<'a> Visit<'a> for Scan<'_> {
                 let left = types.type_of(&binary.left).is_some();
                 let right = types.type_of(&binary.right).is_some();
                 if left != right {
-                    let untyped = if left { binary.right.span() } else { binary.left.span() };
-                    self.conversions.insert((binary.span.start, binary.span.end), untyped);
+                    let untyped = if left {
+                        binary.right.span()
+                    } else {
+                        binary.left.span()
+                    };
+                    self.conversions
+                        .insert((binary.span.start, binary.span.end), untyped);
                 }
             }
         }
@@ -715,14 +765,16 @@ impl<'a> Visit<'a> for Scan<'_> {
     fn visit_await_expression(&mut self, expression: &AwaitExpression<'a>) {
         self.runs(expression.span);
         let owner = self.owner();
-        self.suspends.push((expression.span.start, expression.span.end, owner));
+        self.suspends
+            .push((expression.span.start, expression.span.end, owner));
         walk::walk_await_expression(self, expression);
     }
 
     fn visit_yield_expression(&mut self, expression: &YieldExpression<'a>) {
         self.runs(expression.span);
         let owner = self.owner();
-        self.suspends.push((expression.span.start, expression.span.end, owner));
+        self.suspends
+            .push((expression.span.start, expression.span.end, owner));
         walk::walk_yield_expression(self, expression);
     }
 

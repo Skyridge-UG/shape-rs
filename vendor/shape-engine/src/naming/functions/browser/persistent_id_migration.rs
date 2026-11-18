@@ -13,7 +13,8 @@ const NAME: &str = "migrateAndInitializePersistentId";
 const EVALUATOR: &str = "persistent_id_migration";
 // Definition-level role only. It is not an exported helper/algorithm contract.
 const PROTOCOL_NAME: &str = "runPersistentIdMigrationProtocol";
-pub(in crate::naming) const PROTOCOL_EVALUATOR: &str = "owned_persistent_id_migration_protocol_definition";
+pub(in crate::naming) const PROTOCOL_EVALUATOR: &str =
+    "owned_persistent_id_migration_protocol_definition";
 const CONTRACT: &str = include_str!("persistent_id_migration_contract.js");
 
 // A single shared continuation grammar, not a body catalog. The helper calls
@@ -78,17 +79,23 @@ fn canonical_compact(source: &str) -> Option<String> {
 fn canonical_options(source: &str, minify: bool) -> Option<String> {
     let allocator = Allocator::default();
     let program = crate::analysis::parse_program(&allocator, source).ok()?;
-    Some(oxc_codegen::Codegen::new()
-        .with_options(oxc_codegen::CodegenOptions {
-            minify, comments: oxc_codegen::CommentOptions::disabled(),
-            ..Default::default()
-        })
-        .build(&program).code)
+    Some(
+        oxc_codegen::Codegen::new()
+            .with_options(oxc_codegen::CodegenOptions {
+                minify,
+                comments: oxc_codegen::CommentOptions::disabled(),
+                ..Default::default()
+            })
+            .build(&program)
+            .code,
+    )
 }
 
 fn captured_variable(model: &Model<'_, '_>, site: FunctionSite, symbol: SymbolId) -> bool {
     let declaration = model.scoping.symbol_declaration(symbol);
-    !site.span.contains_inclusive(model.nodes.get_node(declaration).span())
+    !site
+        .span
+        .contains_inclusive(model.nodes.get_node(declaration).span())
         && model.scoping.symbol_redeclarations(symbol).is_empty()
         && matches!(model.nodes.kind(declaration), AstKind::VariableDeclarator(d)
             if matches!(&d.id, BindingPattern::BindingIdentifier(id)
@@ -104,12 +111,18 @@ fn opaque_port_slot(model: &Model<'_, '_>, site: FunctionSite, symbol: SymbolId)
 
 fn normalized(model: &Model<'_, '_>, site: FunctionSite, span: Span) -> Option<String> {
     let mut identifiers = BTreeMap::new();
-    for node in model.nodes.iter().filter(|n| span.contains_inclusive(n.kind().span())) {
+    for node in model
+        .nodes
+        .iter()
+        .filter(|n| span.contains_inclusive(n.kind().span()))
+    {
         let (id_span, symbol) = match node.kind() {
             AstKind::BindingIdentifier(id) => (id.span, id.symbol_id.get()?),
             AstKind::IdentifierReference(id) => {
                 let Some(symbol) = crate::analysis::identifier_symbol(id, model.scoping) else {
-                    if !matches!(id.name.as_str(), "Error" | "Date" | "setTimeout") { return None; }
+                    if !matches!(id.name.as_str(), "Error" | "Date" | "setTimeout") {
+                        return None;
+                    }
                     continue;
                 };
                 (id.span, symbol)
@@ -125,43 +138,67 @@ fn normalized(model: &Model<'_, '_>, site: FunctionSite, span: Span) -> Option<S
     for ((start, end), symbol) in identifiers {
         let next = names.len();
         let index = *names.entry(symbol).or_insert(next);
-        if matches!(index, 1 | 2 | 8 | 14 | 15 | 16 | 18 | 19 | 20 | 21 | 23 | 26 | 28 | 29 | 32) {
-            if !opaque_port_slot(model, site, symbol) { return None; }
+        if matches!(
+            index,
+            1 | 2 | 8 | 14 | 15 | 16 | 18 | 19 | 20 | 21 | 23 | 26 | 28 | 29 | 32
+        ) {
+            if !opaque_port_slot(model, site, symbol) {
+                return None;
+            }
         } else {
             let declaration = model.scoping.symbol_declaration(symbol);
             if !span.contains_inclusive(model.nodes.get_node(declaration).span())
                 || !model.scoping.symbol_redeclarations(symbol).is_empty()
-                || model.scoping.get_resolved_references(symbol).any(|r|
-                    r.is_write() && !span.contains_inclusive(model.nodes.get_node(r.node_id()).span())) {
+                || model.scoping.get_resolved_references(symbol).any(|r| {
+                    r.is_write()
+                        && !span.contains_inclusive(model.nodes.get_node(r.node_id()).span())
+                })
+            {
                 return None;
             }
         }
         edits.push((start, end, format!("__pid{index}")));
     }
-    if names.len() != 33 { return None; }
+    if names.len() != 33 {
+        return None;
+    }
 
-    let mut source = model.source.get(span.start as usize..span.end as usize)?.to_string();
+    let mut source = model
+        .source
+        .get(span.start as usize..span.end as usize)?
+        .to_string();
     for (start, end, replacement) in edits.into_iter().rev() {
-        source.replace_range((start-span.start) as usize..(end-span.start) as usize, &replacement);
+        source.replace_range(
+            (start - span.start) as usize..(end - span.start) as usize,
+            &replacement,
+        );
     }
     canonical_migration(&source)
 }
 
 fn legacy_normalized(model: &Model<'_, '_>, site: FunctionSite, span: Span) -> Option<String> {
     let mut identifiers = BTreeMap::new();
-    for node in model.nodes.iter().filter(|n| span.contains_inclusive(n.kind().span())) {
+    for node in model
+        .nodes
+        .iter()
+        .filter(|n| span.contains_inclusive(n.kind().span()))
+    {
         let (id_span, symbol) = match node.kind() {
             AstKind::BindingIdentifier(id) => (id.span, id.symbol_id.get()?),
             AstKind::IdentifierReference(id) => {
                 let Some(symbol) = crate::analysis::identifier_symbol(id, model.scoping) else {
-                    if id.name != "Error" { return None; }
+                    if id.name != "Error" {
+                        return None;
+                    }
                     continue;
                 };
                 (id.span, symbol)
             }
             // No nested body, dynamic scope or opaque donor is admitted.
-            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
-            | AstKind::Class(_) | AstKind::WithStatement(_) => return None,
+            AstKind::Function(_)
+            | AstKind::ArrowFunctionExpression(_)
+            | AstKind::Class(_)
+            | AstKind::WithStatement(_) => return None,
             _ => continue,
         };
         identifiers.insert((id_span.start, id_span.end), symbol);
@@ -172,60 +209,110 @@ fn legacy_normalized(model: &Model<'_, '_>, site: FunctionSite, span: Span) -> O
         let next = names.len();
         let index = *names.entry(symbol).or_insert(next);
         if matches!(index, 1 | 2 | 8) {
-            if !captured_variable(model, site, symbol) { return None; }
+            if !captured_variable(model, site, symbol) {
+                return None;
+            }
             // Config/storage must not be replaced by a local write in this body.
-            if index != 8 && model.scoping.get_resolved_references(symbol).any(|r|
-                r.is_write() && site.span.contains_inclusive(model.nodes.get_node(r.node_id()).span())) {
+            if index != 8
+                && model.scoping.get_resolved_references(symbol).any(|r| {
+                    r.is_write()
+                        && site
+                            .span
+                            .contains_inclusive(model.nodes.get_node(r.node_id()).span())
+                })
+            {
                 return None;
             }
         } else {
             let declaration = model.scoping.symbol_declaration(symbol);
             if !span.contains_inclusive(model.nodes.get_node(declaration).span())
                 || !model.scoping.symbol_redeclarations(symbol).is_empty()
-                || model.scoping.get_resolved_references(symbol).any(|r|
-                    r.is_write() && !span.contains_inclusive(model.nodes.get_node(r.node_id()).span())) {
+                || model.scoping.get_resolved_references(symbol).any(|r| {
+                    r.is_write()
+                        && !span.contains_inclusive(model.nodes.get_node(r.node_id()).span())
+                })
+            {
                 return None;
             }
         }
         edits.push((start, end, format!("__pid{index}")));
     }
-    if names.len() != 14 { return None; }
-    let mut source = model.source.get(span.start as usize..span.end as usize)?.to_string();
+    if names.len() != 14 {
+        return None;
+    }
+    let mut source = model
+        .source
+        .get(span.start as usize..span.end as usize)?
+        .to_string();
     for (start, end, replacement) in edits.into_iter().rev() {
-        source.replace_range((start-span.start) as usize..(end-span.start) as usize, &replacement);
+        source.replace_range(
+            (start - span.start) as usize..(end - span.start) as usize,
+            &replacement,
+        );
     }
     canonical(&source)
 }
 
-
 pub(in crate::naming) fn evaluate<'a>(
-    model: &Model<'_, 'a>, site: FunctionSite, f: &Facts<'_>,
+    model: &Model<'_, 'a>,
+    site: FunctionSite,
+    f: &Facts<'_>,
     _proposals: &BTreeMap<u32, Vec<Proposal>>,
 ) -> Vec<Proposal> {
-    let AstKind::Function(function) = model.nodes.kind(site.node_id) else { return Vec::new(); };
-    if function.r#async || function.generator || function.params.rest.is_some()
-        || !function.params.items.is_empty() { return Vec::new(); }
-    let Some(body) = &function.body else { return Vec::new(); };
-    if !body.directives.is_empty() || body.statements.len() < 5 { return Vec::new(); }
+    let AstKind::Function(function) = model.nodes.kind(site.node_id) else {
+        return Vec::new();
+    };
+    if function.r#async
+        || function.generator
+        || function.params.rest.is_some()
+        || !function.params.items.is_empty()
+    {
+        return Vec::new();
+    }
+    let Some(body) = &function.body else {
+        return Vec::new();
+    };
+    if !body.directives.is_empty() || body.statements.len() < 5 {
+        return Vec::new();
+    }
     // Preserve the accepted rule exactly; the extension below has its own
     // complete-body proof and cannot borrow the legacy prefix's acceptance.
-    let legacy_span = Span::new(body.statements[0].span().start, body.statements[4].span().end);
+    let legacy_span = Span::new(
+        body.statements[0].span().start,
+        body.statements[4].span().end,
+    );
     static LEGACY_EXPECTED: OnceLock<String> = OnceLock::new();
-    let legacy_expected = LEGACY_EXPECTED.get_or_init(|| canonical(CONTRACT).expect("migration grammar parses"));
+    let legacy_expected =
+        LEGACY_EXPECTED.get_or_init(|| canonical(CONTRACT).expect("migration grammar parses"));
     if legacy_span.size() <= 16000
-        && model.source[legacy_span.start as usize..legacy_span.end as usize].contains("persistentId")
-        && legacy_normalized(model, site, legacy_span).as_ref() == Some(legacy_expected) {
+        && model.source[legacy_span.start as usize..legacy_span.end as usize]
+            .contains("persistentId")
+        && legacy_normalized(model, site, legacy_span).as_ref() == Some(legacy_expected)
+    {
         return vec![proposal(NAME, EVALUATOR,
             "exact owned lexical migration grammar: captured storage/config; URL-safe legacy f decode, padding and version validation; same-value migration under persistentId.key; resetKey removal and transactionToken initialization on that same storage/config; no nested or adjacent evidence", f)];
     }
-    if body.statements.len() != 9 { return Vec::new(); }
-    let prefix = Span::new(body.statements[0].span().start, body.statements[8].span().end);
+    if body.statements.len() != 9 {
+        return Vec::new();
+    }
+    let prefix = Span::new(
+        body.statements[0].span().start,
+        body.statements[8].span().end,
+    );
     // Cheap necessary prefilter only. The entire grammar below establishes proof.
-    if prefix.size() > 16000 || !model.source[prefix.start as usize..prefix.end as usize]
-        .contains("persistentId") { return Vec::new(); }
+    if prefix.size() > 16000
+        || !model.source[prefix.start as usize..prefix.end as usize].contains("persistentId")
+    {
+        return Vec::new();
+    }
     static EXPECTED: OnceLock<String> = OnceLock::new();
-    let expected = EXPECTED.get_or_init(|| canonical_migration(&format!("{CONTRACT}\n{CONTINUATION}")).expect("migration grammar parses"));
-    if normalized(model, site, prefix).as_ref() != Some(expected) { return Vec::new(); }
+    let expected = EXPECTED.get_or_init(|| {
+        canonical_migration(&format!("{CONTRACT}\n{CONTINUATION}"))
+            .expect("migration grammar parses")
+    });
+    if normalized(model, site, prefix).as_ref() != Some(expected) {
+        return Vec::new();
+    }
     vec![proposal(PROTOCOL_NAME, PROTOCOL_EVALUATOR,
         "complete owned protocol definition: local URL-safe legacy decode/padding/version guards; ordered migration, reset and fallback requests; lease/token/module/observer/afterReady/error continuations with exact scoped reads, receivers, arguments and exception order; every external port read/call is opaque and effectful, repeated lexical slots need not retain object values; no entry readiness, native API/helper algorithm identity, stable backend, entropy quality, persistence success or callback delivery is established", f)]
 }

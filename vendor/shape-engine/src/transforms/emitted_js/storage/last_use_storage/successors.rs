@@ -51,7 +51,10 @@ impl<'a> SuccessorProof<'_, 'a> {
     // A continuation copy often lives on the true side of `test && (...)`.
     // Joining both outcomes before forming the backedge loses that equality.
     // Keep truth outcomes separate without moving or evaluating any producer.
-    pub(super) fn condition(&mut self, expression: &Expression<'a>) -> (SuccessorState, SuccessorState) {
+    pub(super) fn condition(
+        &mut self,
+        expression: &Expression<'a>,
+    ) -> (SuccessorState, SuccessorState) {
         if !self.state.live {
             return (SuccessorState::DEAD, SuccessorState::DEAD);
         }

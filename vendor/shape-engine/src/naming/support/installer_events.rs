@@ -3,10 +3,7 @@ use oxc_semantic::SymbolId;
 
 pub(in crate::naming) type Symbol = SymbolId;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<Symbol> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<Symbol> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -50,9 +47,7 @@ pub(in crate::naming) fn member<'a>(
     (!m.optional && m.property.name == key).then_some(&m.object)
 }
 
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     let Expression::CallExpression(c) = e else {
         return None;
     };
@@ -68,9 +63,7 @@ pub(in crate::naming) fn statement_call<'a>(
     call(&s.expression)
 }
 
-pub(in crate::naming) fn block<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a [Statement<'a>]> {
+pub(in crate::naming) fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(b) = s else {
         return None;
     };

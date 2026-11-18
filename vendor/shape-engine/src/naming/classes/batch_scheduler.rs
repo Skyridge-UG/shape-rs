@@ -1,9 +1,9 @@
 //! Complete, ordered native BatchScheduler contract. p03 supplies only the
 //! elapsed-clock factory witness; no weak scheduler role is promoted.
-use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::analysis::roles::FinderClaim;
 #[cfg(test)]
 use crate::signals::analysis::roles::FinderCtx;
+use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::schema::Confidence;
 use oxc_ast::{ast::*, AstKind};
 use oxc_semantic::{Scoping, SymbolId};
@@ -735,7 +735,10 @@ pub(crate) fn claims(model: &Model<'_, '_>) -> Vec<FinderClaim> {
         scoping: model.scoping,
         nodes: model.nodes,
     };
-    claims_with_finder_claims(model, &crate::signals::analysis::roles::vm_exec::classes::find(&ctx))
+    claims_with_finder_claims(
+        model,
+        &crate::signals::analysis::roles::vm_exec::classes::find(&ctx),
+    )
 }
 
 /// Integration supplies the finder claims collected for this exact Model.

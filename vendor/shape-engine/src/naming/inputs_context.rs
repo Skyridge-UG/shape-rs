@@ -8,8 +8,7 @@ use crate::naming::function_index::extract_function_index;
 use crate::naming::output::{extract_output_properties_with_context, OutputProperties};
 use crate::naming::role_graph::{extract_program_role_graph_with_context, ProgramRoleGraph};
 use crate::signals::extract::inputs::{
-    extract_program_inputs, source_identity, verify_identity, ProgramInputError,
-    ProgramInputReport,
+    extract_program_inputs, source_identity, verify_identity, ProgramInputError, ProgramInputReport,
 };
 
 pub const PROGRAM_INPUT_CONTEXT_SCHEMA_VERSION: u32 = 1;
@@ -127,7 +126,8 @@ fn build_context_joins(
     output: &OutputProperties,
 ) -> Vec<ProgramInputJoin> {
     let mut joins = Vec::new();
-    let contains = |outer: crate::signals::schema::SourceSpan, inner: crate::signals::schema::SourceSpan| {
+    let contains = |outer: crate::signals::schema::SourceSpan,
+                    inner: crate::signals::schema::SourceSpan| {
         inner.start >= outer.start && inner.end <= outer.end
     };
     for request in &inputs.wiring.collector_requests {
@@ -212,4 +212,3 @@ fn build_context_joins(
     }
     joins
 }
-

@@ -49,7 +49,11 @@ impl Synthesizer {
 
     /// Synthesize the given catalog. Unknown catalog entries fail loud —
     /// a half-synthesized report is worse than an error at the API boundary.
-    pub fn synthesize(&self, catalog: &[crate::catalog::SignalDef], request_seed: u64) -> Result<NamedSignals> {
+    pub fn synthesize(
+        &self,
+        catalog: &[crate::catalog::SignalDef],
+        request_seed: u64,
+    ) -> Result<NamedSignals> {
         let mut out = NamedSignals::new();
         let mut jitter = Jitter::new(request_seed);
         for def in catalog {
@@ -69,7 +73,7 @@ impl Synthesizer {
                     return Err(Error::Synthesis {
                         signal: other,
                         message: "no synthesizer rule; extend synth.rs".into(),
-                    })
+                    });
                 }
             };
             if !value.matches(def.kind) {

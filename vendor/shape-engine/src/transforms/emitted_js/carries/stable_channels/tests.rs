@@ -62,8 +62,7 @@ fn initialized_snapshots_keep_their_source_version_through_nested_loops() {
 #[test]
 fn constant_alias_stores_retain_their_error() {
     let source = "function f(){let source=1;const $SSA_0=source;$SSA_0=source;return $SSA_0;}";
-    let (_, a, b) =
-        super::eliminate_stable_channels(source, &Default::default(), false).unwrap();
+    let (_, a, b) = super::eliminate_stable_channels(source, &Default::default(), false).unwrap();
     assert_eq!(a + b, 0);
 }
 #[test]
@@ -95,8 +94,7 @@ fn incoming_slot_aliases_preserve_the_first_read_and_effect_barriers() {
         "function f(){const $SSA_0=$KEY_0;return $SSA_0();}",
         "function f(){const $SSA_0=$KEY_0;return [$SSA_0,$SSA_0];}",
     ] {
-        let (code, _, count) =
-            super::eliminate_stable_channels(source, &protected, false).unwrap();
+        let (code, _, count) = super::eliminate_stable_channels(source, &protected, false).unwrap();
         assert_eq!(count, 1, "{code}");
     }
     for source in [
@@ -108,14 +106,13 @@ fn incoming_slot_aliases_preserve_the_first_read_and_effect_barriers() {
         "function f(){const $SSA_0=$KEY_0;return [+$SSA_0,$SSA_0];}",
         "function f(){const $SSA_0=$KEY_0;return [$SSA_0,(()=>{let $KEY_0=2;return $SSA_0;})()];}",
     ] {
-        let (_,a,b)=super::eliminate_stable_channels(source,&protected,false).unwrap();
-        assert_eq!(a+b,0,"{source}");
+        let (_, a, b) = super::eliminate_stable_channels(source, &protected, false).unwrap();
+        assert_eq!(a + b, 0, "{source}");
     }
 }
 #[test]
 fn retained_declarators_keep_their_const_contract() {
-    let source =
-        "function f(){let source=1;const $SSA_0=source, other=2;other=3;return $SSA_0;}";
+    let source = "function f(){let source=1;const $SSA_0=source, other=2;other=3;return $SSA_0;}";
     let (code, _, count) =
         super::eliminate_stable_channels(source, &Default::default(), false).unwrap();
     assert_eq!(count, 1, "{code}");
@@ -200,8 +197,7 @@ fn existing_slot_copy_outs_can_own_a_producer_without_an_extra_snapshot() {
         "function f(){let $SSA_0=arguments[0]*2;$KEY_0=$SSA_0;return ($SSA_0<<5)-$SSA_0;}",
         "function f(){let $SSA_0=new Thing();$KEY_0=$SSA_0;return [$SSA_0,$SSA_0];}",
     ] {
-        let (code, _, count) =
-            super::eliminate_stable_channels(source, &protected, false).unwrap();
+        let (code, _, count) = super::eliminate_stable_channels(source, &protected, false).unwrap();
         assert_eq!(count, 1, "{code}");
         assert!(!code.contains("$SSA_0"), "{code}");
     }

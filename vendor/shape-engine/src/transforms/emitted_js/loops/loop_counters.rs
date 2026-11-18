@@ -52,8 +52,8 @@ use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, UnaryOperator};
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LoopCountersResult {
@@ -176,7 +176,8 @@ impl Candidate {
         for reference in scoping.get_resolved_references(symbol) {
             let node = reference.node_id();
             let span = nodes.kind(node).span();
-            if !contains(self.while_span, span) || enclosing_function(node, nodes) != self.function {
+            if !contains(self.while_span, span) || enclosing_function(node, nodes) != self.function
+            {
                 return false;
             }
             if reference.is_write() && span.start >= self.update_span.end {
@@ -352,9 +353,11 @@ impl Scan<'_, '_> {
             // store is lifted by the next step of the scan instead.
             let mut tested = Reads::default();
             tested.visit_expression(&statement.test);
-            if !tested.symbols.iter().any(|reference| {
-                self.scoping.get_reference(*reference).symbol_id() == Some(symbol)
-            }) {
+            if !tested
+                .symbols
+                .iter()
+                .any(|reference| self.scoping.get_reference(*reference).symbol_id() == Some(symbol))
+            {
                 continue;
             }
             let mut reads = Reads::default();
@@ -429,9 +432,10 @@ impl Scan<'_, '_> {
         }
         let mut reads = Reads::default();
         reads.visit_expression(&assign.right);
-        !reads.symbols.iter().any(|reference| {
-            self.scoping.get_reference(*reference).symbol_id() == Some(counter)
-        })
+        !reads
+            .symbols
+            .iter()
+            .any(|reference| self.scoping.get_reference(*reference).symbol_id() == Some(counter))
     }
 
     fn text(&self, span: Span) -> &str {
@@ -451,9 +455,7 @@ fn side_effect_free(expression: &Expression<'_>) -> bool {
         | Expression::BigIntLiteral(_)
         | Expression::StringLiteral(_)
         | Expression::RegExpLiteral(_) => true,
-        Expression::TemplateLiteral(template) => {
-            template.expressions.iter().all(side_effect_free)
-        }
+        Expression::TemplateLiteral(template) => template.expressions.iter().all(side_effect_free),
         Expression::UnaryExpression(unary) => match unary.operator {
             UnaryOperator::Delete => false,
             _ => side_effect_free(&unary.argument),
@@ -570,10 +572,14 @@ impl<'a> Visit<'a> for Scan<'_, 'a> {
 
 /// The innermost function or arrow containing `node`.
 fn enclosing_function(node: oxc_semantic::NodeId, nodes: &AstNodes<'_>) -> Option<Span> {
-    nodes.ancestor_ids(node).find_map(|ancestor| match nodes.kind(ancestor) {
-        AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => Some(nodes.kind(ancestor).span()),
-        _ => None,
-    })
+    nodes
+        .ancestor_ids(node)
+        .find_map(|ancestor| match nodes.kind(ancestor) {
+            AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => {
+                Some(nodes.kind(ancestor).span())
+            }
+            _ => None,
+        })
 }
 
 fn contains(outer: Span, inner: Span) -> bool {
@@ -627,9 +633,9 @@ mod tests {
         let result = lift_loop_counters(source).unwrap();
         assert_eq!(result.lifted, 1, "{}", result.code);
         assert!(
-            result.code.contains(
-                "for (; $VMHELPER_274($CARRY_2, x); $CARRY_2 = Number($CARRY_2) + 1)"
-            ),
+            result
+                .code
+                .contains("for (; $VMHELPER_274($CARRY_2, x); $CARRY_2 = Number($CARRY_2) + 1)"),
             "{}",
             result.code
         );
@@ -682,7 +688,9 @@ mod tests {
         let result = lift_loop_counters(source).unwrap();
         assert_eq!(result.lifted, 1, "{}", result.code);
         assert!(
-            result.code.contains("for (; $CARRY_1 < a.length; $CARRY_1 = Number($CARRY_1) + 1)"),
+            result
+                .code
+                .contains("for (; $CARRY_1 < a.length; $CARRY_1 = Number($CARRY_1) + 1)"),
             "{}",
             result.code
         );
@@ -721,7 +729,9 @@ mod tests {
         let result = lift_loop_counters(source).unwrap();
         assert_eq!(result.lifted, 1, "{}", result.code);
         assert!(
-            result.code.contains("for (; $CARRY_1 < a.length; $CARRY_1 = Number($CARRY_1) + 1)"),
+            result
+                .code
+                .contains("for (; $CARRY_1 < a.length; $CARRY_1 = Number($CARRY_1) + 1)"),
             "{}",
             result.code
         );

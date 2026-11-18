@@ -1,16 +1,24 @@
 //! `NamespacePropertyNameHashes`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `NamespacePropertyNameHashes`. Card: [`CARD`].
-pub(crate) fn recognize_namespace_property_name_hashes(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_namespace_property_name_hashes(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
-    (five_numbers(view) && namespace_table(&census).is_some() && !census.frame_realm)
-        .then(|| Claim::new(["namespace path table walked from the context global", "five hashes"]))
+    (five_numbers(view) && namespace_table(&census).is_some() && !census.frame_realm).then(|| {
+        Claim::new([
+            "namespace path table walked from the context global",
+            "five hashes",
+        ])
+    })
 }
 
 pub(crate) fn bind_namespace_property_name_hashes(
@@ -18,13 +26,21 @@ pub(crate) fn bind_namespace_property_name_hashes(
     layout: &SignalLayout,
     ctx: &FinderCtx,
 ) -> Result<FieldBinding, BindRefusal> {
-    bind_by_path(view, layout, ctx, &[
-        (&["Navigator", "prototype"], "navigatorProtoHash"),
-        (&["CanvasRenderingContext2D", "prototype"], "canvas2dProtoHash"),
-        (&["chrome", "app"], "chromeAppHash"),
-        (&["ApplePaySetup", "prototype"], "applePaySetupProtoHash"),
-        (&["safari"], "safariHash"),
-    ])
+    bind_by_path(
+        view,
+        layout,
+        ctx,
+        &[
+            (&["Navigator", "prototype"], "navigatorProtoHash"),
+            (
+                &["CanvasRenderingContext2D", "prototype"],
+                "canvas2dProtoHash",
+            ),
+            (&["chrome", "app"], "chromeAppHash"),
+            (&["ApplePaySetup", "prototype"], "applePaySetupProtoHash"),
+            (&["safari"], "safariHash"),
+        ],
+    )
 }
 
 // ===========================================================================

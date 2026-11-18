@@ -3,16 +3,16 @@
 //! The contract grammar is the wire IR. Source expressions are evidence,
 //! never code executed by the consumer. Unproved operations fail closed.
 mod algorithms;
-mod consumer;
 mod compact;
+mod consumer;
 mod counted;
 pub use compact::CompactSchema;
 mod control;
 mod float;
 pub mod named;
-pub mod semantic;
 mod position;
 mod program;
+pub mod semantic;
 pub(crate) mod source_number;
 
 pub use algorithms::{

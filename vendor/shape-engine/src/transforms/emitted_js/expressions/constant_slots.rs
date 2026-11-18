@@ -34,8 +34,8 @@ use oxc_span::{GetSpan, Span};
 
 use super::super::primitives::is_stable_global;
 use super::super::support::owner;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn inline_constant_slots(source: &str) -> Result<(String, usize), String> {
     let mut code = source.to_string();
@@ -57,11 +57,18 @@ fn stable_root(name: &str) -> bool {
 /// A global path's root name, or None: `Array.prototype.push` → `Array`.
 fn global_path<'e>(scoping: &Scoping, expression: &'e Expression<'_>) -> Option<&'e str> {
     match expression.without_parentheses() {
-        Expression::Identifier(name) => {
-            (stable_root(&name.name) && scoping.get_reference(name.reference_id()).symbol_id().is_none()).then_some(name.name.as_str())
+        Expression::Identifier(name) => (stable_root(&name.name)
+            && scoping
+                .get_reference(name.reference_id())
+                .symbol_id()
+                .is_none())
+        .then_some(name.name.as_str()),
+        Expression::StaticMemberExpression(member) if !member.optional => {
+            global_path(scoping, &member.object)
         }
-        Expression::StaticMemberExpression(member) if !member.optional => global_path(scoping, &member.object),
-        Expression::ComputedMemberExpression(member) if !member.optional && matches!(member.expression, Expression::StringLiteral(_)) => {
+        Expression::ComputedMemberExpression(member)
+            if !member.optional && matches!(member.expression, Expression::StringLiteral(_)) =>
+        {
             global_path(scoping, &member.object)
         }
         _ => None,
@@ -76,12 +83,16 @@ pub(crate) fn regexp_literal(scoping: &Scoping, expression: &Expression<'_>) -> 
         Expression::NewExpression(new) => (&new.callee, &new.arguments),
         _ => return None,
     };
-    if global_path(scoping, callee) != Some("RegExp") || !matches!(callee, Expression::Identifier(_)) {
+    if global_path(scoping, callee) != Some("RegExp")
+        || !matches!(callee, Expression::Identifier(_))
+    {
         return None;
     }
     let (pattern, flags) = match arguments.as_slice() {
         [Argument::StringLiteral(pattern)] => (pattern.value.as_str(), ""),
-        [Argument::StringLiteral(pattern), Argument::StringLiteral(flags)] => (pattern.value.as_str(), flags.value.as_str()),
+        [Argument::StringLiteral(pattern), Argument::StringLiteral(flags)] => {
+            (pattern.value.as_str(), flags.value.as_str())
+        }
         _ => return None,
     };
     if flags.contains(['g', 'y']) || !flags.chars().all(|flag| "dimsuv".contains(flag)) {
@@ -129,11 +140,16 @@ fn inline_once(source: &str) -> Result<(String, usize), String> {
         }
     }
     // A slot whose value reads another slot waits for that one to go.
-    let spans: Vec<Span> = slots.values().flat_map(|slot| slot.reads.iter().map(|(span, _)| *span)).collect();
+    let spans: Vec<Span> = slots
+        .values()
+        .flat_map(|slot| slot.reads.iter().map(|(span, _)| *span))
+        .collect();
     slots.retain(|symbol, slot| {
         let declaration = nodes.kind(scoping.symbol_declaration(*symbol)).span();
         let value_span = slot.store.unwrap_or(declaration);
-        !spans.iter().any(|read| value_span.start <= read.start && read.end <= value_span.end)
+        !spans
+            .iter()
+            .any(|read| value_span.start <= read.start && read.end <= value_span.end)
     });
     if slots.is_empty() {
         return Ok((source.into(), 0));
@@ -148,7 +164,11 @@ fn inline_once(source: &str) -> Result<(String, usize), String> {
                 let kept = declaration
                     .declarations
                     .iter()
-                    .filter(|d| !d.id.get_binding_identifier().is_some_and(|id| slots.contains_key(&id.symbol_id())))
+                    .filter(|d| {
+                        !d.id
+                            .get_binding_identifier()
+                            .is_some_and(|id| slots.contains_key(&id.symbol_id()))
+                    })
                     .map(|d| source[d.span.start as usize..d.span.end as usize].to_string())
                     .collect();
                 (kept, declaration.kind.as_str())
@@ -159,7 +179,10 @@ fn inline_once(source: &str) -> Result<(String, usize), String> {
         if kept.is_empty() {
             edits.push(analysis::Edit::delete(whole_line(source, *span)));
         } else {
-            edits.push(analysis::Edit::replace(*span, format!("{kind} {};", kept.join(", "))));
+            edits.push(analysis::Edit::replace(
+                *span,
+                format!("{kind} {};", kept.join(", ")),
+            ));
         }
     }
     for slot in slots.values() {
@@ -175,7 +198,12 @@ fn inline_once(source: &str) -> Result<(String, usize), String> {
     Ok((output, count))
 }
 
-fn candidate(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, symbol: SymbolId) -> Option<Slot> {
+fn candidate(
+    source: &str,
+    scoping: &Scoping,
+    nodes: &AstNodes<'_>,
+    symbol: SymbolId,
+) -> Option<Slot> {
     if !scoping.symbol_name(symbol).starts_with("$KEY_") {
         return None;
     }
@@ -201,32 +229,39 @@ fn candidate(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, symbol: Symb
         }
     }
     // The value: the declaration's, or one store statement's.
-    let (value, store): (&Expression<'_>, Option<Span>) = match (&declarator.init, writes.as_slice()) {
-        (Some(init), []) => (init, None),
-        (None, [write]) => {
-            let AstKind::AssignmentExpression(assignment) = nodes.parent_kind(*write) else {
-                return None;
-            };
-            if assignment.operator != AssignmentOperator::Assign {
-                return None;
+    let (value, store): (&Expression<'_>, Option<Span>) =
+        match (&declarator.init, writes.as_slice()) {
+            (Some(init), []) => (init, None),
+            (None, [write]) => {
+                let AstKind::AssignmentExpression(assignment) = nodes.parent_kind(*write) else {
+                    return None;
+                };
+                if assignment.operator != AssignmentOperator::Assign {
+                    return None;
+                }
+                let assignment_node = nodes.parent_id(*write);
+                let AstKind::ExpressionStatement(statement) = nodes.parent_kind(assignment_node)
+                else {
+                    return None;
+                };
+                // Directly in the declaring function's body.
+                let statement_node = nodes.parent_id(assignment_node);
+                if !matches!(
+                    nodes.parent_kind(statement_node),
+                    AstKind::FunctionBody(_) | AstKind::Program(_)
+                ) || owner(nodes, statement_node) != home
+                {
+                    return None;
+                }
+                (&assignment.right, Some(statement.span))
             }
-            let assignment_node = nodes.parent_id(*write);
-            let AstKind::ExpressionStatement(statement) = nodes.parent_kind(assignment_node) else {
-                return None;
-            };
-            // Directly in the declaring function's body.
-            let statement_node = nodes.parent_id(assignment_node);
-            if !matches!(nodes.parent_kind(statement_node), AstKind::FunctionBody(_) | AstKind::Program(_))
-                || owner(nodes, statement_node) != home
-            {
-                return None;
-            }
-            (&assignment.right, Some(statement.span))
-        }
-        _ => return None,
-    };
+            _ => return None,
+        };
     let (text, root) = if let Some(root) = global_path(scoping, value) {
-        (source[value.span().start as usize..value.span().end as usize].to_string(), Some(root.to_string()))
+        (
+            source[value.span().start as usize..value.span().end as usize].to_string(),
+            Some(root.to_string()),
+        )
     } else {
         (regexp_literal(scoping, value)?, None)
     };
@@ -238,7 +273,10 @@ fn candidate(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, symbol: Symb
         }
         // The global's name means the global where it is read.
         if let Some(root) = &root {
-            if scoping.find_binding(nodes.get_node(*node).scope_id(), root.as_str().into()).is_some() {
+            if scoping
+                .find_binding(nodes.get_node(*node).scope_id(), root.as_str().into())
+                .is_some()
+            {
                 return None;
             }
         }
@@ -250,7 +288,11 @@ fn candidate(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, symbol: Symb
             }
         }
     }
-    Some(Slot { value: text, store, reads })
+    Some(Slot {
+        value: text,
+        store,
+        reads,
+    })
 }
 
 /// A name, or a method of a namespace whose methods ignore `this`
@@ -258,7 +300,8 @@ fn candidate(source: &str, scoping: &Scoping, nodes: &AstNodes<'_>, symbol: Symb
 fn receiver_free(value: &Expression<'_>) -> bool {
     match value.without_parentheses() {
         Expression::Identifier(_) => true,
-        member @ (Expression::StaticMemberExpression(_) | Expression::ComputedMemberExpression(_)) => {
+        member @ (Expression::StaticMemberExpression(_)
+        | Expression::ComputedMemberExpression(_)) => {
             let member = member.as_member_expression().unwrap();
             matches!(member.object().without_parentheses(), Expression::Identifier(root)
                 if matches!(root.name.as_str(), "Object" | "Math" | "JSON" | "Reflect" | "Number" | "String"))

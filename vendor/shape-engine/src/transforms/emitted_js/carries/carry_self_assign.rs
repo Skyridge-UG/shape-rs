@@ -11,8 +11,8 @@ use oxc_syntax::operator::AssignmentOperator;
 
 use super::super::adjacent_ssa::LocalReads;
 use crate::analysis;
-use std::collections::BTreeSet;
 use crate::transforms::emitted_js::support::unwrap;
+use std::collections::BTreeSet;
 
 pub(crate) fn remove_carry_self_assignments(source: &str) -> Result<(String, usize), String> {
     if !source.contains("$SSA_") && !source.contains("$CARRY_") {

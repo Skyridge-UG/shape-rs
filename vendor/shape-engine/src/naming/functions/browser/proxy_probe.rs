@@ -3,18 +3,13 @@
 use super::*;
 use oxc_syntax::operator::{BinaryOperator, UnaryOperator};
 
-pub(in crate::naming) fn sym(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<SymbolId> {
+pub(in crate::naming) fn sym(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(e.without_parentheses(), model.scoping)
 }
 pub(in crate::naming) fn stable(model: &Model<'_, '_>, s: SymbolId) -> bool {
     model.binding_writes(s) == 0 && model.scoping.symbol_redeclarations(s).is_empty()
 }
-pub(in crate::naming) fn expr<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a Expression<'a>> {
+pub(in crate::naming) fn expr<'a>(s: &'a Statement<'a>) -> Option<&'a Expression<'a>> {
     let Statement::ExpressionStatement(s) = s else {
         return None;
     };
@@ -26,9 +21,7 @@ fn returned<'a>(s: &'a Statement<'a>) -> Option<&'a Expression<'a>> {
     };
     s.argument.as_ref().map(Expression::without_parentheses)
 }
-pub(in crate::naming) fn call<'a>(
-    e: &'a Expression<'a>,
-) -> Option<&'a CallExpression<'a>> {
+pub(in crate::naming) fn call<'a>(e: &'a Expression<'a>) -> Option<&'a CallExpression<'a>> {
     let Expression::CallExpression(c) = e.without_parentheses() else {
         return None;
     };
@@ -43,11 +36,7 @@ pub(in crate::naming) fn member<'a>(
     };
     (!m.optional && m.property.name == key).then_some(&m.object)
 }
-pub(in crate::naming) fn ambient(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-    name: &str,
-) -> bool {
+pub(in crate::naming) fn ambient(model: &Model<'_, '_>, e: &Expression<'_>, name: &str) -> bool {
     matches!(e.without_parentheses(), Expression::Identifier(i)
         if i.name == name && crate::analysis::identifier_symbol(i, model.scoping).is_none())
 }
@@ -90,9 +79,7 @@ fn local<'a>(
         .is_empty()
         .then_some((symbol, v.init.as_ref()?))
 }
-pub(in crate::naming) fn block<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a [Statement<'a>]> {
+pub(in crate::naming) fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(b) = s else {
         return None;
     };
@@ -168,16 +155,33 @@ fn proxy_contract(model: &Model<'_, '_>, function: &Function<'_>) -> Option<oxc_
         [result_decl, alias_decl, Statement::IfStatement(absent), result] => {
             let (result_symbol, result_value) = local(model, result_decl)?;
             let (alias, alias_value) = local(model, alias_decl)?;
-            if !stable(model, result_symbol) || !stable(model, alias)
-                || sym(model, alias_value) != Some(object) || absent.alternate.is_some()
-            { return None; }
-            let Expression::UnaryExpression(test) = &absent.test else { return None; };
-            if test.operator != UnaryOperator::LogicalNot || sym(model, &test.argument) != Some(alias) { return None; }
-            let [Statement::ThrowStatement(throw)] = block(&absent.consequent)? else { return None; };
-            let Expression::NewExpression(error) = &throw.argument else { return None; };
-            if !ambient(model, &error.callee, "TypeError") || error.arguments.len() != 1
+            if !stable(model, result_symbol)
+                || !stable(model, alias)
+                || sym(model, alias_value) != Some(object)
+                || absent.alternate.is_some()
+            {
+                return None;
+            }
+            let Expression::UnaryExpression(test) = &absent.test else {
+                return None;
+            };
+            if test.operator != UnaryOperator::LogicalNot
+                || sym(model, &test.argument) != Some(alias)
+            {
+                return None;
+            }
+            let [Statement::ThrowStatement(throw)] = block(&absent.consequent)? else {
+                return None;
+            };
+            let Expression::NewExpression(error) = &throw.argument else {
+                return None;
+            };
+            if !ambient(model, &error.callee, "TypeError")
+                || error.arguments.len() != 1
                 || !matches!(error.arguments[0].as_expression()?, Expression::StringLiteral(s) if s.value == "Cannot set properties of undefined (setting 'value')")
-            { return None; }
+            {
+                return None;
+            }
             (result, Some((result_symbol, alias, result_value)))
         }
         _ => return None,
@@ -187,24 +191,33 @@ fn proxy_contract(model: &Model<'_, '_>, function: &Function<'_>) -> Option<oxc_
             let yes = match (block(&branch.consequent)?, explicit.is_some()) {
                 ([yes], _) => yes,
                 ([Statement::IfStatement(check), yes], true) => {
-                    let Expression::BinaryExpression(test) = &check.test else { return None; };
+                    let Expression::BinaryExpression(test) = &check.test else {
+                        return None;
+                    };
                     if test.operator != BinaryOperator::StrictInequality
                         || sym(model, &test.left) != Some(flag)
                         || !matches!(&test.right, Expression::NullLiteral(_))
-                        || check.alternate.is_some() || !block(&check.consequent)?.is_empty()
-                    { return None; }
+                        || check.alternate.is_some()
+                        || !block(&check.consequent)?.is_empty()
+                    {
+                        return None;
+                    }
                     yes
                 }
                 _ => return None,
             };
-            let [no] = block(branch.alternate.as_ref()?)? else { return None; };
+            let [no] = block(branch.alternate.as_ref()?)? else {
+                return None;
+            };
             if sym(model, returned(yes)?) != Some(flag) || !boolean(returned(no)?, false) {
                 return None;
             }
             &branch.test
         }
         _ => {
-            let Expression::LogicalExpression(result) = returned(result)? else { return None; };
+            let Expression::LogicalExpression(result) = returned(result)? else {
+                return None;
+            };
             if result.operator != LogicalOperator::And || sym(model, &result.right) != Some(flag) {
                 return None;
             }
@@ -220,9 +233,13 @@ fn proxy_contract(model: &Model<'_, '_>, function: &Function<'_>) -> Option<oxc_
         return None;
     }
     let get_value = if let Some((result_symbol, _, value)) = explicit {
-        if sym(model, &equal.left) != Some(result_symbol) { return None; }
+        if sym(model, &equal.left) != Some(result_symbol) {
+            return None;
+        }
         value
-    } else { &equal.left };
+    } else {
+        &equal.left
+    };
     let get = call(get_value)?;
     if !ambient(model, member(&get.callee, "getPrototypeOf")?, "Object") || get.arguments.len() != 1
     {

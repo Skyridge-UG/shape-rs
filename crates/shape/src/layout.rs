@@ -222,8 +222,7 @@ mod tests {
 
     #[test]
     fn accepts_wellformed_layout() {
-        let layout: SeedLayout =
-            serde_json::from_value(base()).expect("well-formed fixture");
+        let layout: SeedLayout = serde_json::from_value(base()).expect("well-formed fixture");
         layout.validate().unwrap();
         let round = SeedLayout::from_json(&serde_json::to_vec(&layout).unwrap()).unwrap();
         assert_eq!(round, layout);

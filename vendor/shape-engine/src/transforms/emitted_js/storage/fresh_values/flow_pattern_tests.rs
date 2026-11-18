@@ -16,8 +16,7 @@ fn point_types_cover_nine_rematerialization_patterns() {
 ];
 
     for source in cases {
-        let (code, count) =
-            super::inline_fresh_values(source, &Default::default(), false).unwrap();
+        let (code, count) = super::inline_fresh_values(source, &Default::default(), false).unwrap();
         assert!(count > 0 && !code.contains("$SSA_0"), "{code}");
     }
 }

@@ -7,7 +7,11 @@ pub(super) struct NativeAuthority {
 }
 
 impl NativeAuthority {
-    pub(super) fn evaluate(scoping: &Scoping, nodes: &AstNodes<'_>, scan: &ScanCollector<'_>) -> Self {
+    pub(super) fn evaluate(
+        scoping: &Scoping,
+        nodes: &AstNodes<'_>,
+        scan: &ScanCollector<'_>,
+    ) -> Self {
         if scan.saw_with || scan.saw_eval_reference {
             return Self {
                 declined: Some((

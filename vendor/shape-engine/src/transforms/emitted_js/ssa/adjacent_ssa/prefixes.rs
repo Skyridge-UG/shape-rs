@@ -4,7 +4,11 @@ use super::*;
 
 /// A prefix may move before another evaluation only if it cannot throw or
 /// execute user code and all of its binding reads are stable during it.
-pub(super) fn harmless_prefix(e: &Expression<'_>, scoping: &Scoping, readable: &BTreeSet<SymbolId>) -> bool {
+pub(super) fn harmless_prefix(
+    e: &Expression<'_>,
+    scoping: &Scoping,
+    readable: &BTreeSet<SymbolId>,
+) -> bool {
     if super::super::super::purity::expression_is_pure(e) {
         return true;
     }
@@ -154,7 +158,9 @@ pub(super) fn successful_numeric_input(
     scoping: &Scoping,
     ordinary_number: bool,
 ) -> bool {
-    if ordinary_number && super::super::super::numeric_coercions::number_argument(e, scoping).is_some() {
+    if ordinary_number
+        && super::super::super::numeric_coercions::number_argument(e, scoping).is_some()
+    {
         return true;
     }
     let number = |e| successful_numeric_input(e, numeric_inputs, scoping, ordinary_number);
@@ -592,7 +598,10 @@ impl PrefixScan<'_> {
         if native_calls
             && self.policy.cells.is_some_and(|f| {
                 f.values.get(&m.span).is_some_and(|v| {
-                    matches!(v.token, Some(super::super::super::cell_facts::Token::Argument(_, _)))
+                    matches!(
+                        v.token,
+                        Some(super::super::super::cell_facts::Token::Argument(_, _))
+                    )
                 })
             })
         {

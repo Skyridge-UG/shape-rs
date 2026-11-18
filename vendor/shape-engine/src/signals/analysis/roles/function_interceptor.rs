@@ -92,10 +92,9 @@
 use crate::signals::extract::bindings::{
     call_arguments, expression_path, property_key_name, FunctionSite, Model,
 };
-use std::collections::{BTreeMap, BTreeSet};
 use oxc_ast::{ast::*, AstKind};
 use oxc_semantic::SymbolId;
-
+use std::collections::{BTreeMap, BTreeSet};
 
 fn symbol(model: &Model<'_, '_>, expression: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(expression, model.scoping)
@@ -124,7 +123,9 @@ pub(crate) fn is_null_literal(expression: &Expression<'_>) -> bool {
     matches!(expression.without_parentheses(), Expression::NullLiteral(_))
 }
 
-pub(crate) fn plain_assignment<'a>(statement: &'a Statement<'a>) -> Option<&'a AssignmentExpression<'a>> {
+pub(crate) fn plain_assignment<'a>(
+    statement: &'a Statement<'a>,
+) -> Option<&'a AssignmentExpression<'a>> {
     let Statement::ExpressionStatement(expression) = statement else {
         return None;
     };
@@ -179,7 +180,11 @@ fn not_null_compared(
                 && is_null_literal(&binary.left)))
 }
 
-pub(crate) fn plain_local_in_body(model: &Model<'_, '_>, site: FunctionSite, symbol: SymbolId) -> bool {
+pub(crate) fn plain_local_in_body(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    symbol: SymbolId,
+) -> bool {
     model.formal_symbol_slot(symbol).is_none()
         && model.scoping.symbol_redeclarations(symbol).is_empty()
         && site
@@ -543,7 +548,11 @@ pub(crate) fn symbol_of(model: &Model<'_, '_>, expression: &Expression<'_>) -> O
     symbol(model, expression.without_parentheses())
 }
 
-pub(crate) fn is_null_compare(model: &Model<'_, '_>, expression: &Expression<'_>, symbol: SymbolId) -> bool {
+pub(crate) fn is_null_compare(
+    model: &Model<'_, '_>,
+    expression: &Expression<'_>,
+    symbol: SymbolId,
+) -> bool {
     let Expression::BinaryExpression(binary) = expression.without_parentheses() else {
         return false;
     };
@@ -820,7 +829,11 @@ fn bucket_null_test(
         || (is_null_literal(&binary.left) && is_bucket(&binary.right))
 }
 
-pub(crate) fn increments(model: &Model<'_, '_>, statement: &Statement<'_>, cursor: SymbolId) -> bool {
+pub(crate) fn increments(
+    model: &Model<'_, '_>,
+    statement: &Statement<'_>,
+    cursor: SymbolId,
+) -> bool {
     let Statement::ExpressionStatement(expression) = statement else {
         return false;
     };

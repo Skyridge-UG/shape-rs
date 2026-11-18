@@ -6,8 +6,16 @@ fn expands_one_line_helpers_at_their_calls() {
     let result = inline_small_helpers(source).unwrap();
     assert_eq!(result.expanded, 4, "{}", result.code);
     assert!(!result.code.contains("$VMHELPER_"), "{}", result.code);
-    assert!(result.code.contains("(o)[(1)] = (((g()))) ^ ($SSA_1)();"), "{}", result.code);
-    assert!(result.code.contains("((((o.q)))[\"push\"]).call(o)"), "{}", result.code);
+    assert!(
+        result.code.contains("(o)[(1)] = (((g()))) ^ ($SSA_1)();"),
+        "{}",
+        result.code
+    );
+    assert!(
+        result.code.contains("((((o.q)))[\"push\"]).call(o)"),
+        "{}",
+        result.code
+    );
 }
 
 #[test]
@@ -34,7 +42,11 @@ fn expands_empty_helpers_and_literal_factories() {
     let source = "function $VMHELPER_1() {}\nfunction $VMHELPER_2() {\n  return [false];\n}\nfunction f() {\n  $VMHELPER_1();\n  let x = $VMHELPER_2();\n  return x;\n}\n";
     let result = inline_small_helpers(source).unwrap();
     assert!(!result.code.contains("$VMHELPER_"), "{}", result.code);
-    assert!(result.code.contains("let x = ([false]);"), "{}", result.code);
+    assert!(
+        result.code.contains("let x = ([false]);"),
+        "{}",
+        result.code
+    );
 }
 
 #[test]
@@ -42,7 +54,13 @@ fn hoists_a_nested_statement_helper_call_before_its_statement() {
     let source = "function $VMHELPER_375(a, b, c) {\n  a[b] = c;\n  a[2] = 0;\n  return a;\n}\nfunction f(g, r) {\n  g(r, 1, $VMHELPER_375([0], 1, 1), 3);\n}\n";
     let result = super::hoist_helper_calls(source).unwrap();
     assert_eq!(result.expanded, 1, "{}", result.code);
-    assert!(result.code.contains("= $VMHELPER_375([0], 1, 1);\n  g(r, 1, $SSA_x"), "{}", result.code);
+    assert!(
+        result
+            .code
+            .contains("= $VMHELPER_375([0], 1, 1);\n  g(r, 1, $SSA_x"),
+        "{}",
+        result.code
+    );
     // a call before it would run after the helper
     let source = "function $VMHELPER_375(a, b, c) {\n  a[b] = c;\n  a[2] = 0;\n  return a;\n}\nfunction f(g, r) {\n  g(r(), $VMHELPER_375([0], 1, 1));\n}\n";
     assert_eq!(super::hoist_helper_calls(source).unwrap().expanded, 0);
@@ -83,7 +101,13 @@ fn hoists_a_store_and_return_helper_out_of_a_store_to_the_array_it_is_handed() {
     let source = "function f(x) {\n\tfunction vm_sub_1_1(a, b, c, d, e) {\n\t\ta[b] = c & d;\n\t\treturn e;\n\t}\n\tlet o = [x >>> 24, x >> 16 & 255];\n\to[3] = vm_sub_1_1(o, 2, 255, x >> 8, x) & 255;\n\treturn o;\n}\n";
     let hoisted = super::hoist_remaining_helper_calls(source).unwrap();
     assert_eq!(hoisted.expanded, 1, "{}", hoisted.code);
-    assert!(hoisted.code.contains("= vm_sub_1_1(o, 2, 255, x >> 8, x);\n\to[3] = $SSA_x"), "{}", hoisted.code);
+    assert!(
+        hoisted
+            .code
+            .contains("= vm_sub_1_1(o, 2, 255, x >> 8, x);\n\to[3] = $SSA_x"),
+        "{}",
+        hoisted.code
+    );
     let expanded = inline_remaining_helpers(&hoisted.code).unwrap();
     assert!(!expanded.code.contains("vm_sub_1_1"), "{}", expanded.code);
     // A reassigned object may name another array once the call has run:
@@ -95,7 +119,12 @@ fn hoists_a_store_and_return_helper_out_of_a_store_to_the_array_it_is_handed() {
     assert_eq!(observe(source, run), observe(&code, run));
     // A computed key is a read the call could change.
     let source = "function f(x) {\n\tfunction vm_sub_1_1(a, b, c, d, e) {\n\t\ta[b] = c & d;\n\t\treturn e;\n\t}\n\tlet o = [x];\n\to[o[0]] = vm_sub_1_1(o, 0, 255, x >> 8, x) & 255;\n\treturn o;\n}\n";
-    assert_eq!(super::hoist_remaining_helper_calls(source).unwrap().expanded, 0);
+    assert_eq!(
+        super::hoist_remaining_helper_calls(source)
+            .unwrap()
+            .expanded,
+        0
+    );
 }
 
 /// Hoist and expand exactly until nothing changes, as `late_helpers` does.
@@ -121,8 +150,14 @@ fn hoists_nested_expression_helpers_whose_arguments_need_temporaries() {
     let code = expand_exactly(source);
     assert!(!code.contains("vm_sub_1_1"), "{code}");
     let first = code.find("= k(1);").expect(&code);
-    let inner = code.find("(z) << 8").or_else(|| code.find("z << 8")).expect(&code);
-    let outer = code.find("(y) << 8").or_else(|| code.find("y << 8")).expect(&code);
+    let inner = code
+        .find("(z) << 8")
+        .or_else(|| code.find("z << 8"))
+        .expect(&code);
+    let outer = code
+        .find("(y) << 8")
+        .or_else(|| code.find("y << 8"))
+        .expect(&code);
     assert!(first < inner && inner < outer, "{code}");
     // A name a call could change, read before the code to bind, is bound
     // too, in order.
@@ -139,8 +174,16 @@ fn hoists_nested_expression_helpers_whose_arguments_need_temporaries() {
 /// What `run` prints before and after, run by node.
 fn observe(code: &str, run: &str) -> String {
     let script = format!("{code}\n{run}");
-    let output = std::process::Command::new("node").arg("-e").arg(&script).output().unwrap();
-    assert!(output.status.success(), "{script}\n{}", String::from_utf8_lossy(&output.stderr));
+    let output = std::process::Command::new("node")
+        .arg("-e")
+        .arg(&script)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{script}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     String::from_utf8(output.stdout).unwrap()
 }
 
@@ -151,7 +194,10 @@ fn splits_a_conditional_store_so_the_helper_in_one_arm_expands_there() {
     let code = expand_exactly(source);
     assert!(!code.contains("vm_sub_1_1"), "{code}");
     assert!(!code.contains("=>"), "{code}");
-    assert!(code.contains("if (log.push(\"test\"), c) {\n\t\tx = null;\n\t} else {"), "{code}");
+    assert!(
+        code.contains("if (log.push(\"test\"), c) {\n\t\tx = null;\n\t} else {"),
+        "{code}"
+    );
     let run = "for (const c of [true, false]) { const log = []; console.log(JSON.stringify([f(c, log), log])); }";
     assert_eq!(observe(source, run), observe(&code, run));
 }
@@ -192,7 +238,12 @@ fn keeps_a_declared_name_a_closure_reads_out_of_the_split() {
 #[test]
 fn leaves_a_helper_inside_an_optional_chain() {
     let source = "function f(o) {\n\tfunction vm_sub_1_1(a) {\n\t\ta.n = 1;\n\t\treturn a;\n\t}\n\tlet x = o?.m(vm_sub_1_1({}));\n\treturn x;\n}\n";
-    assert_eq!(super::hoist_remaining_helper_calls(source).unwrap().expanded, 0);
+    assert_eq!(
+        super::hoist_remaining_helper_calls(source)
+            .unwrap()
+            .expanded,
+        0
+    );
 }
 
 #[test]
@@ -206,7 +257,12 @@ fn hoists_past_a_standard_namespace_method_and_another_positional_argument() {
     assert_eq!(observe(source, run), observe(&code, run));
     // A call handed the object whose method is read first stays put.
     let source = "function g() {\n\tfunction vm_sub_1_2(a, b) {\n\t\ta.m = b;\n\t\treturn 1;\n\t}\n\treturn arguments[0].m(vm_sub_1_2(arguments[0], arguments[1]));\n}\n";
-    assert_eq!(super::hoist_remaining_helper_calls(source).unwrap().expanded, 0);
+    assert_eq!(
+        super::hoist_remaining_helper_calls(source)
+            .unwrap()
+            .expanded,
+        0
+    );
 }
 
 #[test]
@@ -228,7 +284,12 @@ fn keeps_the_update_of_a_let_loop_a_closure_captures() {
     // Moved into the body, the update would run before the per-iteration
     // copy of `k`, and the closures would see it.
     let source = "function f(log) {\n\tfunction vm_sub_1_1(a, b) {\n\t\tlog.push(a);\n\t\treturn b;\n\t}\n\tlet read = [];\n\tfor (let k = 0; k < 3; k = Number(vm_sub_1_1(\"u\", k)) + 1) {\n\t\tread.push(() => k);\n\t}\n\treturn read.map((r) => r());\n}\n";
-    assert_eq!(super::hoist_remaining_helper_calls(source).unwrap().expanded, 0);
+    assert_eq!(
+        super::hoist_remaining_helper_calls(source)
+            .unwrap()
+            .expanded,
+        0
+    );
 }
 
 #[test]

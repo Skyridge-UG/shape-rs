@@ -80,20 +80,14 @@ fn number(expression: &Expression<'_>, expected: f64) -> bool {
     )
 }
 
-pub(in crate::naming) fn boolean(
-    expression: &Expression<'_>,
-    expected: bool,
-) -> bool {
+pub(in crate::naming) fn boolean(expression: &Expression<'_>, expected: bool) -> bool {
     matches!(
         expression.without_parentheses(),
         Expression::BooleanLiteral(literal) if literal.value == expected
     )
 }
 
-pub(in crate::naming) fn text(
-    expression: &Expression<'_>,
-    expected: &str,
-) -> bool {
+pub(in crate::naming) fn text(expression: &Expression<'_>, expected: &str) -> bool {
     matches!(
         expression.without_parentheses(),
         Expression::StringLiteral(literal) if literal.value == expected
@@ -135,9 +129,7 @@ fn statement_call<'a>(statement: &'a Statement<'a>) -> Option<&'a CallExpression
     call(&expression.expression)
 }
 
-pub(in crate::naming) fn block<'a>(
-    statement: &'a Statement<'a>,
-) -> Option<&'a [Statement<'a>]> {
+pub(in crate::naming) fn block<'a>(statement: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(block) = statement else {
         return None;
     };

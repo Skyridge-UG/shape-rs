@@ -73,8 +73,12 @@ fn actual_three_full_body_and_first_guard() {
                 );
             }
             assert!(
-                crate::naming::functions::network::xhr_open_metadata::evaluate(m, site, &Facts::default())
-                    .is_empty()
+                crate::naming::functions::network::xhr_open_metadata::evaluate(
+                    m,
+                    site,
+                    &Facts::default()
+                )
+                .is_empty()
             );
             eprintln!(
                 "actual {}..{}: {:?}; key_writers={} logger_writers={}",
@@ -376,7 +380,11 @@ fn request_factory_uniqueness_is_the_first_gate() {
             candidates.len() > 1,
             "xhr_factory must refuse its nonunique candidates"
         );
-        eprintln!("XHR uniqueness guard refuses {} actual factories: {:?}",candidates.len(),candidates);
+        eprintln!(
+            "XHR uniqueness guard refuses {} actual factories: {:?}",
+            candidates.len(),
+            candidates
+        );
     });
 }
 

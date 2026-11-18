@@ -4,6 +4,7 @@
 //! coercion order and rounding, without reassociating floating-point sums.
 use super::super::adjacent_ssa::LocalReads;
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_allocator::Allocator;
 use oxc_ast::ast::*;
 use oxc_ast_visit::{walk, Visit};
@@ -11,7 +12,6 @@ use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 use std::collections::BTreeSet;
-use crate::transforms::emitted_js::support::unwrap;
 
 fn offset(e: &Expression<'_>, symbol: SymbolId, scoping: &Scoping) -> Option<(usize, Span)> {
     let mut e = unwrap(e);

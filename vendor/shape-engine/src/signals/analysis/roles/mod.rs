@@ -27,21 +27,21 @@ use oxc_span::Span;
 
 use crate::signals::schema::Confidence;
 
-pub(crate) mod function_interceptor;
-pub(crate) mod entry_runtime;
-pub(crate) mod vm_exec;
+pub(crate) mod browser_env;
+pub(crate) mod carriers;
 pub(crate) mod collector_wiring;
 pub(crate) mod encoding_framing;
-pub(crate) mod serializer;
-pub(crate) mod request_envelope;
-pub(crate) mod carriers;
-pub(crate) mod interception_dom;
-pub(crate) mod browser_env;
-pub(crate) mod platform_gpu;
-pub(crate) mod interaction_timing;
+pub(crate) mod entry_runtime;
+pub(crate) mod function_interceptor;
 pub(crate) mod graphics_canvas;
+pub(crate) mod interaction_timing;
+pub(crate) mod interception_dom;
 pub(crate) mod persistence_telemetry;
+pub(crate) mod platform_gpu;
 pub mod purposes;
+pub(crate) mod request_envelope;
+pub(crate) mod serializer;
+pub(crate) mod vm_exec;
 
 /// The parse a package finder reads.
 #[allow(dead_code)] // read by the package finders as they are filled in
@@ -121,8 +121,16 @@ const PACKAGES: &[(&str, &[FinderRole], fn(&FinderCtx) -> Vec<FinderClaim>)] = &
         entry_runtime::VOCABULARY,
         entry_runtime::find,
     ),
-    ("p02_exec_a", vm_exec::operators::VOCABULARY, vm_exec::operators::find),
-    ("p03_exec_b", vm_exec::classes::VOCABULARY, vm_exec::classes::find),
+    (
+        "p02_exec_a",
+        vm_exec::operators::VOCABULARY,
+        vm_exec::operators::find,
+    ),
+    (
+        "p03_exec_b",
+        vm_exec::classes::VOCABULARY,
+        vm_exec::classes::find,
+    ),
     (
         "p04_collector_wiring",
         collector_wiring::VOCABULARY,
@@ -133,17 +141,17 @@ const PACKAGES: &[(&str, &[FinderRole], fn(&FinderCtx) -> Vec<FinderClaim>)] = &
         encoding_framing::VOCABULARY,
         encoding_framing::find,
     ),
-    (
-        "p06_serializer",
-        serializer::VOCABULARY,
-        serializer::find,
-    ),
+    ("p06_serializer", serializer::VOCABULARY, serializer::find),
     (
         "p07_request_envelope",
         request_envelope::VOCABULARY,
         request_envelope::find,
     ),
-    ("request_output_carriers", carriers::VOCABULARY, carriers::find),
+    (
+        "request_output_carriers",
+        carriers::VOCABULARY,
+        carriers::find,
+    ),
     (
         "p09_interception_dom",
         interception_dom::VOCABULARY,

@@ -2,10 +2,7 @@ use super::*;
 use oxc_semantic::SymbolId;
 use oxc_span::GetSpan;
 
-pub(in crate::naming) fn symbol(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<SymbolId> {
+pub(in crate::naming) fn symbol(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<SymbolId> {
     crate::analysis::expression_symbol(e, model.scoping)
 }
 
@@ -19,9 +16,7 @@ pub(in crate::naming) fn member<'a>(
     (!m.optional && m.property.name == key).then_some(&m.object)
 }
 
-pub(in crate::naming) fn block<'a>(
-    s: &'a Statement<'a>,
-) -> Option<&'a [Statement<'a>]> {
+pub(in crate::naming) fn block<'a>(s: &'a Statement<'a>) -> Option<&'a [Statement<'a>]> {
     let Statement::BlockStatement(b) = s else {
         return None;
     };
@@ -67,9 +62,7 @@ pub(in crate::naming) fn plain_parameters(
         .collect()
 }
 
-pub(in crate::naming) fn plain_variable_kind(
-    kind: VariableDeclarationKind,
-) -> bool {
+pub(in crate::naming) fn plain_variable_kind(kind: VariableDeclarationKind) -> bool {
     matches!(
         kind,
         VariableDeclarationKind::Var

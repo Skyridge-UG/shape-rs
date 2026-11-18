@@ -3,7 +3,7 @@
 //! Role identifiers are grammar metavariables; no seed identity is consulted.
 
 pub(super) const FORMS: &[&str] = &[
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -115,7 +115,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -241,7 +241,7 @@ r###"function numeric(mask, value, output, position) {
       return local4;
     }
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -360,7 +360,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -472,7 +472,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -595,7 +595,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -706,7 +706,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -816,7 +816,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -940,7 +940,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1052,7 +1052,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1165,7 +1165,7 @@ r###"function numeric(mask, value, output, position) {
       return local4;
     }
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1282,7 +1282,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1399,7 +1399,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1517,7 +1517,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1639,7 +1639,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1754,7 +1754,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1875,7 +1875,7 @@ r###"function numeric(mask, value, output, position) {
       return local4;
     }
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -1988,7 +1988,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2098,7 +2098,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2218,7 +2218,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2330,7 +2330,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2439,7 +2439,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2561,7 +2561,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2675,7 +2675,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2789,7 +2789,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -2901,7 +2901,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3016,7 +3016,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3141,7 +3141,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3255,7 +3255,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3372,7 +3372,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3496,7 +3496,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3606,7 +3606,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3717,7 +3717,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3827,7 +3827,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -3942,7 +3942,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4064,7 +4064,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4174,7 +4174,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4294,7 +4294,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4404,7 +4404,7 @@ r###"function numeric(mask, value, output, position) {
       return local4;
     }
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4518,7 +4518,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4645,7 +4645,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4757,7 +4757,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4880,7 +4880,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -4991,7 +4991,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -5107,7 +5107,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -5230,7 +5230,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -5354,7 +5354,7 @@ r###"function numeric(mask, value, output, position) {
     }
     return local0;
   }"###,
-r###"function numeric(mask, value, output, position) {
+    r###"function numeric(mask, value, output, position) {
     let local0;
     if ((value | 0) === value) {
       let local1;
@@ -5472,5 +5472,5 @@ r###"function numeric(mask, value, output, position) {
       }
     }
     return local0;
-  }"###
+  }"###,
 ];

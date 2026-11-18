@@ -1,8 +1,8 @@
 //! Closed scene drawing, anchor-property queue and sampled-pixel frame protocol.
 //! Grammar nodes preserve every literal, operator and effect in the source;
 //! geometry is typed rather than enumerated as a per-input scene catalogue.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 use oxc_semantic::SymbolId;
 type Sym = SymbolId;
 enum E {

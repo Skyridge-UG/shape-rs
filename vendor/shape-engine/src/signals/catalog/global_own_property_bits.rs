@@ -1,24 +1,40 @@
 //! `GlobalOwnPropertyBits`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_messages_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{LayoutNode, LeafKind};
+use crate::signals::analysis::{
+    bind_messages_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout,
+    SlotView,
+};
 use crate::signals::analysis::{leaf_checks::*, property_census::*};
+use crate::signals::analysis::{LayoutNode, LeafKind};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `GlobalOwnPropertyBits`. Card: [`CARD`].
-pub(crate) fn recognize_global_own_property_bits(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_global_own_property_bits(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     // The bits come from `hasOwnProperty.call(global, name)` in the value
     // provenance, packed by a byte loop.
     let own_property = view
         .leaves()
         .filter(|leaf| leaf.op == LeafOp::Byte)
-        .any(|leaf| leaf.transforms.iter().any(|t| t.ends_with("hasOwnProperty.call")));
-    let byte_loop = view.leaves().any(|leaf| leaf.op == LeafOp::Byte && leaf.repeat_depth == 1);
+        .any(|leaf| {
+            leaf.transforms
+                .iter()
+                .any(|t| t.ends_with("hasOwnProperty.call"))
+        });
+    let byte_loop = view
+        .leaves()
+        .any(|leaf| leaf.op == LeafOp::Byte && leaf.repeat_depth == 1);
     (count_then_bit_bytes(view) && byte_loop && own_property && !census.string_containing("xn--"))
-        .then(|| Claim::new(["hasOwnProperty(global, name) per listed name", "count + packed bit bytes"]))
+        .then(|| {
+            Claim::new([
+                "hasOwnProperty(global, name) per listed name",
+                "count + packed bit bytes",
+            ])
+        })
 }
 
 pub(crate) fn bind_global_own_property_bits(
@@ -35,7 +51,8 @@ pub(crate) fn bind_global_own_property_bits(
     let packed_byte = |node: &LayoutNode| match node {
         LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Byte,
         LayoutNode::Choice { arms } => {
-            arms.iter().any(|arm| matches!(&arm.node, LayoutNode::Leaf(_)))
+            arms.iter()
+                .any(|arm| matches!(&arm.node, LayoutNode::Leaf(_)))
                 && arms.iter().all(|arm| match &arm.node {
                     LayoutNode::Leaf(leaf) => leaf.kind == LeafKind::Byte,
                     LayoutNode::Empty => true,

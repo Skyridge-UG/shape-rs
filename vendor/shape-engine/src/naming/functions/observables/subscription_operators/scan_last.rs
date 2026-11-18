@@ -1,6 +1,7 @@
 use super::*;
-const SOURCE: &str =
-    include_str!("../../../../../tests/fixtures/program/observable-mixed-factories/source-class-parent.js");
+const SOURCE: &str = include_str!(
+    "../../../../../tests/fixtures/program/observable-mixed-factories/source-class-parent.js"
+);
 const LAST: &str = "$THREAD_5_3651";
 const SCAN: &str = "$THREAD_0_70818";
 fn inspect(source: &str, name: &str, check: impl FnOnce(&Model<'_, '_>, &Function<'_>)) {
@@ -47,9 +48,13 @@ fn actual_initial_guard() {
             let maker = stable_function(m, &call(value).unwrap().callee, 0).unwrap();
             let native = observables::observable_factory::proven_native_class(m, maker).is_some();
             let exposures:Vec<_>=m.scoping.get_resolved_references(fs(f).unwrap()).map(|r|serde_json::json!({"span":format!("{:?}",m.nodes.kind(r.node_id()).span()),"parent":format!("{:?}",m.nodes.parent_kind(r.node_id())),"ready":callable_origin_precedes(m,owner,end,r.node_id(),None,0,true)})).collect();
-            let old_origin =
-                observables::observable_map_operator::native_origin(m, &n.callee, fs(f).unwrap(), 8)
-                    .is_some();
+            let old_origin = observables::observable_map_operator::native_origin(
+                m,
+                &n.callee,
+                fs(f).unwrap(),
+                8,
+            )
+            .is_some();
             let full = if name == LAST { last(m, f) } else { scan(m, f) };
             println!(
                 "{}",
@@ -318,7 +323,9 @@ fn scan_last_preserves_exact_role_and_cleanup_metadata() {
     ))
     .unwrap();
     let result = crate::naming::name_threads(
-        include_str!("../../../../../tests/fixtures/scan_last_capture_order/captured-order-parent.js"),
+        include_str!(
+            "../../../../../tests/fixtures/scan_last_capture_order/captured-order-parent.js"
+        ),
         true,
     )
     .unwrap();

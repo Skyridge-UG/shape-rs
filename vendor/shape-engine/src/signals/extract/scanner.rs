@@ -34,8 +34,7 @@ use super::bindings::{
     array_elements, binding_pattern_symbol, call_arguments, computed_member_name, is_boolean_array,
     is_integer_array, literal_value, new_arguments, numeric_index, numeric_value, object_members,
     object_members_of, property_key_name, proven_function_at_read, proven_function_node,
-    static_member_name, FunctionSite,
-    Model,
+    static_member_name, FunctionSite, Model,
 };
 use super::reaching::expression_value_at_use;
 use crate::signals::schema::{
@@ -629,7 +628,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     /// A main binding that aliases a local registry array (`public = local`).
     fn public_alias_of(&self, symbol: SymbolId) -> Option<SymbolId> {
         let mut candidates = Vec::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -724,11 +726,17 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             // scratch = [{ctor: task}]; registry = scratch; scratch = other.
             // Resolve at that read, not from scratch's last program-wide value.
             for _ in 0..8 {
-                let Ok(definition) = expression_value_at_use(
-                    self.model.scoping(), self.model.nodes(), initializer,
-                ) else { break };
-                if definition.value.span() == initializer.span() { break; }
-                if let Some(owner) = crate::analysis::expression_symbol(initializer, self.model.scoping()) {
+                let Ok(definition) =
+                    expression_value_at_use(self.model.scoping(), self.model.nodes(), initializer)
+                else {
+                    break;
+                };
+                if definition.value.span() == initializer.span() {
+                    break;
+                }
+                if let Some(owner) =
+                    crate::analysis::expression_symbol(initializer, self.model.scoping())
+                {
                     origin_symbol = owner;
                 }
                 initializer = definition.value;
@@ -842,7 +850,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     /// parameter (slot 0), as the bootstrap does to start each collector.
     fn has_ctor_consumer(&self, array: SymbolId) -> bool {
         let mut holders = vec![array];
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -855,41 +866,45 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                 ));
             }
         }
-        self.model.kind_nodes(oxc_ast::AstType::CallExpression).any(|node| {
-            let AstKind::CallExpression(call) = node.kind() else {
-                return false;
-            };
-            if !matches!(static_member_name(&call.callee), Some("forEach" | "map")) {
-                return false;
-            }
-            let receiver = member_object_expression(&call.callee).and_then(|object| {
-                crate::analysis::expression_symbol(object, self.model.scoping())
-            });
-            if !receiver.is_some_and(|symbol| holders.contains(&symbol)) {
-                return false;
-            }
-            let Some(callback) = call_arguments(call)
-                .first()
-                .and_then(|argument| self.model.function_from_expression(argument))
-            else {
-                return false;
-            };
-            self.model.nodes_within(callback).into_iter().any(|inner| {
-                let object = match inner.kind() {
-                    AstKind::StaticMemberExpression(member) if member.property.name == "ctor" => {
-                        &member.object
-                    }
-                    AstKind::ComputedMemberExpression(member)
-                        if computed_member_name(member).as_deref() == Some("ctor") =>
-                    {
-                        &member.object
-                    }
-                    _ => return false,
+        self.model
+            .kind_nodes(oxc_ast::AstType::CallExpression)
+            .any(|node| {
+                let AstKind::CallExpression(call) = node.kind() else {
+                    return false;
                 };
-                self.model.node_within(inner.id(), callback)
-                    && self.model.site_parameter_slot(object, callback) == Some(0)
+                if !matches!(static_member_name(&call.callee), Some("forEach" | "map")) {
+                    return false;
+                }
+                let receiver = member_object_expression(&call.callee).and_then(|object| {
+                    crate::analysis::expression_symbol(object, self.model.scoping())
+                });
+                if !receiver.is_some_and(|symbol| holders.contains(&symbol)) {
+                    return false;
+                }
+                let Some(callback) = call_arguments(call)
+                    .first()
+                    .and_then(|argument| self.model.function_from_expression(argument))
+                else {
+                    return false;
+                };
+                self.model.nodes_within(callback).into_iter().any(|inner| {
+                    let object = match inner.kind() {
+                        AstKind::StaticMemberExpression(member)
+                            if member.property.name == "ctor" =>
+                        {
+                            &member.object
+                        }
+                        AstKind::ComputedMemberExpression(member)
+                            if computed_member_name(member).as_deref() == Some("ctor") =>
+                        {
+                            &member.object
+                        }
+                        _ => return false,
+                    };
+                    self.model.node_within(inner.id(), callback)
+                        && self.model.site_parameter_slot(object, callback) == Some(0)
+                })
             })
-        })
     }
 
     fn descriptor_record(
@@ -903,12 +918,17 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         let read = expression;
         let mut expression = expression;
         for _ in 0..8 {
-            if matches!(expression, Expression::ObjectExpression(_)) { break; }
-            expression = expression_value_at_use(
-                self.model.scoping(), self.model.nodes(), expression,
-            ).ok()?.value;
+            if matches!(expression, Expression::ObjectExpression(_)) {
+                break;
+            }
+            expression =
+                expression_value_at_use(self.model.scoping(), self.model.nodes(), expression)
+                    .ok()?
+                    .value;
         }
-        let Expression::ObjectExpression(_) = expression else { return None; };
+        let Expression::ObjectExpression(_) = expression else {
+            return None;
+        };
         let mut members = object_members(expression)?;
         // `d = {name: "x"}; d.ctor = make(); d.priority = false; table[i] = d`:
         // the descriptor literal completed by member writes before the read.
@@ -927,7 +947,11 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                     }
                     Some(_) if self.strict_registry => return None,
                     Some(_) => {}
-                    None => members.push(super::bindings::ObjectMember { name, value, span: value.span() }),
+                    None => members.push(super::bindings::ObjectMember {
+                        name,
+                        value,
+                        span: value.span(),
+                    }),
                 }
             }
         }
@@ -937,9 +961,15 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             .map(|member| self.model.expr_record(member.value));
         let literal_at_read = |mut value: &Expression<'a>| {
             for _ in 0..8 {
-                if let Some(literal) = literal_value(value) { return Some(literal); }
-                if !self.strict_registry { return None; }
-                value = expression_value_at_use(self.model.scoping(), self.model.nodes(), value).ok()?.value;
+                if let Some(literal) = literal_value(value) {
+                    return Some(literal);
+                }
+                if !self.strict_registry {
+                    return None;
+                }
+                value = expression_value_at_use(self.model.scoping(), self.model.nodes(), value)
+                    .ok()?
+                    .value;
             }
             None
         };
@@ -951,8 +981,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             .iter()
             .find(|member| member.name == "name")
             .and_then(|member| literal_at_read(member.value));
-        if self.strict_registry && ((name.is_none() && members.iter().any(|m| m.name == "name"))
-            || (priority.is_none() && members.iter().any(|m| m.name == "priority"))) {
+        if self.strict_registry
+            && ((name.is_none() && members.iter().any(|m| m.name == "name"))
+                || (priority.is_none() && members.iter().any(|m| m.name == "priority")))
+        {
             return None;
         }
         Some(DescriptorRecord {
@@ -990,7 +1022,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                 if parent == id {
                     return None;
                 }
-                if matches!(nodes.kind(parent), AstKind::BlockStatement(_) | AstKind::FunctionBody(_) | AstKind::Program(_)) {
+                if matches!(
+                    nodes.kind(parent),
+                    AstKind::BlockStatement(_) | AstKind::FunctionBody(_) | AstKind::Program(_)
+                ) {
                     return Some((parent, id));
                 }
                 if matches!(
@@ -1002,25 +1037,37 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                 id = parent;
             }
         };
-        let holder_node = self.model.scoping().get_reference(holder.reference_id()).node_id();
+        let holder_node = self
+            .model
+            .scoping()
+            .get_reference(holder.reference_id())
+            .node_id();
         let Some((read_block, _)) = statement_block(holder_node) else {
             return Vec::new();
         };
         let mut found: BTreeMap<String, Vec<&'a Expression<'a>>> = BTreeMap::new();
         for reference in self.model.scoping().get_resolved_references(symbol) {
             let node = reference.node_id();
-            let AstKind::IdentifierReference(identifier) = nodes.kind(node) else { continue };
+            let AstKind::IdentifierReference(identifier) = nodes.kind(node) else {
+                continue;
+            };
             if identifier.span.start <= literal.end || identifier.span.start >= holder.span.start {
                 continue;
             }
             let member_id = nodes.parent_id(node);
-            let AstKind::StaticMemberExpression(_) = nodes.kind(member_id) else { continue };
+            let AstKind::StaticMemberExpression(_) = nodes.kind(member_id) else {
+                continue;
+            };
             let assignment_id = nodes.parent_id(member_id);
-            let AstKind::AssignmentExpression(assignment) = nodes.kind(assignment_id) else { continue };
+            let AstKind::AssignmentExpression(assignment) = nodes.kind(assignment_id) else {
+                continue;
+            };
             if assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign {
                 continue;
             }
-            let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else { continue };
+            let AssignmentTarget::StaticMemberExpression(target) = &assignment.left else {
+                continue;
+            };
             if target.object.span() != identifier.span {
                 continue;
             }
@@ -1028,11 +1075,16 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             if !matches!(nodes.kind(statement), AstKind::ExpressionStatement(_)) {
                 continue;
             }
-            let Some((block, child)) = statement_block(assignment_id) else { continue };
+            let Some((block, child)) = statement_block(assignment_id) else {
+                continue;
+            };
             if block != read_block || child != statement {
                 continue;
             }
-            found.entry(target.property.name.to_string()).or_default().push(&assignment.right);
+            found
+                .entry(target.property.name.to_string())
+                .or_default()
+                .push(&assignment.right);
         }
         found
             .into_iter()
@@ -1119,7 +1171,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             return self.consumed_registry_overrides(registry, array_span);
         }
         let mut overrides = BTreeMap::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -1136,8 +1191,12 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             }
             // Population belongs to this array lifetime, not to a later
             // object stored in the same coalesced scratch binding.
-            if let Ok(value) = expression_value_at_use(self.model.scoping(), self.model.nodes(), &member.object) {
-                if value.value.span() != array_span { continue; }
+            if let Ok(value) =
+                expression_value_at_use(self.model.scoping(), self.model.nodes(), &member.object)
+            {
+                if value.value.span() != array_span {
+                    continue;
+                }
             }
             let Some(index) = numeric_index(&member.expression) else {
                 continue;
@@ -1165,19 +1224,30 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     /// Use the shared reaching-definition proof for every receiver and alias.
     /// Only unconditional statements in the allocation's own list may donate.
     fn consumed_registry_overrides(
-        &self, registry: SymbolId, array_span: Span,
+        &self,
+        registry: SymbolId,
+        array_span: Span,
     ) -> Result<BTreeMap<usize, OverrideValue<'a>>, ProgramPropertiesError> {
         let nodes = self.model.nodes();
         let scoping = self.model.scoping();
-        let fail = |reason: &str| ProgramPropertiesError::InvalidInput(format!("consumed descriptor registry: {reason}"));
-        let origin = nodes.iter().find(|n| n.span() == array_span && matches!(n.kind(), AstKind::ArrayExpression(_)))
+        let fail = |reason: &str| {
+            ProgramPropertiesError::InvalidInput(format!("consumed descriptor registry: {reason}"))
+        };
+        let origin = nodes
+            .iter()
+            .find(|n| n.span() == array_span && matches!(n.kind(), AstKind::ArrayExpression(_)))
             .ok_or_else(|| fail("allocation is absent"))?;
-        let owner = self.model.enclosing_function(origin.id()).map(|f| f.node_id);
+        let owner = self
+            .model
+            .enclosing_function(origin.id())
+            .map(|f| f.node_id);
         let (list, _) = super::reaching::statement_of(nodes, origin.id()).map_err(|e| fail(&e))?;
         let resolves = |expression: &Expression<'a>| {
             let mut value = expression;
             for _ in 0..8 {
-                if value.span() == array_span { return true; }
+                if value.span() == array_span {
+                    return true;
+                }
                 match expression_value_at_use(scoping, nodes, value) {
                     Ok(next) if next.value.span() != value.span() => value = next.value,
                     _ => return false,
@@ -1189,20 +1259,34 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         let mut cutoff = u32::MAX;
         // A handoff to an outer binding freezes the local population. Local
         // aliases remain eligible receivers until an actual consumer runs.
-        for node in nodes.iter().filter(|n| same_owner(n.id()) && n.span().start > array_span.end) {
-            if node.span().start >= cutoff { continue; }
+        for node in nodes
+            .iter()
+            .filter(|n| same_owner(n.id()) && n.span().start > array_span.end)
+        {
+            if node.span().start >= cutoff {
+                continue;
+            }
             match node.kind() {
                 AstKind::AssignmentExpression(a) if resolves(&a.right) => {
                     if let Some(symbol) = simple_assignment_symbol(&a.left, scoping) {
-                        if self.model.enclosing_function(scoping.symbol_declaration(symbol)).map(|f| f.node_id) != owner {
+                        if self
+                            .model
+                            .enclosing_function(scoping.symbol_declaration(symbol))
+                            .map(|f| f.node_id)
+                            != owner
+                        {
                             cutoff = cutoff.min(a.span.start);
                         }
-                    } else { return Err(fail("unresolved registry handoff")); }
+                    } else {
+                        return Err(fail("unresolved registry handoff"));
+                    }
                 }
                 AstKind::CallExpression(call) => {
                     if member_object_expression(&call.callee).is_some_and(&resolves) {
                         match static_member_name(&call.callee) {
-                            Some("map" | "forEach" | "slice") => cutoff = cutoff.min(call.span.start),
+                            Some("map" | "forEach" | "slice") => {
+                                cutoff = cutoff.min(call.span.start)
+                            }
                             _ => return Err(fail("unknown registry method/mutation")),
                         }
                     }
@@ -1210,13 +1294,17 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                         return Err(fail("registry escapes through an unproven call"));
                     }
                 }
-                AstKind::ReturnStatement(r) if r.argument.as_ref().is_some_and(&resolves) => cutoff = cutoff.min(r.span.start),
+                AstKind::ReturnStatement(r) if r.argument.as_ref().is_some_and(&resolves) => {
+                    cutoff = cutoff.min(r.span.start)
+                }
                 _ => {}
             }
         }
         let mut overrides = BTreeMap::new();
         for node in nodes.iter() {
-            if node.span().start <= array_span.end || node.span().start >= cutoff { continue; }
+            if node.span().start <= array_span.end || node.span().start >= cutoff {
+                continue;
+            }
             // Updates/deletes cannot masquerade as reads of the allocation.
             let receiver = match node.kind() {
                 AstKind::ComputedMemberExpression(m) => Some(&m.object),
@@ -1225,20 +1313,29 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             };
             if let Some(receiver) = receiver {
                 let mut root = receiver;
-                while let Some(object) = member_object_expression(root) { root = object; }
+                while let Some(object) = member_object_expression(root) {
+                    root = object;
+                }
                 if resolves(root) {
                     let parent = nodes.kind(nodes.parent_id(node.id()));
-                    if matches!(parent, AstKind::UpdateExpression(_) | AstKind::UnaryExpression(_)) {
+                    if matches!(
+                        parent,
+                        AstKind::UpdateExpression(_) | AstKind::UnaryExpression(_)
+                    ) {
                         return Err(fail("registry update/delete is unsupported"));
                     }
-                    if receiver.span() != root.span() && matches!(parent, AstKind::AssignmentExpression(_)) {
+                    if receiver.span() != root.span()
+                        && matches!(parent, AstKind::AssignmentExpression(_))
+                    {
                         return Err(fail("descriptor member mutation is unsupported"));
                     }
                 }
             }
             let (receiver, index, assignment) = match node.kind() {
                 AstKind::AssignmentExpression(a) => match &a.left {
-                    AssignmentTarget::ComputedMemberExpression(m) => (&m.object, Some(&m.expression), a),
+                    AssignmentTarget::ComputedMemberExpression(m) => {
+                        (&m.object, Some(&m.expression), a)
+                    }
                     AssignmentTarget::StaticMemberExpression(m) => (&m.object, None, a),
                     _ => continue,
                 },
@@ -1246,12 +1343,22 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             };
             if !same_owner(node.id()) {
                 let mut value = receiver;
-                let mut captured = crate::analysis::expression_symbol(value, scoping) == Some(registry);
+                let mut captured =
+                    crate::analysis::expression_symbol(value, scoping) == Some(registry);
                 for _ in 0..8 {
-                    let Some(symbol) = crate::analysis::expression_symbol(value, scoping) else { break; };
-                    let Some(next) = self.model.symbol_value(symbol) else { break; };
-                    if next.span() == array_span { captured = true; break; }
-                    if next.span() == value.span() { break; }
+                    let Some(symbol) = crate::analysis::expression_symbol(value, scoping) else {
+                        break;
+                    };
+                    let Some(next) = self.model.symbol_value(symbol) else {
+                        break;
+                    };
+                    if next.span() == array_span {
+                        captured = true;
+                        break;
+                    }
+                    if next.span() == value.span() {
+                        break;
+                    }
                     value = next;
                 }
                 let nested = self.model.enclosing_function(node.id());
@@ -1264,21 +1371,37 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             if !resolves(receiver) {
                 // A write to the original binding with an unprovable lifetime
                 // cannot safely be treated as belonging to a different array.
-                if same_owner(node.id()) && crate::analysis::expression_symbol(receiver, scoping) == Some(registry)
-                    && expression_value_at_use(scoping, nodes, receiver).is_err() {
+                if same_owner(node.id())
+                    && crate::analysis::expression_symbol(receiver, scoping) == Some(registry)
+                    && expression_value_at_use(scoping, nodes, receiver).is_err()
+                {
                     return Err(fail("receiver lifetime is unproven"));
                 }
                 continue;
             }
-            let (write_list, position) = super::reaching::statement_of(nodes, node.id()).map_err(|e| fail(&e))?;
+            let (write_list, position) =
+                super::reaching::statement_of(nodes, node.id()).map_err(|e| fail(&e))?;
             if !std::ptr::eq(list, write_list)
                 || !matches!(&write_list[position], Statement::ExpressionStatement(s) if s.expression.span() == assignment.span)
-                || assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign {
+                || assignment.operator != oxc_syntax::operator::AssignmentOperator::Assign
+            {
                 return Err(fail("population is guarded or not a plain assignment"));
             }
-            let index = index.and_then(numeric_index).ok_or_else(|| fail("nonconstant registry index or member mutation"))? as usize;
-            if index >= self.limits.max_array_elements { return Err(fail("registry index exceeds limit")); }
-            overrides.insert(index, OverrideValue { value: &assignment.right, value_span: assignment.right.span(), assignment_span: assignment.span });
+            let index = index
+                .and_then(numeric_index)
+                .ok_or_else(|| fail("nonconstant registry index or member mutation"))?
+                as usize;
+            if index >= self.limits.max_array_elements {
+                return Err(fail("registry index exceeds limit"));
+            }
+            overrides.insert(
+                index,
+                OverrideValue {
+                    value: &assignment.right,
+                    value_span: assignment.right.span(),
+                    assignment_span: assignment.span,
+                },
+            );
         }
         Ok(overrides)
     }
@@ -1293,39 +1416,75 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     /// no intervening or captured write on that branch.
     fn returning_branch_array(&self, symbol: SymbolId) -> Option<&'a Expression<'a>> {
         let mut found = Vec::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
-            let AstKind::AssignmentExpression(assignment) = node.kind() else { continue; };
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
+            let AstKind::AssignmentExpression(assignment) = node.kind() else {
+                continue;
+            };
             if simple_assignment_symbol(&assignment.left, self.model.scoping()) != Some(symbol)
-                || !matches!(assignment.right, Expression::ArrayExpression(_)) { continue; }
+                || !matches!(assignment.right, Expression::ArrayExpression(_))
+            {
+                continue;
+            }
             let mut parent = self.model.nodes().parent_id(node.id());
             let mut branch = None;
             loop {
                 match self.model.nodes().kind(parent) {
                     AstKind::IfStatement(statement) => {
-                        for arm in [Some(&statement.consequent), statement.alternate.as_ref()].into_iter().flatten() {
+                        for arm in [Some(&statement.consequent), statement.alternate.as_ref()]
+                            .into_iter()
+                            .flatten()
+                        {
                             if let Statement::BlockStatement(block) = arm {
-                                if block.span.start < assignment.span.start && assignment.span.end < block.span.end
-                                    && matches!(block.body.last(), Some(Statement::ReturnStatement(_))) {
-                                    branch = Some(block.span); break;
+                                if block.span.start < assignment.span.start
+                                    && assignment.span.end < block.span.end
+                                    && matches!(
+                                        block.body.last(),
+                                        Some(Statement::ReturnStatement(_))
+                                    )
+                                {
+                                    branch = Some(block.span);
+                                    break;
                                 }
                             }
                         }
-                        if branch.is_some() { break; }
+                        if branch.is_some() {
+                            break;
+                        }
                     }
                     AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => break,
                     _ => {}
                 }
-                let next = self.model.nodes().parent_id(parent); if next == parent { break; } parent = next;
+                let next = self.model.nodes().parent_id(parent);
+                if next == parent {
+                    break;
+                }
+                parent = next;
             }
-            let Some(branch) = branch else { continue; };
+            let Some(branch) = branch else {
+                continue;
+            };
             let owner = self.model.enclosing_function(node.id()).map(|s| s.span);
-            let safe = self.model.scoping().get_resolved_references(symbol).all(|reference| {
-                if !reference.is_write() { return true; }
-                let write = self.model.nodes().get_node(reference.node_id()).span();
-                self.model.enclosing_function(reference.node_id()).map(|s| s.span) == owner
-                    && (write.end <= assignment.span.end || write.start >= branch.end)
-            });
-            if safe { found.push(&assignment.right); }
+            let safe = self
+                .model
+                .scoping()
+                .get_resolved_references(symbol)
+                .all(|reference| {
+                    if !reference.is_write() {
+                        return true;
+                    }
+                    let write = self.model.nodes().get_node(reference.node_id()).span();
+                    self.model
+                        .enclosing_function(reference.node_id())
+                        .map(|s| s.span)
+                        == owner
+                        && (write.end <= assignment.span.end || write.start >= branch.end)
+                });
+            if safe {
+                found.push(&assignment.right);
+            }
         }
         (found.len() == 1).then(|| found[0])
     }
@@ -1339,9 +1498,12 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         let mut function_arrays: Vec<(SymbolId, Vec<FunctionSite>, Span)> = Vec::new();
 
         for symbol in &self.model.main_symbols {
-            let Some(initializer) = self.model.symbol_value(*symbol)
+            let Some(initializer) = self
+                .model
+                .symbol_value(*symbol)
                 .filter(|value| array_elements(value).is_some())
-                .or_else(|| self.returning_branch_array(*symbol)) else {
+                .or_else(|| self.returning_branch_array(*symbol))
+            else {
                 continue;
             };
             let Some(elements) = array_elements(initializer) else {
@@ -1527,8 +1689,13 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                 && member_object_expression(&call.callee)
                     .and_then(|method| {
                         static_member_name(method).or_else(|| {
-                            expression_value_at_use(self.model.scoping(), self.model.nodes(), method)
-                                .ok().and_then(|definition| static_member_name(definition.value))
+                            expression_value_at_use(
+                                self.model.scoping(),
+                                self.model.nodes(),
+                                method,
+                            )
+                            .ok()
+                            .and_then(|definition| static_member_name(definition.value))
                         })
                     })
                     .is_some_and(|name| matches!(name, "next" | "error" | "complete")))
@@ -1658,7 +1825,9 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                     "{} session-constructor candidates; the session contract stays unresolved",
                     candidates.len()
                 ),
-                span: candidates.first().map(|(site, _)| SourceSpan::from(site.span)),
+                span: candidates
+                    .first()
+                    .map(|(site, _)| SourceSpan::from(site.span)),
             });
             return Ok(None);
         }
@@ -1804,7 +1973,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             return Some(binding);
         }
         let mut found = None;
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -1834,7 +2006,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     }
 
     fn direct_main_alias_of(&self, local: SymbolId) -> Option<BindingRef> {
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -1864,7 +2039,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         fields: &mut [ContextField],
     ) {
         let mut assignments: HashMap<String, (Span, &Expression<'a>)> = HashMap::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -1909,7 +2087,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         {
             return Some(slot);
         }
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -2170,14 +2351,17 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             return None;
         }
         let (constructor, methods) = self.constructor_shape(&new.callee)?;
-        let constructor_captures_capacity = self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression).any(|node| {
-            let AstKind::AssignmentExpression(assignment) = node.kind() else {
-                return false;
-            };
-            self.model.owning_site(node.id()).map(|site| site.span) == Some(constructor.span)
-                && this_member_name(&assignment.left).is_some()
-                && self.mentions_slot(&assignment.right, constructor, 0, 0)
-        });
+        let constructor_captures_capacity = self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+            .any(|node| {
+                let AstKind::AssignmentExpression(assignment) = node.kind() else {
+                    return false;
+                };
+                self.model.owning_site(node.id()).map(|site| site.span) == Some(constructor.span)
+                    && this_member_name(&assignment.left).is_some()
+                    && self.mentions_slot(&assignment.right, constructor, 0, 0)
+            });
         if !constructor_captures_capacity {
             return None;
         }
@@ -2291,7 +2475,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     fn prototype_methods(&self, constructor: SymbolId) -> Vec<(String, FunctionSite)> {
         let scoping = self.model.scoping();
         let mut methods = Vec::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -2359,26 +2546,30 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
     /// True when `site` returns `this.<buffer>.slice(...)`, possibly chained
     /// (`.slice(...).concat(this.<buffer>.slice(...))`).
     fn returns_this_slice(&self, site: FunctionSite) -> bool {
-        self.model.kind_nodes(oxc_ast::AstType::ReturnStatement).any(|node| {
-            let AstKind::ReturnStatement(ret) = node.kind() else {
-                return false;
-            };
-            if self.model.owning_site(node.id()).map(|owner| owner.span) != Some(site.span) {
-                return false;
-            }
-            let mut current = ret.argument.as_ref().map(Expression::without_parentheses);
-            while let Some(Expression::CallExpression(call)) = current {
-                let callee = call.callee.without_parentheses();
-                let object = member_object_expression(callee).map(Expression::without_parentheses);
-                if static_member_name(callee) == Some("slice")
-                    && object.is_some_and(|object| this_member_expression_name(object).is_some())
-                {
-                    return true;
+        self.model
+            .kind_nodes(oxc_ast::AstType::ReturnStatement)
+            .any(|node| {
+                let AstKind::ReturnStatement(ret) = node.kind() else {
+                    return false;
+                };
+                if self.model.owning_site(node.id()).map(|owner| owner.span) != Some(site.span) {
+                    return false;
                 }
-                current = object;
-            }
-            false
-        })
+                let mut current = ret.argument.as_ref().map(Expression::without_parentheses);
+                while let Some(Expression::CallExpression(call)) = current {
+                    let callee = call.callee.without_parentheses();
+                    let object =
+                        member_object_expression(callee).map(Expression::without_parentheses);
+                    if static_member_name(callee) == Some("slice")
+                        && object
+                            .is_some_and(|object| this_member_expression_name(object).is_some())
+                    {
+                        return true;
+                    }
+                    current = object;
+                }
+                false
+            })
     }
 
     /// True when `site` stores its first argument at `this.<buffer>[this.<cursor>]`
@@ -2389,7 +2580,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         };
         let mut cursors: BTreeSet<String> = BTreeSet::new();
         let mut resets: BTreeSet<String> = BTreeSet::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -3208,7 +3402,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         };
         let mut factory = None;
         let mut factory_arguments = Vec::new();
-        for node in self.model.kind_nodes(oxc_ast::AstType::AssignmentExpression) {
+        for node in self
+            .model
+            .kind_nodes(oxc_ast::AstType::AssignmentExpression)
+        {
             let AstKind::AssignmentExpression(assignment) = node.kind() else {
                 continue;
             };
@@ -3708,7 +3905,8 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
         let session_state = session
             .and_then(|session| session.hash_chain.as_ref())
             .map(|chain| chain.prng_state.name.clone());
-        let mut by_signal: BTreeMap<u32, Vec<crate::signals::extract::layout::Emission>> = BTreeMap::new();
+        let mut by_signal: BTreeMap<u32, Vec<crate::signals::extract::layout::Emission>> =
+            BTreeMap::new();
         for layout in report.signals {
             for mut emission in layout.emissions {
                 emission.session_state = session_state.clone();
@@ -3865,8 +4063,10 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
             // authoritative by accident. Keep every proven core next record
             // (including `.next.call` buffers), backfill a missing buffer from
             // the wire leaves, and add layout-only next emissions.
-            let mut layout_by_origin: BTreeMap<(u32, u32), &crate::signals::extract::layout::Emission> =
-                BTreeMap::new();
+            let mut layout_by_origin: BTreeMap<
+                (u32, u32),
+                &crate::signals::extract::layout::Emission,
+            > = BTreeMap::new();
             for emission in &layouts {
                 layout_by_origin.insert((emission.origin.start, emission.origin.end), emission);
             }
@@ -3896,7 +4096,9 @@ impl<'m, 's, 'a> Extractor<'m, 's, 'a> {
                             crate::signals::extract::layout::ObserverRoute::WaveSlot(slot) => {
                                 ObserverRoute::WaveSlot(slot)
                             }
-                            crate::signals::extract::layout::ObserverRoute::Direct => ObserverRoute::Direct,
+                            crate::signals::extract::layout::ObserverRoute::Direct => {
+                                ObserverRoute::Direct
+                            }
                         },
                         payload: None,
                         buffer: buffer_record_of(emission),
@@ -4216,14 +4418,20 @@ pub(crate) struct CtorResolution {
 /// The function that owns a direct slot's emissions: its task callback, or
 /// the constructor call itself when the constructor names a function
 /// directly (no wrapper call).
-fn direct_task_function(model: &Model<'_, '_>, slot: &crate::signals::schema::DirectSlot) -> Option<SourceSpan> {
-    slot.callback.as_ref().map(|callback| callback.span).or_else(|| {
-        resolve_descriptor_ctor(model, &slot.ctor)
-            .call_span
-            .is_none()
-            .then(|| slot.ctor_call.as_ref().map(|call| call.span))
-            .flatten()
-    })
+fn direct_task_function(
+    model: &Model<'_, '_>,
+    slot: &crate::signals::schema::DirectSlot,
+) -> Option<SourceSpan> {
+    slot.callback
+        .as_ref()
+        .map(|callback| callback.span)
+        .or_else(|| {
+            resolve_descriptor_ctor(model, &slot.ctor)
+                .call_span
+                .is_none()
+                .then(|| slot.ctor_call.as_ref().map(|call| call.span))
+                .flatten()
+        })
 }
 
 pub(crate) fn resolve_descriptor_ctor<'a>(
@@ -4368,12 +4576,12 @@ fn function_statements<'a>(
 
 /// The single top-level `return <expression>` of a function body.
 fn single_return<'a>(model: &Model<'_, 'a>, site: FunctionSite) -> Option<&'a Expression<'a>> {
-    let mut returns = function_statements(model, site)?.iter().filter_map(|statement| {
-        match statement {
+    let mut returns = function_statements(model, site)?
+        .iter()
+        .filter_map(|statement| match statement {
             Statement::ReturnStatement(ret) => Some(ret.argument.as_ref()),
             _ => None,
-        }
-    });
+        });
     let value = returns.next()??;
     returns.next().is_none().then_some(value)
 }
@@ -4433,9 +4641,8 @@ fn resolve_spec_adapter<'a>(
             };
             let symbol = crate::analysis::identifier_symbol(callee, model.scoping())
                 .ok_or_else(|| reason.clone())?;
-            let (_, span) =
-                proven_function_at_read(model.scoping(), model.nodes(), symbol, read)
-                    .map_err(|late| format!("{reason}; at the descriptor call: {late}"))?;
+            let (_, span) = proven_function_at_read(model.scoping(), model.nodes(), symbol, read)
+                .map_err(|late| format!("{reason}; at the descriptor call: {late}"))?;
             model
                 .site_by_span(span)
                 .ok_or_else(|| "function node is not indexed".to_string())
@@ -4519,8 +4726,9 @@ fn resolve_spec_adapter<'a>(
     {
         return Err("the spec local is not a never-written local of the factory".to_string());
     }
-    let Some(Expression::ObjectExpression(literal)) =
-        model.initializer(spec_symbol).map(Expression::without_parentheses)
+    let Some(Expression::ObjectExpression(literal)) = model
+        .initializer(spec_symbol)
+        .map(Expression::without_parentheses)
     else {
         return Err("the spec local is not initialized with an object literal".to_string());
     };
@@ -4582,7 +4790,11 @@ fn resolve_spec_adapter<'a>(
     if hooks.is_empty() {
         return Err("the spec defines none of the hooks the task calls".to_string());
     }
-    Ok(SpecAdapter { wrapper, task, hooks })
+    Ok(SpecAdapter {
+        wrapper,
+        task,
+        hooks,
+    })
 }
 
 /// The reply parameter a collector forwards: the signal's emission payload is a
@@ -4597,9 +4809,15 @@ pub(crate) fn forwarded_parameter(text: &str, base: u32, record: &SignalRecord) 
     let allocator = Allocator::default();
     let program = crate::analysis::parse_program(&allocator, text).ok()?;
     let (scoping, nodes) = crate::analysis::analyze(&program);
-    fn parameter<'a>(expression: &'a Expression<'a>, scoping: &oxc_semantic::Scoping,
-                     nodes: &oxc_semantic::AstNodes<'a>, depth: usize) -> Option<&'a BindingIdentifier<'a>> {
-        if depth == 0 { return None; }
+    fn parameter<'a>(
+        expression: &'a Expression<'a>,
+        scoping: &oxc_semantic::Scoping,
+        nodes: &oxc_semantic::AstNodes<'a>,
+        depth: usize,
+    ) -> Option<&'a BindingIdentifier<'a>> {
+        if depth == 0 {
+            return None;
+        }
         let params = match expression.without_parentheses() {
             Expression::FunctionExpression(f) => &f.params,
             Expression::ArrowFunctionExpression(f) => &f.params,
@@ -4607,43 +4825,62 @@ pub(crate) fn forwarded_parameter(text: &str, base: u32, record: &SignalRecord) 
                 let symbol = scoping.get_reference(id.reference_id()).symbol_id()?;
                 return match nodes.kind(scoping.symbol_declaration(symbol)) {
                     AstKind::Function(f) => match &f.params.items.first()?.pattern {
-                        BindingPattern::BindingIdentifier(id) => Some(id), _ => None,
+                        BindingPattern::BindingIdentifier(id) => Some(id),
+                        _ => None,
                     },
-                    AstKind::VariableDeclarator(d) => parameter(d.init.as_ref()?, scoping, nodes, depth-1),
+                    AstKind::VariableDeclarator(d) => {
+                        parameter(d.init.as_ref()?, scoping, nodes, depth - 1)
+                    }
                     _ => None,
                 };
             }
             _ => return None,
         };
         match &params.items.first()?.pattern {
-            BindingPattern::BindingIdentifier(id) => Some(id), _ => None,
+            BindingPattern::BindingIdentifier(id) => Some(id),
+            _ => None,
         }
     }
     let mut found = BTreeSet::new();
     for node in nodes.iter() {
-        let AstKind::CallExpression(call) = node.kind() else { continue; };
-        let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else { continue; };
+        let AstKind::CallExpression(call) = node.kind() else {
+            continue;
+        };
+        let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else {
+            continue;
+        };
         if member.property.name != "push"
             || !matches!(member.object.without_parentheses(), Expression::Identifier(id) if id.name == "vmWorkerCallbacks")
-        { continue; }
-        let Some(argument) = call.arguments.first().and_then(Argument::as_expression) else { continue; };
+        {
+            continue;
+        }
+        let Some(argument) = call.arguments.first().and_then(Argument::as_expression) else {
+            continue;
+        };
         // A relay function (`post(t, pc, msg, op, cb) { …push(cb); … }`)
         // registers what each of its callers passes for that parameter.
-        let callbacks: Vec<&Expression<'_>> = match relay_parameter_calls(argument, &scoping, &nodes) {
-            Some((slot, calls)) => calls
-                .into_iter()
-                .filter_map(|call| call.arguments.get(slot).and_then(Argument::as_expression))
-                .collect(),
-            None => vec![argument],
-        };
+        let callbacks: Vec<&Expression<'_>> =
+            match relay_parameter_calls(argument, &scoping, &nodes) {
+                Some((slot, calls)) => calls
+                    .into_iter()
+                    .filter_map(|call| call.arguments.get(slot).and_then(Argument::as_expression))
+                    .collect(),
+                None => vec![argument],
+            };
         for callback in callbacks {
-            let Some(id) = parameter(callback, &scoping, &nodes, 8) else { continue; };
+            let Some(id) = parameter(callback, &scoping, &nodes, 8) else {
+                continue;
+            };
             // A direct slot's record names no payload binding for its
             // emissions (its task callback is scanned by the layout pass):
             // the callback itself must hand its parameter to an observer
             // `next`.
             let unbound = record.emissions.iter().all(|emission| {
-                emission.payload.as_ref().and_then(|payload| payload.binding.as_ref()).is_none()
+                emission
+                    .payload
+                    .as_ref()
+                    .and_then(|payload| payload.binding.as_ref())
+                    .is_none()
             });
             if record.direct && unbound {
                 let symbol = id.symbol_id.get();
@@ -4661,16 +4898,26 @@ pub(crate) fn forwarded_parameter(text: &str, base: u32, record: &SignalRecord) 
                 }
                 continue;
             }
-            if record.emissions.iter().filter(|emission| emission.kind == EmissionKind::Next)
-                .filter_map(|emission| emission.payload.as_ref()).any(|payload| {
-                    payload.source.trim() == id.name.as_str() && payload.binding.as_ref().is_some_and(|binding| {
-                        binding.identifier.start == base + id.span.start && binding.identifier.end == base + id.span.end
-                    })
+            if record
+                .emissions
+                .iter()
+                .filter(|emission| emission.kind == EmissionKind::Next)
+                .filter_map(|emission| emission.payload.as_ref())
+                .any(|payload| {
+                    payload.source.trim() == id.name.as_str()
+                        && payload.binding.as_ref().is_some_and(|binding| {
+                            binding.identifier.start == base + id.span.start
+                                && binding.identifier.end == base + id.span.end
+                        })
                 })
-            { found.insert(id.name.to_string()); }
+            {
+                found.insert(id.name.to_string());
+            }
         }
     }
-    (found.len() == 1).then(|| found.into_iter().next()).flatten()
+    (found.len() == 1)
+        .then(|| found.into_iter().next())
+        .flatten()
 }
 
 /// When `expression` reads formal parameter `k` of a function declaration,
@@ -4681,17 +4928,33 @@ fn relay_parameter_calls<'a>(
     scoping: &oxc_semantic::Scoping,
     nodes: &oxc_semantic::AstNodes<'a>,
 ) -> Option<(usize, Vec<&'a CallExpression<'a>>)> {
-    let Expression::Identifier(identifier) = expression.without_parentheses() else { return None; };
-    let symbol = scoping.get_reference(identifier.reference_id()).symbol_id()?;
+    let Expression::Identifier(identifier) = expression.without_parentheses() else {
+        return None;
+    };
+    let symbol = scoping
+        .get_reference(identifier.reference_id())
+        .symbol_id()?;
     let declaration = scoping.symbol_declaration(symbol);
-    let AstKind::FormalParameter(formal) = nodes.kind(declaration) else { return None; };
-    let AstKind::FormalParameters(parameters) = nodes.kind(nodes.parent_id(declaration)) else { return None; };
-    let slot = parameters.items.iter().position(|item| item.span == formal.span)?;
-    let AstKind::Function(function) = nodes.kind(nodes.parent_id(nodes.parent_id(declaration))) else { return None; };
+    let AstKind::FormalParameter(formal) = nodes.kind(declaration) else {
+        return None;
+    };
+    let AstKind::FormalParameters(parameters) = nodes.kind(nodes.parent_id(declaration)) else {
+        return None;
+    };
+    let slot = parameters
+        .items
+        .iter()
+        .position(|item| item.span == formal.span)?;
+    let AstKind::Function(function) = nodes.kind(nodes.parent_id(nodes.parent_id(declaration)))
+    else {
+        return None;
+    };
     let function_symbol = function.id.as_ref()?.symbol_id.get()?;
     let mut calls = Vec::new();
     for reference in scoping.get_resolved_references(function_symbol) {
-        let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(reference.node_id())) else { return None; };
+        let AstKind::CallExpression(call) = nodes.kind(nodes.parent_id(reference.node_id())) else {
+            return None;
+        };
         if call.callee.span() != nodes.get_node(reference.node_id()).span() {
             return None;
         }
@@ -4707,22 +4970,41 @@ pub(crate) fn posted_worker_target(text: &str) -> Option<(String, String)> {
     let program = crate::analysis::parse_program(&allocator, text).ok()?;
     let (scoping, nodes) = crate::analysis::analyze(&program);
     let number = |expression: &Expression<'_>| {
-        let Expression::NumericLiteral(n) = expression.without_parentheses() else { return None; };
-        (n.value.is_finite() && n.value >= 0.0 && n.value <= u32::MAX as f64 && n.value.fract() == 0.0)
+        let Expression::NumericLiteral(n) = expression.without_parentheses() else {
+            return None;
+        };
+        (n.value.is_finite()
+            && n.value >= 0.0
+            && n.value <= u32::MAX as f64
+            && n.value.fract() == 0.0)
             .then(|| (n.value as u32).to_string())
     };
     let integer = |element: &ArrayExpressionElement<'_>| number(element.as_expression()?);
     let mut targets = BTreeSet::new();
     for node in nodes.iter() {
-        let AstKind::CallExpression(call) = node.kind() else { continue; };
-        let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else { continue; };
+        let AstKind::CallExpression(call) = node.kind() else {
+            continue;
+        };
+        let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() else {
+            continue;
+        };
         if member.property.name != "postMessage"
             || !matches!(member.object.without_parentheses(), Expression::Identifier(id) if id.name == "vmWorker")
-        { continue; }
-        let Some(Expression::ArrayExpression(values)) = call.arguments.first().and_then(Argument::as_expression) else { continue; };
-        if values.elements.len() < 2 { continue; }
-        if let (Some(thread),Some(pc)) = (integer(&values.elements[0]),integer(&values.elements[1])) {
-            targets.insert((thread,pc));
+        {
+            continue;
+        }
+        let Some(Expression::ArrayExpression(values)) =
+            call.arguments.first().and_then(Argument::as_expression)
+        else {
+            continue;
+        };
+        if values.elements.len() < 2 {
+            continue;
+        }
+        if let (Some(thread), Some(pc)) =
+            (integer(&values.elements[0]), integer(&values.elements[1]))
+        {
+            targets.insert((thread, pc));
             continue;
         }
         // A relay function posts its own parameters: each caller names the
@@ -4733,17 +5015,28 @@ pub(crate) fn posted_worker_target(text: &str) -> Option<(String, String)> {
         if let (Some((thread_slot, calls)), Some((pc_slot, pc_calls))) =
             (relay(&values.elements[0]), relay(&values.elements[1]))
         {
-            if calls.len() != pc_calls.len() { continue; }
+            if calls.len() != pc_calls.len() {
+                continue;
+            }
             for call in calls {
-                let argument = |slot: usize| call.arguments.get(slot).and_then(Argument::as_expression).and_then(number);
+                let argument = |slot: usize| {
+                    call.arguments
+                        .get(slot)
+                        .and_then(Argument::as_expression)
+                        .and_then(number)
+                };
                 match (argument(thread_slot), argument(pc_slot)) {
-                    (Some(thread), Some(pc)) => { targets.insert((thread, pc)); }
+                    (Some(thread), Some(pc)) => {
+                        targets.insert((thread, pc));
+                    }
                     _ => return None,
                 }
             }
         }
     }
-    (targets.len() == 1).then(|| targets.into_iter().next()).flatten()
+    (targets.len() == 1)
+        .then(|| targets.into_iter().next())
+        .flatten()
 }
 
 /// The expression node whose exact span is `span`.
@@ -4913,7 +5206,8 @@ fn wire_stats(wire: &crate::signals::extract::layout::WireOp) -> WireStats {
     let mut stats = WireStats::default();
     fn visit(wire: &crate::signals::extract::layout::WireOp, stats: &mut WireStats) {
         match wire {
-            crate::signals::extract::layout::WireOp::Sequence(parts) | crate::signals::extract::layout::WireOp::Choice(parts) => {
+            crate::signals::extract::layout::WireOp::Sequence(parts)
+            | crate::signals::extract::layout::WireOp::Choice(parts) => {
                 for part in parts {
                     visit(part, stats);
                 }
@@ -4934,7 +5228,8 @@ fn wire_stats(wire: &crate::signals::extract::layout::WireOp) -> WireStats {
 
 fn first_buffer_name(wire: &crate::signals::extract::layout::WireOp) -> Option<String> {
     match wire {
-        crate::signals::extract::layout::WireOp::Sequence(parts) | crate::signals::extract::layout::WireOp::Choice(parts) => {
+        crate::signals::extract::layout::WireOp::Sequence(parts)
+        | crate::signals::extract::layout::WireOp::Choice(parts) => {
             parts.iter().find_map(first_buffer_name)
         }
         crate::signals::extract::layout::WireOp::Repeat { body, .. } => first_buffer_name(body),
@@ -5153,7 +5448,10 @@ mod worker_forwarding_tests {
     fn errors_with_a_same_spelled_parameter_are_not_worker_replies() {
         let source = "vmWorkerCallbacks.push((reply) => sink.next(reply));";
         let binding = 100 + source.find("reply").unwrap() as u32;
-        assert_eq!(forwarded_parameter(source, 100, &record("error", binding)), None);
+        assert_eq!(
+            forwarded_parameter(source, 100, &record("error", binding)),
+            None
+        );
         assert_eq!(
             forwarded_parameter(source, 100, &record("next", binding)),
             Some("reply".into())
@@ -5171,17 +5469,33 @@ mod worker_forwarding_tests {
         let source = "function branch(reply){sink.next(reply);}vmWorkerCallbacks.push(branch);vmWorkerCallbacks.push((reply)=>sink.next(reply));";
         let named = 100 + source.find("reply").unwrap() as u32;
         let inline = 100 + source.rfind("(reply)=>").unwrap() as u32 + 1;
-        assert_eq!(forwarded_parameter(source, 100, &record("next", named)), Some("reply".into()));
-        assert_eq!(forwarded_parameter(source, 100, &record("next", inline)), Some("reply".into()));
+        assert_eq!(
+            forwarded_parameter(source, 100, &record("next", named)),
+            Some("reply".into())
+        );
+        assert_eq!(
+            forwarded_parameter(source, 100, &record("next", inline)),
+            Some("reply".into())
+        );
         assert_eq!(forwarded_parameter(source, 100, &record("next", 450)), None);
     }
 
     #[test]
     fn worker_dispatch_accepts_integer_exponent_spelling_and_rejects_conflicts() {
-        assert_eq!(posted_worker_target("vmWorker.postMessage([3,122e3,reply,157]);"),
-                   Some(("3".into(),"122000".into())));
-        assert_eq!(posted_worker_target("vmWorker.postMessage([3,122e3]);vmWorker.postMessage([4,122e3]);"),None);
-        assert_eq!(posted_worker_target("vmWorker.postMessage([3,12.5]);"),None);
+        assert_eq!(
+            posted_worker_target("vmWorker.postMessage([3,122e3,reply,157]);"),
+            Some(("3".into(), "122000".into()))
+        );
+        assert_eq!(
+            posted_worker_target(
+                "vmWorker.postMessage([3,122e3]);vmWorker.postMessage([4,122e3]);"
+            ),
+            None
+        );
+        assert_eq!(
+            posted_worker_target("vmWorker.postMessage([3,12.5]);"),
+            None
+        );
     }
 }
 
@@ -5216,8 +5530,14 @@ let entry = { ctor: adapt(makeSpec()) };
         let parsed = crate::analysis::parse(&allocator, source);
         assert!(parsed.errors.is_empty(), "{:?}", parsed.errors);
         let (scoping, nodes) = crate::analysis::analyze(&parsed.program);
-        let model = Model::new(source, &parsed.program, &scoping, &nodes, ProgramPropertiesLimits::default())
-            .expect("model");
+        let model = Model::new(
+            source,
+            &parsed.program,
+            &scoping,
+            &nodes,
+            ProgramPropertiesLimits::default(),
+        )
+        .expect("model");
         let value = "adapt(makeSpec())";
         let start = source.find(value).unwrap() as u32;
         let ctor = ExprRecord {
@@ -5228,12 +5548,18 @@ let entry = { ctor: adapt(makeSpec()) };
             binding: None,
             function: None,
         };
-        let text = |site: FunctionSite| source[site.span.start as usize..site.span.end as usize].to_string();
+        let text = |site: FunctionSite| {
+            source[site.span.start as usize..site.span.end as usize].to_string()
+        };
         let resolution = resolve_descriptor_ctor(&model, &ctor);
         (
             resolution.wrapper.map(text),
             resolution.callback.map(text),
-            resolution.hooks.iter().map(|(site, _)| text(*site)).collect(),
+            resolution
+                .hooks
+                .iter()
+                .map(|(site, _)| text(*site))
+                .collect(),
             resolution.refusals,
         )
     }
@@ -5259,7 +5585,12 @@ let entry = { ctor: adapt(makeSpec()) };
         );
         let (_, task, hooks, refusals) = resolve(&source);
         assert!(task.is_none() && hooks.is_empty());
-        assert!(refusals.iter().any(|reason| reason.contains("more than one definition")), "{refusals:?}");
+        assert!(
+            refusals
+                .iter()
+                .any(|reason| reason.contains("more than one definition")),
+            "{refusals:?}"
+        );
     }
 
     /// A wrapper binding written twice is not read at the descriptor call.
@@ -5268,7 +5599,10 @@ let entry = { ctor: adapt(makeSpec()) };
         let source = SOURCE.replace("let entry", "wrap = null; let entry");
         let (_, task, _, refusals) = resolve(&source);
         assert!(task.is_none());
-        assert!(refusals.iter().any(|reason| reason.contains("2 writes")), "{refusals:?}");
+        assert!(
+            refusals.iter().any(|reason| reason.contains("2 writes")),
+            "{refusals:?}"
+        );
     }
 }
 
@@ -5281,12 +5615,20 @@ mod consumed_registry_tests {
         let parsed = crate::analysis::parse(&arena, &source);
         assert!(parsed.errors.is_empty());
         let (scopes, nodes) = crate::analysis::analyze(&parsed.program);
-        let model = Model::new(&source, &parsed.program, &scopes, &nodes, Default::default())?;
-        descriptor_registry_from_model(&model)?.ok_or(ProgramPropertiesError::Missing { what: "registry" })
+        let model = Model::new(
+            &source,
+            &parsed.program,
+            &scopes,
+            &nodes,
+            Default::default(),
+        )?;
+        descriptor_registry_from_model(&model)?
+            .ok_or(ProgramPropertiesError::Missing { what: "registry" })
     }
     #[test]
     fn consumes_ordered_alias_population_without_dormant_late_or_wrong_array_donations() {
-        let found = registry(r#"
+        let found = registry(
+            r#"
             let alias=r;
             alias[1]={name:"17",ctor:null,priority:true};
             alias[2]={name:17,ctor:null,priority:false};
@@ -5295,13 +5637,21 @@ mod consumed_registry_tests {
             let wrong=[]; wrong[4]={name:"wrong",ctor:null};
             r.forEach(d=>d.ctor);
             r[5]={name:"late",ctor:null};
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         assert_eq!(found.length, 4);
         assert_eq!(found.elements.len(), 4);
-        assert_eq!(found.elements[1].name, Some(LiteralValue::String("17".into())));
+        assert_eq!(
+            found.elements[1].name,
+            Some(LiteralValue::String("17".into()))
+        );
         assert_eq!(found.elements[2].name, Some(LiteralValue::Number(17.0)));
         assert_eq!(found.elements[3].name, found.elements[1].name);
-        assert_eq!(found.elements[1].priority, Some(LiteralValue::Boolean(true)));
+        assert_eq!(
+            found.elements[1].priority,
+            Some(LiteralValue::Boolean(true))
+        );
     }
     #[test]
     fn refuses_guarded_dynamic_and_unknown_mutations() {

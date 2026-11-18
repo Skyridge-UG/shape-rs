@@ -79,7 +79,10 @@ impl<'s, 'a> Merger<'s, 'a> {
                 .position(|other| other.span == declarator.span)?;
             match declaration.declarations.get(at + 1) {
                 Some(next) => Span::new(declarator.span.start, next.span.start),
-                None => Span::new(declaration.declarations[at - 1].span.end, declarator.span.end),
+                None => Span::new(
+                    declaration.declarations[at - 1].span.end,
+                    declarator.span.end,
+                ),
             }
         };
         Some(Candidate {
@@ -96,7 +99,12 @@ impl<'s, 'a> Merger<'s, 'a> {
 
     /// `let r;` is followed by a statement that stores `r` on every path,
     /// and each read comes after it or after a store in its own block.
-    pub(super) fn assigned_before_reads(&self, statement: NodeId, writes: &[(NodeId, NodeId)], reads: &[NodeId]) -> bool {
+    pub(super) fn assigned_before_reads(
+        &self,
+        statement: NodeId,
+        writes: &[(NodeId, NodeId)],
+        reads: &[NodeId],
+    ) -> bool {
         let list: &[Statement<'_>] = match self.nodes.parent_kind(statement) {
             AstKind::BlockStatement(block) => &block.body,
             AstKind::FunctionBody(body) => &body.statements,
@@ -110,7 +118,10 @@ impl<'s, 'a> Merger<'s, 'a> {
         let Some(next) = list.get(at + 1) else {
             return false;
         };
-        let stores: Vec<Span> = writes.iter().map(|(store, _)| self.span_of(*store)).collect();
+        let stores: Vec<Span> = writes
+            .iter()
+            .map(|(store, _)| self.span_of(*store))
+            .collect();
         if !definitely_stores(next, &stores) {
             return false;
         }
@@ -173,8 +184,14 @@ impl<'s, 'a> Merger<'s, 'a> {
         for read in &candidate.reads {
             if let AstKind::AssignmentExpression(assignment) = self.nodes.parent_kind(*read) {
                 if let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left {
-                    if assignment.operator == AssignmentOperator::Assign && assignment.right.span() == self.span_of(*read) {
-                        if let Some(symbol) = self.scoping.get_reference(target.reference_id()).symbol_id() {
+                    if assignment.operator == AssignmentOperator::Assign
+                        && assignment.right.span() == self.span_of(*read)
+                    {
+                        if let Some(symbol) = self
+                            .scoping
+                            .get_reference(target.reference_id())
+                            .symbol_id()
+                        {
                             if !found.contains(&symbol) {
                                 found.push(symbol);
                             }
@@ -210,12 +227,18 @@ impl<'s, 'a> Merger<'s, 'a> {
         // Literal holders keep their objects.
         found.retain(|symbol| {
             let name = self.scoping.symbol_name(*symbol);
-            !(name.starts_with("$OBJECT_") || name.starts_with("$ARRAY_") || name.starts_with("$THREAD_"))
+            !(name.starts_with("$OBJECT_")
+                || name.starts_with("$ARRAY_")
+                || name.starts_with("$THREAD_"))
         });
         found
     }
 
-    pub(super) fn merge(&self, candidate: &Candidate<'_, '_>, local: SymbolId) -> Option<Vec<analysis::Edit>> {
+    pub(super) fn merge(
+        &self,
+        candidate: &Candidate<'_, '_>,
+        local: SymbolId,
+    ) -> Option<Vec<analysis::Edit>> {
         self.local_fits(candidate, local)?;
         let (read_starts, writes) = self.local_references(candidate, local)?;
         let init = candidate.init.map_or(Span::new(0, 0), GetSpan::span);
@@ -225,16 +248,25 @@ impl<'s, 'a> Merger<'s, 'a> {
             reads: &read_starts,
         };
         // The initializer itself must not store the local.
-        if writes.iter().any(|write| contains(init, self.span_of(*write))) {
+        if writes
+            .iter()
+            .any(|write| contains(init, self.span_of(*write)))
+        {
             return None;
         }
-        let reads: Vec<Span> = candidate.reads.iter().map(|read| self.span_of(*read)).collect();
+        let reads: Vec<Span> = candidate
+            .reads
+            .iter()
+            .map(|read| self.span_of(*read))
+            .collect();
         if !self.local_keeps_derived(candidate, &writes, &reads) {
             return None;
         }
         // A copy holds the same value as the local until either is stored;
         // anything else needs the old value dead at once.
-        let copy = candidate.init.is_some_and(|init| self.is_local(init, local));
+        let copy = candidate
+            .init
+            .is_some_and(|init| self.is_local(init, local));
         if candidate.init.is_some() && !copy && walk.live_after(candidate.statement) {
             return None;
         }
@@ -257,7 +289,11 @@ impl<'s, 'a> Merger<'s, 'a> {
                         .map(|span| (self.nodes.parent_id(self.nodes.parent_id(*read)), span))
                 })
                 .collect();
-            if !copies.is_empty() && copies.iter().all(|(statement, _)| !walk.live_after(*statement)) {
+            if !copies.is_empty()
+                && copies
+                    .iter()
+                    .all(|(statement, _)| !walk.live_after(*statement))
+            {
                 return Some(
                     copies
                         .into_iter()
@@ -306,7 +342,11 @@ impl<'s, 'a> Merger<'s, 'a> {
                 let span = self.nodes.kind(function).span();
                 // The function's text names `arguments` somewhere.
                 let at = self.arguments_at.partition_point(|at| *at < span.start);
-                if self.arguments_at.get(at).is_some_and(|at| *at as usize + "arguments".len() <= span.end as usize) {
+                if self
+                    .arguments_at
+                    .get(at)
+                    .is_some_and(|at| *at as usize + "arguments".len() <= span.end as usize)
+                {
                     return None;
                 }
             }
@@ -353,7 +393,12 @@ impl<'s, 'a> Merger<'s, 'a> {
     /// The local keeps the derived value until the derived value's last
     /// read: after a store to the local, no path reaches a read of the
     /// derived value before the derived value is stored again.
-    fn local_keeps_derived(&self, candidate: &Candidate<'_, '_>, writes: &[NodeId], reads: &[Span]) -> bool {
+    fn local_keeps_derived(
+        &self,
+        candidate: &Candidate<'_, '_>,
+        writes: &[NodeId],
+        reads: &[Span],
+    ) -> bool {
         let mut derived_reads: Vec<u32> = reads.iter().map(|read| read.start).collect();
         derived_reads.sort_unstable();
         let derived_walk = Walk {
@@ -396,7 +441,9 @@ impl<'s, 'a> Merger<'s, 'a> {
                 if is_loop(&kind) {
                     let span = kind.span();
                     if span.start >= candidate.statement_span.end
-                        && writes.iter().any(|write| contains(span, self.span_of(*write)))
+                        && writes
+                            .iter()
+                            .any(|write| contains(span, self.span_of(*write)))
                     {
                         return false;
                     }
@@ -411,12 +458,20 @@ impl<'s, 'a> Merger<'s, 'a> {
     fn name_reaches(&self, candidate: &Candidate<'_, '_>, local: SymbolId, name: &str) -> bool {
         let statement_scope = self.nodes.get_node(candidate.statement).scope_id();
         if self.scoping.find_binding(statement_scope, name.into()) != Some(local)
-            || (!self.scoping.symbol_flags(local).contains(SymbolFlags::FunctionScopedVariable)
-                && self.span_of(self.scoping.symbol_declaration(local)).start >= candidate.statement_span.start)
+            || (!self
+                .scoping
+                .symbol_flags(local)
+                .contains(SymbolFlags::FunctionScopedVariable)
+                && self.span_of(self.scoping.symbol_declaration(local)).start
+                    >= candidate.statement_span.start)
         {
             return false;
         }
-        for read in candidate.reads.iter().chain(candidate.writes.iter().map(|(_, target)| target)) {
+        for read in candidate
+            .reads
+            .iter()
+            .chain(candidate.writes.iter().map(|(_, target)| target))
+        {
             let scope = self.nodes.get_node(*read).scope_id();
             if self.scoping.find_binding(scope, name.into()) != Some(local) {
                 return false;
@@ -450,7 +505,10 @@ impl<'s, 'a> Merger<'s, 'a> {
             if self.stores_local(*statement, local) {
                 edits.push(analysis::Edit::delete(whole_line(self.source, store.span)));
             } else {
-                edits.push(analysis::Edit::replace(self.span_of(*target), name.to_string()));
+                edits.push(analysis::Edit::replace(
+                    self.span_of(*target),
+                    name.to_string(),
+                ));
             }
         }
         let mut gone = Vec::new();
@@ -569,13 +627,20 @@ impl<'s, 'a> Merger<'s, 'a> {
         let AstKind::AssignmentExpression(assignment) = self.nodes.parent_kind(read) else {
             return None;
         };
-        if assignment.operator != AssignmentOperator::Assign || assignment.right.span() != self.span_of(read) {
+        if assignment.operator != AssignmentOperator::Assign
+            || assignment.right.span() != self.span_of(read)
+        {
             return None;
         }
         let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
             return None;
         };
-        if self.scoping.get_reference(target.reference_id()).symbol_id() != Some(local) {
+        if self
+            .scoping
+            .get_reference(target.reference_id())
+            .symbol_id()
+            != Some(local)
+        {
             return None;
         }
         let statement = self.nodes.parent_id(self.nodes.parent_id(read));

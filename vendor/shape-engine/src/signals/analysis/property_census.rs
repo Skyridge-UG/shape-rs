@@ -48,7 +48,11 @@ pub(crate) fn contains(outer: Range, inner: Range) -> bool {
 #[derive(Clone, Debug)]
 pub(crate) enum Fact {
     Member(String),
-    Call { method: String, args: Vec<String>, construct: bool },
+    Call {
+        method: String,
+        args: Vec<String>,
+        construct: bool,
+    },
     Global(String),
     Str(String),
     Regex(String),
@@ -169,7 +173,9 @@ pub(crate) fn range(span: oxc_span::Span) -> Range {
 /// The binding an identifier expression resolves to.
 pub(crate) fn ident_symbol(expression: &Expression<'_>, scoping: &Scoping) -> Option<SymbolId> {
     match expression.without_parentheses() {
-        Expression::Identifier(identifier) => crate::analysis::identifier_symbol(identifier, scoping),
+        Expression::Identifier(identifier) => {
+            crate::analysis::identifier_symbol(identifier, scoping)
+        }
         _ => None,
     }
 }
@@ -269,9 +275,9 @@ pub(crate) fn path_table(
     for element in &array.elements {
         let path = match element {
             ArrayExpressionElement::ArrayExpression(inner) => string_path(inner)?,
-            ArrayExpressionElement::Identifier(identifier) => {
-                paths.get(&crate::analysis::identifier_symbol(identifier, scoping)?)?.clone()
-            }
+            ArrayExpressionElement::Identifier(identifier) => paths
+                .get(&crate::analysis::identifier_symbol(identifier, scoping)?)?
+                .clone(),
             _ => return None,
         };
         table.push(path);
@@ -293,27 +299,37 @@ impl Indexer<'_> {
         for statement in &block.body {
             match statement {
                 Statement::ExpressionStatement(expression) => {
-                    let Expression::AssignmentExpression(assignment) = expression.expression.without_parentheses() else {
+                    let Expression::AssignmentExpression(assignment) =
+                        expression.expression.without_parentheses()
+                    else {
                         return;
                     };
-                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
+                    let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left
+                    else {
                         return;
                     };
                     let copied = assignment.operator.is_assign()
-                        && ident_symbol(&assignment.right, self.scoping).is_some_and(|symbol| copies.contains(&symbol));
-                    let Some(register) = crate::analysis::identifier_symbol(target, self.scoping).filter(|_| copied) else {
+                        && ident_symbol(&assignment.right, self.scoping)
+                            .is_some_and(|symbol| copies.contains(&symbol));
+                    let Some(register) =
+                        crate::analysis::identifier_symbol(target, self.scoping).filter(|_| copied)
+                    else {
                         return;
                     };
                     copies.push(register);
                 }
                 Statement::VariableDeclaration(declaration) => {
                     for declarator in &declaration.declarations {
-                        let Some(Expression::ComputedMemberExpression(member)) =
-                            declarator.init.as_ref().map(|init| init.without_parentheses())
+                        let Some(Expression::ComputedMemberExpression(member)) = declarator
+                            .init
+                            .as_ref()
+                            .map(|init| init.without_parentheses())
                         else {
                             return;
                         };
-                        if !ident_symbol(&member.expression, self.scoping).is_some_and(|symbol| copies[1..].contains(&symbol)) {
+                        if !ident_symbol(&member.expression, self.scoping)
+                            .is_some_and(|symbol| copies[1..].contains(&symbol))
+                        {
                             return;
                         }
                         self.fact(member.span.start, Fact::KeyLookup);
@@ -343,14 +359,20 @@ impl Indexer<'_> {
     }
 
     /// `if (t)` / `if (!t)` with `t` last assigned a native-code test.
-    pub(crate) fn test_var_polarity(&self, test: &Expression<'_>, negations: usize) -> Option<bool> {
+    pub(crate) fn test_var_polarity(
+        &self,
+        test: &Expression<'_>,
+        negations: usize,
+    ) -> Option<bool> {
         match test.without_parentheses() {
             Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::LogicalNot => {
                 self.test_var_polarity(&unary.argument, negations + 1)
             }
             Expression::Identifier(identifier) => {
                 let symbol = crate::analysis::identifier_symbol(identifier, self.scoping)?;
-                self.test_vars.get(&symbol).map(|(negated, _)| (*negated) ^ (negations % 2 == 1))
+                self.test_vars
+                    .get(&symbol)
+                    .map(|(negated, _)| (*negated) ^ (negations % 2 == 1))
             }
             _ => None,
         }
@@ -359,7 +381,10 @@ impl Indexer<'_> {
     /// The method `m` a `.call` callee calls, with the receiver variable
     /// when known: `x[1].call` with `x = [o, o.m]` (receiver `o`), or
     /// `o.m.call(r, ..)` (receiver `r`).
-    pub(crate) fn call_through(&self, call_expression: &CallExpression<'_>) -> Option<(String, Option<SymbolId>)> {
+    pub(crate) fn call_through(
+        &self,
+        call_expression: &CallExpression<'_>,
+    ) -> Option<(String, Option<SymbolId>)> {
         let callee = &call_expression.callee;
         let Expression::StaticMemberExpression(call) = callee.without_parentheses() else {
             return None;
@@ -401,7 +426,11 @@ impl Indexer<'_> {
         let fact = match fact {
             Fact::Member(name) | Fact::Global(name) if name.starts_with('$') => return,
             // A call of a generated callee keeps its string arguments only.
-            Fact::Call { method, args, construct } if method.starts_with('$') => Fact::Call {
+            Fact::Call {
+                method,
+                args,
+                construct,
+            } if method.starts_with('$') => Fact::Call {
                 method: String::new(),
                 args,
                 construct,
@@ -414,7 +443,11 @@ impl Indexer<'_> {
     /// Record a write of `symbol` at `offset`.
     pub(crate) fn write(&mut self, symbol: SymbolId, offset: u32, rhs: Rhs) {
         let func = self.func();
-        self.index.writes.entry(symbol).or_default().push(Write { offset, func, rhs });
+        self.index
+            .writes
+            .entry(symbol)
+            .or_default()
+            .push(Write { offset, func, rhs });
         self.index.write_targets.insert(offset);
     }
 
@@ -448,7 +481,11 @@ impl Indexer<'_> {
     /// Record the head of a control statement as its own unit.
     pub(crate) fn head(&mut self, stmt: oxc_span::Span, head: Range) {
         let func = self.func();
-        self.index.heads.push(Head { stmt: range(stmt), head, func });
+        self.index.heads.push(Head {
+            stmt: range(stmt),
+            head,
+            func,
+        });
         self.index.units.push((head, func));
     }
 }
@@ -478,7 +515,8 @@ impl Indexer<'_> {
     fn aliased_index(&self, expression: &Expression<'_>, offset: u32) -> Option<u32> {
         let symbol = ident_symbol(expression, self.scoping)?;
         let (index, list, kill) = self.index_aliases.get(&symbol)?;
-        (Some(list) == self.stmt_lists.last() && kill.is_none_or(|kill| offset < kill)).then_some(*index)
+        (Some(list) == self.stmt_lists.last() && kill.is_none_or(|kill| offset < kill))
+            .then_some(*index)
     }
 }
 
@@ -493,9 +531,13 @@ impl<'a> Visit<'a> for Indexer<'_> {
             let mut aliases: Vec<(SymbolId, u32)> = Vec::new();
             match statement {
                 Statement::ExpressionStatement(statement) => {
-                    if let Expression::AssignmentExpression(assignment) = statement.expression.without_parentheses() {
-                        if let (AssignmentOperator::Assign, AssignmentTarget::AssignmentTargetIdentifier(target)) =
-                            (assignment.operator, &assignment.left)
+                    if let Expression::AssignmentExpression(assignment) =
+                        statement.expression.without_parentheses()
+                    {
+                        if let (
+                            AssignmentOperator::Assign,
+                            AssignmentTarget::AssignmentTargetIdentifier(target),
+                        ) = (assignment.operator, &assignment.left)
                         {
                             if let (Some(symbol), Some(index)) = (
                                 crate::analysis::identifier_symbol(target, self.scoping),
@@ -511,7 +553,9 @@ impl<'a> Visit<'a> for Indexer<'_> {
                         if let (BindingPattern::BindingIdentifier(binding), Some(init)) =
                             (&declarator.id, declarator.init.as_ref())
                         {
-                            if let (Some(symbol), Some(index)) = (binding.symbol_id.get(), literal_index(init)) {
+                            if let (Some(symbol), Some(index)) =
+                                (binding.symbol_id.get(), literal_index(init))
+                            {
                                 aliases.push((symbol, index));
                             }
                         }
@@ -570,12 +614,13 @@ impl<'a> Visit<'a> for Indexer<'_> {
                 self.head(span, (span.start, loop_.right.span().end));
                 self.fact(span.start, Fact::ForIn);
                 let key = match &loop_.left {
-                    ForStatementLeft::VariableDeclaration(declaration) => {
-                        declaration.declarations.first().and_then(|declarator| match &declarator.id {
+                    ForStatementLeft::VariableDeclaration(declaration) => declaration
+                        .declarations
+                        .first()
+                        .and_then(|declarator| match &declarator.id {
                             BindingPattern::BindingIdentifier(binding) => binding.symbol_id.get(),
                             _ => None,
-                        })
-                    }
+                        }),
                     ForStatementLeft::AssignmentTargetIdentifier(target) => {
                         crate::analysis::identifier_symbol(target, self.scoping)
                     }
@@ -586,8 +631,12 @@ impl<'a> Visit<'a> for Indexer<'_> {
                     self.key_copy_lookups(key, &loop_.body);
                 }
             }
-            Statement::ForOfStatement(loop_) => self.head(span, (span.start, loop_.right.span().end)),
-            Statement::SwitchStatement(switch) => self.head(span, range(switch.discriminant.span())),
+            Statement::ForOfStatement(loop_) => {
+                self.head(span, (span.start, loop_.right.span().end))
+            }
+            Statement::SwitchStatement(switch) => {
+                self.head(span, range(switch.discriminant.span()))
+            }
             _ => {}
         }
         walk::walk_statement(self, statement);
@@ -596,7 +645,8 @@ impl<'a> Visit<'a> for Indexer<'_> {
     fn visit_if_statement(&mut self, statement: &IfStatement<'a>) {
         self.head(statement.span, range(statement.test.span()));
         self.visit_expression(&statement.test);
-        let polarity = native_test_polarity(&statement.test, 0).or_else(|| self.test_var_polarity(&statement.test, 0));
+        let polarity = native_test_polarity(&statement.test, 0)
+            .or_else(|| self.test_var_polarity(&statement.test, 0));
         // then-branch runs when the test holds: a negated native test means
         // the then-branch sees non-native values.
         if let Some(negated) = polarity {
@@ -630,10 +680,17 @@ impl<'a> Visit<'a> for Indexer<'_> {
                         self.test_vars.remove(&symbol);
                     }
                 }
-                let rhs = declarator.init.as_ref().map_or(Rhs::Other, |init| self.rhs(init));
+                let rhs = declarator
+                    .init
+                    .as_ref()
+                    .map_or(Rhs::Other, |init| self.rhs(init));
                 self.write(symbol, binding.span.start, rhs);
-                if let Some(Expression::CallExpression(call)) = declarator.init.as_ref().map(|e| e.without_parentheses()) {
-                    if let Expression::StaticMemberExpression(member) = call.callee.without_parentheses() {
+                if let Some(Expression::CallExpression(call)) =
+                    declarator.init.as_ref().map(|e| e.without_parentheses())
+                {
+                    if let Expression::StaticMemberExpression(member) =
+                        call.callee.without_parentheses()
+                    {
                         if member.property.name == "sort" && call.arguments.is_empty() {
                             if let Some(list) = ident_symbol(&member.object, self.scoping) {
                                 self.sorted_aliases.insert(symbol, list);
@@ -664,7 +721,11 @@ impl<'a> Visit<'a> for Indexer<'_> {
         // `let [a, b] = [x, y]` (the tracer's parallel binding): each name is
         // written by the declaration.
         if let BindingPattern::ArrayPattern(pattern) = &declarator.id {
-            let values = match declarator.init.as_ref().map(|init| init.without_parentheses()) {
+            let values = match declarator
+                .init
+                .as_ref()
+                .map(|init| init.without_parentheses())
+            {
                 Some(Expression::ArrayExpression(array)) => Some(array),
                 _ => None,
             };
@@ -700,12 +761,20 @@ impl<'a> Visit<'a> for Indexer<'_> {
             }
             AssignmentTarget::ComputedMemberExpression(member) => {
                 if let Some(symbol) = ident_symbol(&member.object, self.scoping) {
-                    self.index.mutations.entry(symbol).or_default().push(member.span.start);
+                    self.index
+                        .mutations
+                        .entry(symbol)
+                        .or_default()
+                        .push(member.span.start);
                 }
             }
             AssignmentTarget::StaticMemberExpression(member) => {
                 if let Some(symbol) = ident_symbol(&member.object, self.scoping) {
-                    self.index.mutations.entry(symbol).or_default().push(member.span.start);
+                    self.index
+                        .mutations
+                        .entry(symbol)
+                        .or_default()
+                        .push(member.span.start);
                 }
             }
             _ => {}
@@ -726,12 +795,18 @@ impl<'a> Visit<'a> for Indexer<'_> {
                 let func = self.func();
                 self.index.refs.push((identifier.span.start, symbol, func));
             }
-            None => self.fact(identifier.span.start, Fact::Global(identifier.name.to_string())),
+            None => self.fact(
+                identifier.span.start,
+                Fact::Global(identifier.name.to_string()),
+            ),
         }
     }
 
     fn visit_static_member_expression(&mut self, member: &StaticMemberExpression<'a>) {
-        self.fact(member.span.start, Fact::Member(member.property.name.to_string()));
+        self.fact(
+            member.span.start,
+            Fact::Member(member.property.name.to_string()),
+        );
         walk::walk_static_member_expression(self, member);
     }
 
@@ -752,7 +827,10 @@ impl<'a> Visit<'a> for Indexer<'_> {
     }
 
     fn visit_reg_exp_literal(&mut self, literal: &RegExpLiteral<'a>) {
-        self.fact(literal.span.start, Fact::Regex(literal.regex.pattern.text.to_string()));
+        self.fact(
+            literal.span.start,
+            Fact::Regex(literal.regex.pattern.text.to_string()),
+        );
     }
 
     fn visit_array_expression(&mut self, array: &ArrayExpression<'a>) {
@@ -765,7 +843,14 @@ impl<'a> Visit<'a> for Indexer<'_> {
     fn visit_new_expression(&mut self, new: &NewExpression<'a>) {
         if let Some(method) = callee_method(&new.callee) {
             let args = string_arguments(&new.arguments);
-            self.fact(new.span.start, Fact::Call { method, args, construct: true });
+            self.fact(
+                new.span.start,
+                Fact::Call {
+                    method,
+                    args,
+                    construct: true,
+                },
+            );
         }
         walk::walk_new_expression(self, new);
     }
@@ -773,7 +858,14 @@ impl<'a> Visit<'a> for Indexer<'_> {
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
         if let Some(method) = callee_method(&call.callee) {
             let args = string_arguments(&call.arguments);
-            self.fact(call.span.start, Fact::Call { method, args, construct: false });
+            self.fact(
+                call.span.start,
+                Fact::Call {
+                    method,
+                    args,
+                    construct: false,
+                },
+            );
         }
         // A receiver-explicit call is also the method's own call:
         // `x[1].call(x[0], ..)` with `x = [o, o.m]` (the tracer's method
@@ -782,7 +874,11 @@ impl<'a> Visit<'a> for Indexer<'_> {
             let args = string_arguments(call.arguments.get(1..).unwrap_or_default());
             if let Some(receiver) = receiver {
                 if matches!(method.as_str(), "push" | "unshift" | "splice") {
-                    self.index.mutations.entry(receiver).or_default().push(call.span.start);
+                    self.index
+                        .mutations
+                        .entry(receiver)
+                        .or_default()
+                        .push(call.span.start);
                 }
                 if method == "push" {
                     if let Some(native) = self.native_ctx.last().copied() {
@@ -790,7 +886,14 @@ impl<'a> Visit<'a> for Indexer<'_> {
                     }
                 }
             }
-            self.fact(call.span.start, Fact::Call { method, args, construct: false });
+            self.fact(
+                call.span.start,
+                Fact::Call {
+                    method,
+                    args,
+                    construct: false,
+                },
+            );
         }
         if let Some(callee) = ident_symbol(&call.callee, self.scoping) {
             self.index.local_calls.push((call.span.start, callee));
@@ -818,8 +921,12 @@ impl<'a> Visit<'a> for Indexer<'_> {
                 if let (true, Some(object)) = (emits, object) {
                     self.index.emissions.push((call.span.start, object));
                     if let Some(Argument::ArrayExpression(array)) = call.arguments.first() {
-                        if let Some(ArrayExpressionElement::Identifier(buffer)) = array.elements.get(1) {
-                            if let Some(symbol) = crate::analysis::identifier_symbol(buffer, self.scoping) {
+                        if let Some(ArrayExpressionElement::Identifier(buffer)) =
+                            array.elements.get(1)
+                        {
+                            if let Some(symbol) =
+                                crate::analysis::identifier_symbol(buffer, self.scoping)
+                            {
                                 self.index.emission_buffer.insert(call.span.start, symbol);
                             }
                         }
@@ -828,7 +935,11 @@ impl<'a> Visit<'a> for Indexer<'_> {
             }
             if matches!(member.property.name.as_str(), "push" | "unshift" | "splice") {
                 if let Some(object) = object {
-                    self.index.mutations.entry(object).or_default().push(call.span.start);
+                    self.index
+                        .mutations
+                        .entry(object)
+                        .or_default()
+                        .push(call.span.start);
                 }
             }
             if member.property.name == "push" {
@@ -837,19 +948,25 @@ impl<'a> Visit<'a> for Indexer<'_> {
                 }
             }
         }
-        let mut args = CallArgs { end: call.span.end, ..CallArgs::default() };
+        let mut args = CallArgs {
+            end: call.span.end,
+            ..CallArgs::default()
+        };
         for argument in &call.arguments {
             let Some(expression) = argument.as_expression() else {
                 continue;
             };
             // `x[N]`, or a local `a` the same statement list set to `x[N]`.
-            if let Some(index) =
-                literal_index(expression).or_else(|| self.aliased_index(expression, call.span.start))
+            if let Some(index) = literal_index(expression)
+                .or_else(|| self.aliased_index(expression, call.span.start))
             {
                 args.indices.push(index);
             }
-            let mut sorted =
-                SortedLists { scoping: self.scoping, sorted_aliases: &self.sorted_aliases, out: Vec::new() };
+            let mut sorted = SortedLists {
+                scoping: self.scoping,
+                sorted_aliases: &self.sorted_aliases,
+                out: Vec::new(),
+            };
             sorted.visit_expression(expression);
             args.sorted.extend(sorted.out);
         }
@@ -917,7 +1034,9 @@ impl ProgramIndex {
         let mut index = indexer.index;
         index.facts.sort_by_key(|(offset, _)| *offset);
         index.refs.sort_by_key(|(offset, _, _)| *offset);
-        index.units.sort_by_key(|((start, end), _)| (*start, u32::MAX - *end));
+        index
+            .units
+            .sort_by_key(|((start, end), _)| (*start, u32::MAX - *end));
         index.heads.sort_by_key(|head| head.stmt.0);
         index.local_calls.sort_by_key(|(offset, _)| *offset);
         index
@@ -934,14 +1053,20 @@ impl ProgramIndex {
 
     /// The binding references inside `range`.
     pub(crate) fn refs_in(&self, range: Range) -> impl Iterator<Item = &(u32, SymbolId, usize)> {
-        let first = self.refs.partition_point(|(offset, _, _)| *offset < range.0);
-        self.refs[first..].iter().take_while(move |(offset, _, _)| *offset < range.1)
+        let first = self
+            .refs
+            .partition_point(|(offset, _, _)| *offset < range.0);
+        self.refs[first..]
+            .iter()
+            .take_while(move |(offset, _, _)| *offset < range.1)
     }
 
     /// The innermost unit containing `offset`: units nest or are disjoint,
     /// so it is the containing unit with the greatest start.
     pub(crate) fn unit_at(&self, offset: u32) -> Option<Range> {
-        let end = self.units.partition_point(|((start, _), _)| *start <= offset);
+        let end = self
+            .units
+            .partition_point(|((start, _), _)| *start <= offset);
         self.units[..end]
             .iter()
             .rev()
@@ -953,8 +1078,13 @@ impl ProgramIndex {
     pub(crate) fn func_at(&self, offset: u32) -> usize {
         // Functions are recorded in pre-order: the innermost containing one
         // is the last containing one with a start before `offset`.
-        let end = self.functions.partition_point(|function| function.0 <= offset);
-        (0..end).rev().find(|id| inside(offset, self.functions[*id])).unwrap_or(usize::MAX)
+        let end = self
+            .functions
+            .partition_point(|function| function.0 <= offset);
+        (0..end)
+            .rev()
+            .find(|id| inside(offset, self.functions[*id]))
+            .unwrap_or(usize::MAX)
     }
 
     /// Control heads governing `offset` inside function `func`.
@@ -965,14 +1095,18 @@ impl ProgramIndex {
             .iter()
             .rev()
             .take_while(|head| head.stmt.0 >= floor)
-            .filter(|head| head.func == func && inside(offset, head.stmt) && !inside(offset, head.head))
+            .filter(|head| {
+                head.func == func && inside(offset, head.stmt) && !inside(offset, head.head)
+            })
             .map(|head| head.head)
             .collect()
     }
 
     /// The statement units inside `block`.
     pub(crate) fn units_within(&self, block: Range) -> impl Iterator<Item = Range> + '_ {
-        let first = self.units.partition_point(|((start, _), _)| *start < block.0);
+        let first = self
+            .units
+            .partition_point(|((start, _), _)| *start < block.0);
         self.units[first..]
             .iter()
             .take_while(move |((start, _), _)| *start < block.1)
@@ -992,7 +1126,9 @@ impl ProgramIndex {
         for write in self.writes.get(&symbol).into_iter().flatten() {
             match write.rhs {
                 Rhs::Function(function) => out.push(function),
-                Rhs::Ident(next) if next != symbol => out.extend(self.resolve_function(next, depth - 1)),
+                Rhs::Ident(next) if next != symbol => {
+                    out.extend(self.resolve_function(next, depth - 1))
+                }
                 _ => {}
             }
         }
@@ -1001,12 +1137,15 @@ impl ProgramIndex {
 
     /// `function` itself (not a nested function) runs a `for…in` loop.
     pub(crate) fn own_for_in(&self, function: Range) -> bool {
-        let first = self.facts.partition_point(|(offset, _)| *offset < function.0);
+        let first = self
+            .facts
+            .partition_point(|(offset, _)| *offset < function.0);
         self.facts[first..]
             .iter()
             .take_while(|(offset, _)| *offset < function.1)
             .any(|(offset, fact)| {
-                matches!(fact, Fact::ForIn) && self.functions.get(self.func_at(*offset)) == Some(&function)
+                matches!(fact, Fact::ForIn)
+                    && self.functions.get(self.func_at(*offset)) == Some(&function)
             })
     }
 
@@ -1057,7 +1196,9 @@ impl Census {
 
     /// `method` is called with the string argument `arg`.
     pub(crate) fn calls_with(&self, method: &str, arg: &str) -> bool {
-        self.calls.iter().any(|(m, args, _)| m == method && args.iter().any(|a| a == arg))
+        self.calls
+            .iter()
+            .any(|(m, args, _)| m == method && args.iter().any(|a| a == arg))
     }
 
     /// The string literal `value` occurs.
@@ -1067,7 +1208,8 @@ impl Census {
 
     /// Some string literal contains `needle`.
     pub(crate) fn string_containing(&self, needle: &str) -> bool {
-        self.strings.iter().any(|s| s.contains(needle)) || self.regexes.iter().any(|s| s.contains(needle))
+        self.strings.iter().any(|s| s.contains(needle))
+            || self.regexes.iter().any(|s| s.contains(needle))
     }
 
     /// Member read or string literal (`x.name`, `"name" in x`,
@@ -1079,7 +1221,11 @@ impl Census {
 
 /// Build the slot-local census of `view` from the program index.
 pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scoping) -> Census {
-    let spans: Vec<Range> = view.spans().iter().map(|span| (span.start, span.end)).collect();
+    let spans: Vec<Range> = view
+        .spans()
+        .iter()
+        .map(|span| (span.start, span.end))
+        .collect();
     let in_producer = |offset: u32| spans.iter().any(|span| inside(offset, *span));
     let anchors = view.anchors();
     let own: Vec<(u32, SymbolId)> = index
@@ -1096,7 +1242,9 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
         let mut candidates: Vec<Range> = index
             .stmts
             .iter()
-            .filter(|stmt| inside(*site, **stmt) && spans.iter().any(|span| contains(*span, **stmt)))
+            .filter(|stmt| {
+                inside(*site, **stmt) && spans.iter().any(|span| contains(*span, **stmt))
+            })
             .copied()
             .collect();
         candidates.sort_by_key(|stmt| stmt.1 - stmt.0);
@@ -1149,7 +1297,11 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
                     continue;
                 }
                 if let Some(callee) = index.param_callee.get(&symbol) {
-                    if index.resolve_function(*callee, 3).iter().any(|f| index.builds_iframe(*f)) {
+                    if index
+                        .resolve_function(*callee, 3)
+                        .iter()
+                        .any(|f| index.builds_iframe(*f))
+                    {
                         census.frame_realm = true;
                     }
                 }
@@ -1195,7 +1347,11 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
                     add.extend(index.heads_governing(write.offset, write.func));
                     // Mutations between this write and the next write of the
                     // same function, inside that function.
-                    let scope_range = index.functions.get(write.func).copied().unwrap_or((0, u32::MAX));
+                    let scope_range = index
+                        .functions
+                        .get(write.func)
+                        .copied()
+                        .unwrap_or((0, u32::MAX));
                     let next_write = writes
                         .iter()
                         .filter(|other| other.func == write.func && other.offset > write.offset)
@@ -1203,7 +1359,10 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
                         .min()
                         .unwrap_or(scope_range.1);
                     for mutation in index.mutations.get(&symbol).into_iter().flatten() {
-                        if *mutation > write.offset && *mutation < next_write && inside(*mutation, scope_range) {
+                        if *mutation > write.offset
+                            && *mutation < next_write
+                            && inside(*mutation, scope_range)
+                        {
                             if let Some(found) = index.unit_at(*mutation) {
                                 add.push(found);
                             }
@@ -1241,7 +1400,13 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
                 Fact::Member(name) => {
                     census.members.insert(name.clone());
                 }
-                Fact::Call { method, args, construct } => census.calls.push((method.clone(), args.clone(), *construct)),
+                Fact::Call {
+                    method,
+                    args,
+                    construct,
+                } => census
+                    .calls
+                    .push((method.clone(), args.clone(), *construct)),
                 Fact::Global(name) => {
                     census.globals.insert(name.clone());
                 }
@@ -1265,12 +1430,17 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
         // x in o) k[k.length] = x; return k; }`) called here is this slot's
         // `for…in` walk.
         if !census.for_in {
-            let first = index.local_calls.partition_point(|(offset, _)| *offset < region.0);
+            let first = index
+                .local_calls
+                .partition_point(|(offset, _)| *offset < region.0);
             census.for_in = index.local_calls[first..]
                 .iter()
                 .take_while(|(offset, _)| *offset < region.1)
                 .any(|(_, callee)| {
-                    index.resolve_function(*callee, 3).iter().any(|function| index.own_for_in(*function))
+                    index
+                        .resolve_function(*callee, 3)
+                        .iter()
+                        .any(|function| index.own_for_in(*function))
                 });
         }
     }
@@ -1291,7 +1461,10 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
         if let Some(args) = index.call_args.get(anchor) {
             if *anchor < covered {
                 if !args.indices.is_empty() {
-                    group.push(CallArgs { sorted: Vec::new(), ..args.clone() });
+                    group.push(CallArgs {
+                        sorted: Vec::new(),
+                        ..args.clone()
+                    });
                 }
                 continue;
             }
@@ -1306,7 +1479,11 @@ pub(crate) fn build_census(index: &ProgramIndex, view: &SlotView, scoping: &Scop
         let Some(buffer) = index.emission_buffer.get(site) else {
             continue;
         };
-        let function = index.functions.get(index.func_at(*site)).copied().unwrap_or((0, *site));
+        let function = index
+            .functions
+            .get(index.func_at(*site))
+            .copied()
+            .unwrap_or((0, *site));
         let mut direct_units: BTreeSet<Range> = BTreeSet::new();
         for (offset, symbol, _) in index.refs_in((function.0, *site)) {
             if symbol == buffer {
@@ -1339,14 +1516,19 @@ pub(crate) struct CensusKey(pub(crate) Vec<u32>, pub(crate) u32);
 
 /// The census memo key of a slot (anchors and producer start).
 pub(crate) fn slot_key(view: &SlotView) -> CensusKey {
-    CensusKey(view.anchors().to_vec(), view.producer_span().map_or(0, |span| span.start))
+    CensusKey(
+        view.anchors().to_vec(),
+        view.producer_span().map_or(0, |span| span.start),
+    )
 }
 
 /// The slot-local census of `view` (memoized per analysis and slot; the
 /// binders read the census their recognizer built).
 pub(crate) fn census(view: &SlotView, ctx: &FinderCtx) -> Rc<Census> {
     ctx.memo(slot_key(view), || {
-        let index = ctx.memo(ProgramIndexKey, || ProgramIndex::build(ctx.parse.program, ctx.parse.scoping));
+        let index = ctx.memo(ProgramIndexKey, || {
+            ProgramIndex::build(ctx.parse.program, ctx.parse.scoping)
+        });
         build_census(&index, view, ctx.parse.scoping)
     })
 }
@@ -1355,9 +1537,12 @@ pub(crate) fn census(view: &SlotView, ctx: &FinderCtx) -> Rc<Census> {
 mod tests {
     fn index_of(source: &str) -> super::ProgramIndex {
         let allocator = oxc_allocator::Allocator::default();
-        let parsed = oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::mjs()).parse();
+        let parsed =
+            oxc_parser::Parser::new(&allocator, source, oxc_span::SourceType::mjs()).parse();
         assert!(!parsed.panicked);
-        let semantic = oxc_semantic::SemanticBuilder::new().build(&parsed.program).semantic;
+        let semantic = oxc_semantic::SemanticBuilder::new()
+            .build(&parsed.program)
+            .semantic;
         let (scoping, _) = semantic.into_scoping_and_nodes();
         super::ProgramIndex::build(&parsed.program, &scoping)
     }
@@ -1395,7 +1580,12 @@ mod tests {
         let realms: Vec<bool> = index
             .param_callee
             .values()
-            .map(|callee| index.resolve_function(*callee, 3).iter().any(|function| index.builds_iframe(*function)))
+            .map(|callee| {
+                index
+                    .resolve_function(*callee, 3)
+                    .iter()
+                    .any(|function| index.builds_iframe(*function))
+            })
             .collect();
         let mut sorted = realms.clone();
         sorted.sort_unstable();
@@ -1420,8 +1610,17 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(tables, [vec![vec!["Navigator".to_string(), "prototype".to_string()], vec!["safari".to_string()]]]);
-        assert!(!index.facts.iter().any(|(_, fact)| matches!(fact, super::Fact::Member(name) if name.starts_with('$'))));
+        assert_eq!(
+            tables,
+            [vec![
+                vec!["Navigator".to_string(), "prototype".to_string()],
+                vec!["safari".to_string()]
+            ]]
+        );
+        assert!(!index
+            .facts
+            .iter()
+            .any(|(_, fact)| matches!(fact, super::Fact::Member(name) if name.starts_with('$'))));
         assert!(index
             .facts
             .iter()
@@ -1448,7 +1647,11 @@ mod tests {
                w(k, d, b, 3);
              }";
         let index = index_of(source);
-        let mut calls: Vec<_> = index.call_args.iter().map(|(start, args)| (*start, args.indices.clone())).collect();
+        let mut calls: Vec<_> = index
+            .call_args
+            .iter()
+            .map(|(start, args)| (*start, args.indices.clone()))
+            .collect();
         calls.sort();
         let indices: Vec<Vec<u32>> = calls.into_iter().map(|(_, indices)| indices).collect();
         assert_eq!(indices, [vec![2], vec![1], vec![0]]);

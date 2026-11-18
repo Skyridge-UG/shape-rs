@@ -1,37 +1,60 @@
 //! `IntervalClockDriftStats`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use std::collections::BTreeSet;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use value_facts::{slot_facts, Guard};
-use crate::signals::analysis::{value_facts, described_fields::*};
+use crate::signals::analysis::{described_fields::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use std::collections::BTreeSet;
+use value_facts::{slot_facts, Guard};
 
 /// `IntervalClockDriftStats`. Card: [`CARD`].
-pub(crate) fn recognize_interval_clock_drift_stats(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_interval_clock_drift_stats(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     // Four numbers per message (a top-level choice may send the placeholder
     // and the statistics from one emission).
     let numbers = view.emissions().iter().all(|emission| {
         let count = emission.leaves.len();
-        emission.leaves.iter().all(|leaf| leaf.op == LeafOp::Number && leaf.repeat_depth == 0)
+        emission
+            .leaves
+            .iter()
+            .all(|leaf| leaf.op == LeafOp::Number && leaf.repeat_depth == 0)
             && {
                 // Four per message: top-level leaves plus one arm of a
                 // two-arm choice (`placeholder | statistics`, with the
                 // shared fields after the choice).
-                let shared = emission.leaves.iter().filter(|leaf| leaf.choice_depth == 0).count();
-                let armed = emission.leaves.iter().filter(|leaf| leaf.choice_depth == 1).count();
+                let shared = emission
+                    .leaves
+                    .iter()
+                    .filter(|leaf| leaf.choice_depth == 0)
+                    .count();
+                let armed = emission
+                    .leaves
+                    .iter()
+                    .filter(|leaf| leaf.choice_depth == 1)
+                    .count();
                 (armed == 0 && count == 4)
-                    || (shared + armed == count && armed % 2 == 0 && armed > 0 && shared + armed / 2 == 4)
+                    || (shared + armed == count
+                        && armed % 2 == 0
+                        && armed > 0
+                        && shared + armed / 2 == 4)
             }
     });
     if view.emissions().is_empty() || !numbers {
         return None;
     }
     let facts = slot_facts(view, ctx);
-    let guards: BTreeSet<Guard> = facts.descs().flat_map(|desc| desc.guards.iter().copied()).collect();
-    (facts.timers.contains("setInterval") && guards.contains(&Guard::Max) && guards.contains(&Guard::Min))
-        .then(|| Claim::new(["setInterval tick state", "running min/max of tick deltas"]))
+    let guards: BTreeSet<Guard> = facts
+        .descs()
+        .flat_map(|desc| desc.guards.iter().copied())
+        .collect();
+    (facts.timers.contains("setInterval")
+        && guards.contains(&Guard::Max)
+        && guards.contains(&Guard::Min))
+    .then(|| Claim::new(["setInterval tick state", "running min/max of tick deltas"]))
 }
 
 pub(crate) fn bind_interval_clock_drift_stats(

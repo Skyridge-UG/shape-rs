@@ -65,11 +65,14 @@ mod tests {
             );
             let result = crate::naming::name_threads(&source, true).unwrap();
             let outcome = result
-                .report.outcomes
+                .report
+                .outcomes
                 .iter()
                 .find(|o| o.binding.name == "$THREAD_1_2")
                 .unwrap();
-            if expected { assert!(!outcome.evidence.is_empty(), "whole-body evidence required"); }
+            if expected {
+                assert!(!outcome.evidence.is_empty(), "whole-body evidence required");
+            }
             assert_eq!(
                 outcome.evaluator.as_deref() == Some("operations_throw_type_error_message"),
                 expected,
@@ -78,7 +81,8 @@ mod tests {
         }
         let result = crate::naming::name_threads("function main(TypeError){function $THREAD_1_2(){throw new TypeError('message');}return $THREAD_1_2;}main(Other);", true).unwrap();
         assert!(result
-            .report.outcomes
+            .report
+            .outcomes
             .iter()
             .all(|o| o.evaluator.as_deref() != Some("operations_throw_type_error_message")));
     }

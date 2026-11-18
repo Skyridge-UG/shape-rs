@@ -13,8 +13,7 @@ fn inventory_remaining_loops() {
     }
     impl Audit<'_> {
         fn outline(&self, statement: &Statement<'_>, indent: usize, lines: &mut String) {
-            let text =
-                &self.source[statement.span().start as usize..statement.span().end as usize];
+            let text = &self.source[statement.span().start as usize..statement.span().end as usize];
             let line = self.source[..statement.span().start as usize]
                 .bytes()
                 .filter(|b| *b == b'\n')

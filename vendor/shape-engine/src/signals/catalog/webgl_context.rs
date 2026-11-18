@@ -1,10 +1,12 @@
 //! `WebGlContext`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutField, LayoutNode, LeafKind, LeafOp,
+    LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `WebGlContext`. Card: [`CARD`].
 ///
@@ -22,7 +24,8 @@ pub(crate) fn recognize_webgl_context(view: &SlotView, ctx: &FinderCtx) -> Optio
             .filter(|name| !matches!(**name, "version" | "vendor"))
             .filter(|name| {
                 let property = format!(".{name}");
-                view.leaves().any(|leaf| leaf.transforms.iter().any(|t| *t == property))
+                view.leaves()
+                    .any(|leaf| leaf.transforms.iter().any(|t| *t == property))
             })
             .count();
         if reads == 0 {
@@ -85,7 +88,9 @@ fn webgl_field_name(ctx: &FinderCtx, leaves: &[&LeafView]) -> Result<Option<&'st
         let container = match first {
             Some(".vendor" | ".renderer") => {
                 let mut rest = leaf.transforms.iter().skip(1).map(String::as_str);
-                let owner = rest.clone().find(|t| matches!(*t, ".params" | ".debugInfo"));
+                let owner = rest
+                    .clone()
+                    .find(|t| matches!(*t, ".params" | ".debugInfo"));
                 owner.or_else(|| rest.find(|t| !matches!(*t, "[index]" | "array")))
             }
             _ => second,
@@ -114,10 +119,15 @@ fn webgl_field_name(ctx: &FinderCtx, leaves: &[&LeafView]) -> Result<Option<&'st
             }
             (Some(".length" | "[index]"), Some(".dimensions")) => Some("dimensions"),
             (Some(".length" | "[index]"), Some(".shaderPrecisions")) => Some("shaderPrecisions"),
-            (Some(".length" | "[index]"), Some(".supportedExtensions")) => Some("supportedExtensions"),
+            (Some(".length" | "[index]"), Some(".supportedExtensions")) => {
+                Some("supportedExtensions")
+            }
             (Some(property), _) => {
                 let property = property.strip_prefix('.').unwrap_or("");
-                WEBGL_PARAMETERS.iter().copied().find(|name| *name == property)
+                WEBGL_PARAMETERS
+                    .iter()
+                    .copied()
+                    .find(|name| *name == property)
             }
             _ => None,
         };
@@ -148,12 +158,14 @@ fn webgl_path_name(ctx: &FinderCtx, leaves: &[&LeafView]) -> Result<Option<&'sta
         };
         let name = match path.as_slice() {
             [.., container, PathStep::Property(last)] if last == "length" => {
-                property(Some(container)).and_then(|group| webgl_list_names(&group).map(|(count, _)| count))
+                property(Some(container))
+                    .and_then(|group| webgl_list_names(&group).map(|(count, _)| count))
             }
-            [.., container, PathStep::Index(_) | PathStep::Dynamic] => {
-                property(Some(container)).and_then(|group| webgl_list_names(&group).map(|(count, _)| count))
+            [.., container, PathStep::Index(_) | PathStep::Dynamic] => property(Some(container))
+                .and_then(|group| webgl_list_names(&group).map(|(count, _)| count)),
+            [.., PathStep::Property(last)] => {
+                WEBGL_PARAMETERS.iter().copied().find(|name| *name == last)
             }
-            [.., PathStep::Property(last)] => WEBGL_PARAMETERS.iter().copied().find(|name| *name == last),
             _ => None,
         };
         match name {
@@ -166,7 +178,9 @@ fn webgl_path_name(ctx: &FinderCtx, leaves: &[&LeafView]) -> Result<Option<&'sta
     match names.into_iter().collect::<Vec<_>>().as_slice() {
         [] => Ok(None),
         [name] => Ok(Some(name)),
-        names => Err(format!("value leaves read several report properties {names:?}")),
+        names => Err(format!(
+            "value leaves read several report properties {names:?}"
+        )),
     }
 }
 
@@ -186,7 +200,9 @@ fn webgl_list_names(group: &str) -> Option<(&'static str, &'static str)> {
 fn bind_webgl_list(node: &LayoutNode, message: usize, group: &str, binding: &mut FieldBinding) {
     match node {
         LayoutNode::Record { fields } => {
-            let Some((count, item)) = webgl_list_names(group) else { return };
+            let Some((count, item)) = webgl_list_names(group) else {
+                return;
+            };
             if let [first, second] = fields.as_slice() {
                 if is_scalar(&first.node) && is_array(&second.node) {
                     binding.insert(message, first.key.clone(), count);
@@ -202,7 +218,12 @@ fn bind_webgl_list(node: &LayoutNode, message: usize, group: &str, binding: &mut
 }
 
 /// Record keys under `node` that `binding` leaves unnamed.
-fn unbound_record_keys(node: &LayoutNode, message: usize, binding: &FieldBinding, out: &mut Vec<String>) {
+fn unbound_record_keys(
+    node: &LayoutNode,
+    message: usize,
+    binding: &FieldBinding,
+    out: &mut Vec<String>,
+) {
     match node {
         LayoutNode::Record { fields } => {
             for field in fields {
@@ -266,7 +287,9 @@ fn bind_marker_pairs(node: &LayoutNode, message: usize, binding: &mut FieldBindi
                 }
             }
         }
-        LayoutNode::Choice { arms } => arms.iter().for_each(|arm| bind_marker_pairs(&arm.node, message, binding)),
+        LayoutNode::Choice { arms } => arms
+            .iter()
+            .for_each(|arm| bind_marker_pairs(&arm.node, message, binding)),
         _ => {}
     }
 }
@@ -285,10 +308,12 @@ pub(crate) fn bind_webgl_context(
     const SIGNAL: &str = "WebGlContext";
     let mut binding = FieldBinding::new();
     for (message, layout_message) in layout.messages.iter().enumerate() {
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
         let mut seen = std::collections::BTreeSet::new();
         for (field, leaves) in layout_message.fields.iter().zip(&leaves) {
-            let name = webgl_field_name(ctx, leaves).map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?;
+            let name = webgl_field_name(ctx, leaves)
+                .map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?;
             // The packed flags byte is the record's only unguarded computed
             // byte; its provenance can miss `.antialias` when the main-thread
             // printer routes it through a shared register.
@@ -296,12 +321,14 @@ pub(crate) fn bind_webgl_context(
                 && leaves.iter().all(|leaf| leaf.choice_depth == 0);
             let name = match name {
                 Some(name) => Some(name),
-                None => webgl_path_name(ctx, leaves).map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?,
+                None => webgl_path_name(ctx, leaves)
+                    .map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?,
             };
             let name = match name {
                 Some(name) => name,
                 None if computed_byte => "flags",
-                None => webgl_group_marker(ctx, leaves).map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?,
+                None => webgl_group_marker(ctx, leaves)
+                    .map_err(|reason| refuse(SIGNAL, format!("{}: {reason}", field.key)))?,
             };
             if !seen.insert(name) {
                 return Err(refuse(SIGNAL, format!("{}: {name} bound twice", field.key)));

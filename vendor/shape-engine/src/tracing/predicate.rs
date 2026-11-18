@@ -232,9 +232,8 @@ impl Abstract {
             (Some(left), Some(right)) => Self::one_of(left.iter().chain(right).cloned().collect()),
             _ => {
                 // A type stays listed when every side that may have it lists it.
-                let unlisted = Types(
-                    (self.types.0 & !self.listed.0) | (other.types.0 & !other.listed.0),
-                );
+                let unlisted =
+                    Types((self.types.0 & !self.listed.0) | (other.types.0 & !other.listed.0));
                 let listed = Types((self.listed.0 | other.listed.0) & !unlisted.0);
                 let mut some: Vec<SymbolicValue> = Vec::new();
                 for value in self.some.iter().chain(&other.some) {

@@ -2502,11 +2502,17 @@ mod tests {
         let standard = VmStringFoldPlan::compile(&report(&source()));
         let json = serde_json::to_string(&standard).unwrap();
         assert!(!json.contains("decoder_url_safe"));
-        assert_eq!(serde_json::from_str::<VmStringFoldPlan>(&json).unwrap(), standard);
+        assert_eq!(
+            serde_json::from_str::<VmStringFoldPlan>(&json).unwrap(),
+            standard
+        );
 
         let url_safe = VmStringFoldPlan::compile(&report(&url_safe_source()));
         let json = serde_json::to_string(&url_safe).unwrap();
-        assert_eq!(serde_json::from_str::<VmStringFoldPlan>(&json).unwrap(), url_safe);
+        assert_eq!(
+            serde_json::from_str::<VmStringFoldPlan>(&json).unwrap(),
+            url_safe
+        );
     }
 
     #[test]

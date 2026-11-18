@@ -40,7 +40,8 @@ fn ready(
             _ => None,
         };
         if let Some(s) = copy {
-            let Some((rhs, copy_owner, copy_end)) = observables::observable_map_operator::origin(m, s)
+            let Some((rhs, copy_owner, copy_end)) =
+                observables::observable_map_operator::origin(m, s)
             else {
                 return false;
             };
@@ -141,13 +142,20 @@ pub(super) fn constructor(
 }
 
 pub(super) fn ordinary_constructor(
-    m: &Model<'_, '_>, callee: &Expression<'_>, factory: Sym, depth: usize,
+    m: &Model<'_, '_>,
+    callee: &Expression<'_>,
+    factory: Sym,
+    depth: usize,
 ) -> Option<()> {
     constructor_with_origin(m, callee, factory, depth, true)
 }
 
 fn constructor_with_origin(
-    m: &Model<'_, '_>, callee: &Expression<'_>, factory: Sym, depth: usize, ordinary: bool,
+    m: &Model<'_, '_>,
+    callee: &Expression<'_>,
+    factory: Sym,
+    depth: usize,
+    ordinary: bool,
 ) -> Option<()> {
     if depth == 0 {
         return None;

@@ -25,11 +25,11 @@ use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
 use crate::analysis;
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 use crate::signals::extract::bindings::{
     call_arguments, new_arguments, object_members_of, static_member_name, FunctionSite, Model,
 };
 use crate::signals::schema::{Confidence, ProgramPropertiesLimits};
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
     FinderRole {
@@ -351,7 +351,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                     if let Some(Statement::ExpressionStatement(statement)) =
                         arrow.body.statements.first()
                     {
-                        own.entry(id).or_default().returns.push(&statement.expression);
+                        own.entry(id)
+                            .or_default()
+                            .returns
+                            .push(&statement.expression);
                     }
                 }
             }
@@ -372,11 +375,15 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 AstKind::AssignmentExpression(assignment) => entry.assigns.push(assignment),
                 AstKind::VariableDeclarator(declarator) => entry.declarators.push(declarator),
                 AstKind::StaticMemberExpression(member) => {
-                    entry.members.push((member.property.name.to_string(), &member.object));
+                    entry
+                        .members
+                        .push((member.property.name.to_string(), &member.object));
                 }
                 AstKind::ComputedMemberExpression(member) => {
                     if let Expression::StringLiteral(literal) = &member.expression {
-                        entry.members.push((literal.value.to_string(), &member.object));
+                        entry
+                            .members
+                            .push((literal.value.to_string(), &member.object));
                     }
                 }
                 AstKind::TryStatement(_) => entry.tries += 1,
@@ -427,11 +434,15 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
     }
 
     fn nested(&self, site: FunctionSite) -> Vec<FunctionSite> {
-        self.own(site).map(|own| own.nested.clone()).unwrap_or_default()
+        self.own(site)
+            .map(|own| own.nested.clone())
+            .unwrap_or_default()
     }
 
     fn returns(&self, site: FunctionSite) -> Vec<&'a Expression<'a>> {
-        self.own(site).map(|own| own.returns.clone()).unwrap_or_default()
+        self.own(site)
+            .map(|own| own.returns.clone())
+            .unwrap_or_default()
     }
 
     fn reads_member(&self, site: FunctionSite, name: &str) -> bool {
@@ -514,11 +525,17 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         exec: FunctionSite,
         excluded: &[FunctionSite],
     ) -> bool {
-        self.model.scoping().get_resolved_references(symbol).any(|reference| {
-            self.model.owning_site(reference.node_id()).is_some_and(|site| {
-                site.span != exec.span && excluded.iter().all(|other| other.span != site.span)
+        self.model
+            .scoping()
+            .get_resolved_references(symbol)
+            .any(|reference| {
+                self.model
+                    .owning_site(reference.node_id())
+                    .is_some_and(|site| {
+                        site.span != exec.span
+                            && excluded.iter().all(|other| other.span != site.span)
+                    })
             })
-        })
     }
 
     /// Whether `node` lies in the consequent of an `if (symbol)` inside its
@@ -776,7 +793,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let evidence = "registrar handed to a collector task: stores its slots in the closure and does nothing else";
         self.claim_function(REGISTER_INIT, routines.init_register, None, evidence);
         self.claim_function(REGISTER_EMIT, routines.emit_register, None, evidence);
-        self.claim_function(REGISTER_LAST_CHANCE, routines.last_chance_register, None, evidence);
+        self.claim_function(
+            REGISTER_LAST_CHANCE,
+            routines.last_chance_register,
+            None,
+            evidence,
+        );
         self.claim_function(REGISTER_CLEANUP, routines.cleanup_register, None, evidence);
         self.claim_main(
             NOOP_ROUTINE,
@@ -792,10 +814,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let [call] = calls.as_slice() else {
             return false;
         };
-        let routine = call
-            .args
-            .iter()
-            .any(|arg| self.symbol(arg).is_some_and(|symbol| routines.emit.contains(&symbol)));
+        let routine = call.args.iter().any(|arg| {
+            self.symbol(arg)
+                .is_some_and(|symbol| routines.emit.contains(&symbol))
+        });
         if !routine {
             return false;
         }
@@ -830,7 +852,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let Some(ctor) = self.function_of(returned) else {
                 continue;
             };
-            if !self.nested(factory).iter().any(|site| site.span == ctor.span) {
+            if !self
+                .nested(factory)
+                .iter()
+                .any(|site| site.span == ctor.span)
+            {
                 continue;
             }
             let ctor_returns = self.returns(ctor);
@@ -906,9 +932,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
             let guarded = self.own(site).is_some_and(|own| own.tries == 1)
                 && self.reads_member(site, "isComplete")
-                && self.calls(site).iter().any(|call| {
-                    self.symbol(call.callee) == Some(routines.last_chance)
-                });
+                && self
+                    .calls(site)
+                    .iter()
+                    .any(|call| self.symbol(call.callee) == Some(routines.last_chance));
             if guarded {
                 // The executor registers one copy on each side of the label
                 // test. Hoisted copies share a scope, so each side has a role.
@@ -970,7 +997,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
 
     fn claim_coordinator(&mut self, coordinator: FunctionSite) {
         let task_call = self.calls(coordinator).into_iter().find(|call| {
-            self.model.site_slot_value(call.callee, coordinator).is_some() && call.args.len() == 6
+            self.model
+                .site_slot_value(call.callee, coordinator)
+                .is_some()
+                && call.args.len() == 6
         });
         let Some(task_call) = task_call else {
             return;
@@ -979,7 +1009,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         let Some(handles) = self.symbol(leading[0]) else {
             return;
         };
-        if self.model.site_slot_value(leading[1], coordinator).is_none() {
+        if self
+            .model
+            .site_slot_value(leading[1], coordinator)
+            .is_none()
+        {
             return;
         }
         let nested = self.nested(coordinator);
@@ -1023,14 +1057,20 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             return;
         };
 
-        self.coordinators.insert((coordinator.span.start, coordinator.span.end));
+        self.coordinators
+            .insert((coordinator.span.start, coordinator.span.end));
         self.claim_function(
             COORDINATOR,
             coordinator,
             Some(COORDINATOR_ALIAS),
             "subscribes one capturing Observable per observer, hands the facades to the group task and returns its unsubscribe",
         );
-        self.claim_function(GROUP_CAPTURE, capture, None, "Observable executor pushing the subscriber facade into the group's handles");
+        self.claim_function(
+            GROUP_CAPTURE,
+            capture,
+            None,
+            "Observable executor pushing the subscriber facade into the group's handles",
+        );
         self.claim_function(
             GROUP_UNSUBSCRIBE,
             teardown,
@@ -1038,7 +1078,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             "returned group unsubscribe: blanks init and last-chance, then runs the stored cleanup",
         );
         if let Some(noop) = noop {
-            self.claim_function(GROUP_NOOP, noop, None, "empty unsubscribe returned when the group task throws");
+            self.claim_function(
+                GROUP_NOOP,
+                noop,
+                None,
+                "empty unsubscribe returned when the group task throws",
+            );
         }
         self.claim_registrars(&routines);
 
@@ -1059,9 +1104,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
             errors.push(site);
             let is_safe_run = self.own(site).is_some_and(|own| own.tries == 1)
-                && self.calls(site).iter().any(|call| {
-                    self.is_slot(call.callee, site, 0) && call.args.is_empty()
-                });
+                && self
+                    .calls(site)
+                    .iter()
+                    .any(|call| self.is_slot(call.callee, site, 0) && call.args.is_empty());
             if is_safe_run {
                 errors.extend(self.nested(site));
                 self.claim_function(
@@ -1116,9 +1162,15 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 continue;
             };
             let (Some(next), Some(error), Some(complete)) = (
-                members.get("next").and_then(|value| self.function_of(value)),
-                members.get("error").and_then(|value| self.function_of(value)),
-                members.get("complete").and_then(|value| self.function_of(value)),
+                members
+                    .get("next")
+                    .and_then(|value| self.function_of(value)),
+                members
+                    .get("error")
+                    .and_then(|value| self.function_of(value)),
+                members
+                    .get("complete")
+                    .and_then(|value| self.function_of(value)),
             ) else {
                 continue;
             };
@@ -1175,10 +1227,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 _ => {}
             }
         }
-        let error_marks = self.reads_member(error, "hasErrored")
-            || self.own(error)?.assigns.iter().any(|assignment| {
-                target_key(&assignment.left).as_deref() == Some("hasErrored")
-            });
+        let error_marks =
+            self.reads_member(error, "hasErrored")
+                || self.own(error)?.assigns.iter().any(|assignment| {
+                    target_key(&assignment.left).as_deref() == Some("hasErrored")
+                });
         let scr = self.reads_member(complete, "scrBytes");
         if !error_marks || !scr {
             return None;
@@ -1200,7 +1253,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 self.reads_member(*site, "ctor")
                     && self.reads_member(*site, "priority")
                     && self.reads_member(*site, "debugName")
-                    && self.calls(*site).iter().any(|call| call.method == Some("subscribe"))
+                    && self
+                        .calls(*site)
+                        .iter()
+                        .any(|call| call.method == Some("subscribe"))
             }) else {
                 continue;
             };
@@ -1233,7 +1289,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let calls = self.calls(site);
             match calls.as_slice() {
                 [call] if call.method == Some("unsubscribe") => {
-                    self.claim_function(DIRECT_UNSUBSCRIBE, site, None, "teardown thunk unsubscribing one descriptor subscription");
+                    self.claim_function(
+                        DIRECT_UNSUBSCRIBE,
+                        site,
+                        None,
+                        "teardown thunk unsubscribing one descriptor subscription",
+                    );
                 }
                 [call] if self.forwards_callback(call, site) => {
                     self.claim_function(DIRECT_NOTIFIER, site, None, "registrar handed to the ctor: stores the callback in the notifier table under the slot");
@@ -1259,7 +1320,8 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             }
             let starts_group = calls.iter().any(|call| {
                 self.function_of(call.callee).is_some_and(|target| {
-                    self.coordinators.contains(&(target.span.start, target.span.end))
+                    self.coordinators
+                        .contains(&(target.span.start, target.span.end))
                 })
             });
             if starts_group {
@@ -1285,7 +1347,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             let delegates = self
                 .function_of(call.callee)
                 .is_some_and(|target| self.reads_member(target, "assign"));
-            if let (true, true, Some(helper)) = (carries_logger, delegates, self.symbol(call.callee)) {
+            if let (true, true, Some(helper)) =
+                (carries_logger, delegates, self.symbol(call.callee))
+            {
                 self.claim_main(
                     OBJECT_MERGE,
                     helper,
@@ -1358,7 +1422,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
         for relay in self.model.all_sites().to_vec() {
             let keys: BTreeSet<String> = self
                 .own(relay)
-                .map(|own| own.assigns.iter().filter_map(|a| target_key(&a.left)).collect())
+                .map(|own| {
+                    own.assigns
+                        .iter()
+                        .filter_map(|a| target_key(&a.left))
+                        .collect()
+                })
                 .unwrap_or_default();
             if !keys.contains("collectedSignals") || !keys.contains("erroredSignals") {
                 continue;
@@ -1371,9 +1440,19 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             );
             for site in self.nested(relay) {
                 if self.returns_slot_member(site, "hasCollected") {
-                    self.claim_function(STATUS_IS_COLLECTED, site, None, "filter predicate over status records: hasCollected");
+                    self.claim_function(
+                        STATUS_IS_COLLECTED,
+                        site,
+                        None,
+                        "filter predicate over status records: hasCollected",
+                    );
                 } else if self.returns_slot_member(site, "hasErrored") {
-                    self.claim_function(STATUS_IS_ERRORED, site, None, "filter predicate over status records: hasErrored");
+                    self.claim_function(
+                        STATUS_IS_ERRORED,
+                        site,
+                        None,
+                        "filter predicate over status records: hasErrored",
+                    );
                 }
             }
             let Some(owner) = self.model.owning_site(relay.node_id) else {
@@ -1383,7 +1462,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 let passes = call.method == Some("forEach")
                     && matches!(call.args.as_slice(), [arg]
                         if self.function_of(arg).is_some_and(|site| site.span == relay.span));
-                passes.then(|| call.receiver.and_then(|receiver| self.symbol(receiver))).flatten()
+                passes
+                    .then(|| call.receiver.and_then(|receiver| self.symbol(receiver)))
+                    .flatten()
             });
             if let Some(listeners) = listeners {
                 self.claim_main(
@@ -1431,7 +1512,11 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 .find(|call| call.method.is_none() && call.args.len() == 1)
                 .and_then(|call| self.symbol(call.callee));
             if let Some(sink) = sink {
-                self.claim_main(ERROR_SINK, sink, "receives the finished signal error record");
+                self.claim_main(
+                    ERROR_SINK,
+                    sink,
+                    "receives the finished signal error record",
+                );
             }
         }
     }
@@ -1466,15 +1551,27 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 let snapshot = self.is_snapshot(hooks);
                 let walks_slots = self.calls(hooks).iter().any(|call| {
                     call.method == Some("forEach")
-                        && call.receiver.is_some_and(|receiver| self.is_slot(receiver, hooks, 0))
+                        && call
+                            .receiver
+                            .is_some_and(|receiver| self.is_slot(receiver, hooks, 0))
                 });
                 if !snapshot && !walks_slots {
                     continue;
                 }
                 tables.insert(table);
-                self.claim_function(NOTIFY_ENTRY, entry, None, "forEach callback calling the notifier-table entry of one slot");
+                self.claim_function(
+                    NOTIFY_ENTRY,
+                    entry,
+                    None,
+                    "forEach callback calling the notifier-table entry of one slot",
+                );
                 if walks_slots {
-                    self.claim_function(NOTIFY_HOOKS, hooks, None, "walks the given slots and calls each notifier-table entry");
+                    self.claim_function(
+                        NOTIFY_HOOKS,
+                        hooks,
+                        None,
+                        "walks the given slots and calls each notifier-table entry",
+                    );
                 }
             }
         }
@@ -1492,7 +1589,9 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 continue;
             };
             let is_store = own.calls.is_empty()
-                && self.symbol(&member.object).is_some_and(|table| tables.contains(&table))
+                && self
+                    .symbol(&member.object)
+                    .is_some_and(|table| tables.contains(&table))
                 && self.is_slot(&assignment.right, register, 0)
                 && self.is_slot(&member.expression, register, 1);
             if is_store {
@@ -1520,14 +1619,24 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             for site in self.nested(snapshot) {
                 if let Some(members) = self.returned_object(site) {
                     if members.contains_key("value") && members.contains_key("signal") {
-                        self.claim_function(PAYLOAD_NAMED_VALUE, site, None, "snapshot map callback: {value, signal} for one slot");
+                        self.claim_function(
+                            PAYLOAD_NAMED_VALUE,
+                            site,
+                            None,
+                            "snapshot map callback: {value, signal} for one slot",
+                        );
                     }
                     continue;
                 }
                 let returns = self.returns(site);
                 if let [Expression::ComputedMemberExpression(member)] = returns.as_slice() {
                     if self.is_slot(&member.expression, site, 0) {
-                        self.claim_function(PAYLOAD_VALUE, site, None, "snapshot map callback: the value cell of one slot");
+                        self.claim_function(
+                            PAYLOAD_VALUE,
+                            site,
+                            None,
+                            "snapshot map callback: the value cell of one slot",
+                        );
                     }
                 }
             }
@@ -1538,7 +1647,10 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
     /// stores over the descriptor table.
     fn find_store_initializers(&mut self, descriptors: SymbolId, observer: &ObserverStores) {
         for owner in self.model.all_sites().to_vec() {
-            let assigns = self.own(owner).map(|own| own.assigns.clone()).unwrap_or_default();
+            let assigns = self
+                .own(owner)
+                .map(|own| own.assigns.clone())
+                .unwrap_or_default();
             for assignment in assigns {
                 let AssignmentTarget::AssignmentTargetIdentifier(target) = &assignment.left else {
                     continue;
@@ -1546,7 +1658,8 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                 let Some(store) = analysis::identifier_symbol(target, self.model.scoping()) else {
                     continue;
                 };
-                let Expression::CallExpression(call) = assignment.right.without_parentheses() else {
+                let Expression::CallExpression(call) = assignment.right.without_parentheses()
+                else {
                     continue;
                 };
                 let call = normal_call(call);
@@ -1562,7 +1675,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                     continue;
                 };
                 if store == observer.values {
-                    self.claim_function(VALUE_CELL_INIT, callback, None, "fills the observer's value store with one sentinel per descriptor");
+                    self.claim_function(
+                        VALUE_CELL_INIT,
+                        callback,
+                        None,
+                        "fills the observer's value store with one sentinel per descriptor",
+                    );
                 } else if store == observer.statuses {
                     let record = self.returned_object(callback).is_some_and(|members| {
                         ["debugName", "hasCollected", "hasErrored"]
@@ -1573,7 +1691,12 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
                         self.claim_function(STATUS_RECORD_INIT, callback, None, "builds one status record per descriptor for the observer's status store");
                     }
                 } else if self.returns_slot_member(callback, "debugName") {
-                    self.claim_function(DEBUG_NAME_READ, callback, None, "reads debugName of one descriptor");
+                    self.claim_function(
+                        DEBUG_NAME_READ,
+                        callback,
+                        None,
+                        "reads debugName of one descriptor",
+                    );
                 }
             }
         }
@@ -1665,22 +1788,58 @@ impl<'m, 's, 'a> Scan<'m, 's, 'a> {
             Some(SHA_HASH_ALIAS),
             "digests each data pair with SHA-256, digests the concatenation and resolves to {sidx, hash}",
         );
-        self.claim_function(SHA_PAIR, chain.pair, None, "data.map callback: SHA-256 of one concatenated byte pair");
-        self.claim_function(SHA_OUTER, chain.outer, None, "first then handler: SHA-256 of the concatenated digests");
-        self.claim_function(SHA_RESULT, chain.result, None, "second then handler: hex-encodes the digest and returns {sidx, hash}");
-        self.claim_function(SHA_FAILURE, chain.failure, None, "catch handler of the hash chain");
+        self.claim_function(
+            SHA_PAIR,
+            chain.pair,
+            None,
+            "data.map callback: SHA-256 of one concatenated byte pair",
+        );
+        self.claim_function(
+            SHA_OUTER,
+            chain.outer,
+            None,
+            "first then handler: SHA-256 of the concatenated digests",
+        );
+        self.claim_function(
+            SHA_RESULT,
+            chain.result,
+            None,
+            "second then handler: hex-encodes the digest and returns {sidx, hash}",
+        );
+        self.claim_function(
+            SHA_FAILURE,
+            chain.failure,
+            None,
+            "catch handler of the hash chain",
+        );
         for site in self.nested(chain.outer) {
-            if self.calls(site).iter().any(|call| call.method == Some("concat")) {
-                self.claim_function(SHA_APPEND, site, None, "forEach callback appending one digest's bytes to the accumulator");
+            if self
+                .calls(site)
+                .iter()
+                .any(|call| call.method == Some("concat"))
+            {
+                self.claim_function(
+                    SHA_APPEND,
+                    site,
+                    None,
+                    "forEach callback appending one digest's bytes to the accumulator",
+                );
             }
         }
         for site in self.nested(chain.result) {
             let hex = self.calls(site).iter().any(|call| {
                 call.method == Some("toString")
-                    && call.receiver.is_some_and(|receiver| self.is_slot(receiver, site, 0))
+                    && call
+                        .receiver
+                        .is_some_and(|receiver| self.is_slot(receiver, site, 0))
             });
             if hex {
-                self.claim_function(SHA_HEX, site, None, "map callback: one byte to two lowercase hex digits");
+                self.claim_function(
+                    SHA_HEX,
+                    site,
+                    None,
+                    "map callback: one byte to two lowercase hex digits",
+                );
             }
         }
     }

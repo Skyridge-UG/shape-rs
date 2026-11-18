@@ -1,11 +1,12 @@
 //! `BuiltinProbeChecksum`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView};
-use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, flag_bytes::*};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use buffer_writes::slot_info;
 
 /// `x % m` over a first-char-code sum. The `.apply()` of the probed
 /// built-ins is on the leaf's provenance, or (when the contract pass stops at
@@ -14,7 +15,9 @@ fn is_probe_checksum(leaf: &LeafView, write: Option<&buffer_writes::WriteInfo>) 
     has_transform(leaf, "%")
         && (has_transform(leaf, ".charCodeAt()") || has_transform(leaf, ".charCodeAt"))
         && (has_transform(leaf, ".apply()")
-            || write.is_some_and(|write| write.facts.call("apply") && calls_method(&write.facts, "charCodeAt")))
+            || write.is_some_and(|write| {
+                write.facts.call("apply") && calls_method(&write.facts, "charCodeAt")
+            }))
 }
 
 /// `name` is called on the slice: `x.name(…)`, or the method read off and
@@ -31,16 +34,22 @@ fn is_fraction(leaf: &LeafView) -> bool {
 /// Per view emission, which leaves are the probe checksum (`None`: the
 /// emission's AST candidates disagree).
 fn probe_checksum_leaves(view: &SlotView, ctx: &FinderCtx) -> Vec<Option<Vec<bool>>> {
-    let needs_slice = view
-        .emissions()
-        .iter()
-        .any(|emission| !emission.leaves.iter().any(|leaf| is_probe_checksum(leaf, None)));
+    let needs_slice = view.emissions().iter().any(|emission| {
+        !emission
+            .leaves
+            .iter()
+            .any(|leaf| is_probe_checksum(leaf, None))
+    });
     let info = needs_slice.then(|| slot_info(view, ctx));
     view.emissions()
         .iter()
         .enumerate()
         .map(|(index, emission)| {
-            let direct: Vec<bool> = emission.leaves.iter().map(|leaf| is_probe_checksum(leaf, None)).collect();
+            let direct: Vec<bool> = emission
+                .leaves
+                .iter()
+                .map(|leaf| is_probe_checksum(leaf, None))
+                .collect();
             if direct.iter().any(|flag| *flag) {
                 return Some(direct);
             }
@@ -71,27 +80,39 @@ pub(crate) fn recognize_builtin_probe_checksum(view: &SlotView, ctx: &FinderCtx)
     }
     // Cheap pre-filter before any slice walk.
     let shaped = view.emissions().iter().all(|emission| {
-        emission.leaves.iter().any(|leaf| has_transform(leaf, "%") && (has_transform(leaf, ".charCodeAt()") || has_transform(leaf, ".charCodeAt")))
+        emission.leaves.iter().any(|leaf| {
+            has_transform(leaf, "%")
+                && (has_transform(leaf, ".charCodeAt()") || has_transform(leaf, ".charCodeAt"))
+        })
     });
     if !shaped {
         return None;
     }
     let flags = probe_checksum_leaves(view, ctx);
-    let ok = view.emissions().iter().zip(&flags).all(|(emission, flags)| {
-        let Some(flags) = flags else {
-            return false;
-        };
-        let checksum = flags.iter().filter(|flag| **flag).count();
-        let seed = emission
-            .leaves
-            .iter()
-            .zip(flags)
-            .filter(|(leaf, flag)| !**flag && is_fraction(leaf))
-            .count();
-        checksum == 1 && seed == 1
-    });
-    ok.then(|| claim(&["first-char-code sum of applied built-in probes mod 65353", "generator seed fraction"]))
-        .flatten()
+    let ok = view
+        .emissions()
+        .iter()
+        .zip(&flags)
+        .all(|(emission, flags)| {
+            let Some(flags) = flags else {
+                return false;
+            };
+            let checksum = flags.iter().filter(|flag| **flag).count();
+            let seed = emission
+                .leaves
+                .iter()
+                .zip(flags)
+                .filter(|(leaf, flag)| !**flag && is_fraction(leaf))
+                .count();
+            checksum == 1 && seed == 1
+        });
+    ok.then(|| {
+        claim(&[
+            "first-char-code sum of applied built-in probes mod 65353",
+            "generator seed fraction",
+        ])
+    })
+    .flatten()
 }
 
 pub(crate) fn bind_builtin_probe_checksum(
@@ -105,7 +126,11 @@ pub(crate) fn bind_builtin_probe_checksum(
             flags.map(|flags| {
                 flags
                     .into_iter()
-                    .map(|checksum| Some(Hint::Name(if checksum { "checksum" } else { "probeSeed" }.to_string())))
+                    .map(|checksum| {
+                        Some(Hint::Name(
+                            if checksum { "checksum" } else { "probeSeed" }.to_string(),
+                        ))
+                    })
                     .collect()
             })
         })

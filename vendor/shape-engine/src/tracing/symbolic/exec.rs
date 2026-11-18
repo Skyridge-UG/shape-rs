@@ -437,7 +437,10 @@ impl Executor {
             Some(SymbolicValue::Number(index))
                 if index.fract() == 0.0 && *index >= table.len() as f64 =>
             {
-                Some(format!("{name}[{index}] is past its {} entries", table.len()))
+                Some(format!(
+                    "{name}[{index}] is past its {} entries",
+                    table.len()
+                ))
             }
             _ => None,
         }
@@ -756,8 +759,11 @@ impl Executor {
             else {
                 continue;
             };
-            if let Some(TraceNodeKind::ObjectLiteral { keys, .. }) =
-                self.arena.nodes.get(*memory as usize).map(|node| &node.kind)
+            if let Some(TraceNodeKind::ObjectLiteral { keys, .. }) = self
+                .arena
+                .nodes
+                .get(*memory as usize)
+                .map(|node| &node.kind)
             {
                 if keys.contains(&key) {
                     holders.insert((*descriptor, *byte_offset, *dispatch_state));
@@ -1989,8 +1995,9 @@ impl Executor {
         what: &str,
         p: &TraceProvenance,
     ) -> Result<usize, ExecutionStop> {
-        let body_state =
-            what == "dispatch state" && !self.from_value_set && std::mem::take(&mut self.body_address);
+        let body_state = what == "dispatch state"
+            && !self.from_value_set
+            && std::mem::take(&mut self.body_address);
         let entry_state = what == "dispatch state"
             && !self.from_value_set
             && std::mem::take(&mut self.entry_address);
@@ -2214,7 +2221,9 @@ impl Executor {
                             Some(Assumption::Is(value)) => vec![value.clone()],
                             Some(Assumption::Not(excluded)) => constants
                                 .into_iter()
-                                .filter(|value| !excluded.iter().any(|other| same_fact(other, value)))
+                                .filter(|value| {
+                                    !excluded.iter().any(|other| same_fact(other, value))
+                                })
                                 .collect(),
                             None => constants,
                         }
@@ -5222,7 +5231,10 @@ impl Executor {
                             data: true,
                         }),
                     );
-                    self.note_cell_types(slot_number, predicate::fact_types(&SymbolicValue::Undefined));
+                    self.note_cell_types(
+                        slot_number,
+                        predicate::fact_types(&SymbolicValue::Undefined),
+                    );
                     Arc::make_mut(&mut self.context.escaped_cells).remove(&slot_number);
                     self.context
                         .memory_mut()

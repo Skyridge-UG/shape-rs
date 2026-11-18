@@ -1,23 +1,36 @@
 //! `MemoryBreakdownSummary`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, LeafView,
+    SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `MemoryBreakdownSummary`. Card: [`CARD`].
-pub(crate) fn recognize_memory_breakdown_summary(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_memory_breakdown_summary(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let leaves = leaves_of(view);
     let result = any_transform(&leaves, ".breakdown") && any_transform(&leaves, ".bytes");
     let status_only = view.emissions().iter().any(|emission| {
         emission.leaves.len() == 4
             && emission.leaves.iter().all(literal_only)
-            && emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::Number).count() == 1
+            && emission
+                .leaves
+                .iter()
+                .filter(|leaf| leaf.op == LeafOp::Number)
+                .count()
+                == 1
     });
     if result && status_only {
-        return claim(&["status-only message (status + 3 markers)", "result.breakdown / result.bytes"]);
+        return claim(&[
+            "status-only message (status + 3 markers)",
+            "result.breakdown / result.bytes",
+        ]);
     }
     None
 }
@@ -41,7 +54,10 @@ pub(crate) fn bind_memory_breakdown_summary(
     // it still has no host or loop source.
     let marker_leaf = |leaf: &LeafView| {
         !leaf.classes.is_empty()
-            && leaf.classes.iter().all(|class| matches!(class, SourceClass::Literal | SourceClass::Opaque))
+            && leaf
+                .classes
+                .iter()
+                .all(|class| matches!(class, SourceClass::Literal | SourceClass::Opaque))
     };
     let status_only = |fields: &[Field]| {
         fields.iter().all(|field| field.literal_only())
@@ -49,13 +65,25 @@ pub(crate) fn bind_memory_breakdown_summary(
                 (field.is_plain(LeafKind::Byte) || field.is_plain(LeafKind::Number))
                     && !field.leaves.is_empty()
                     && field.leaves.iter().all(marker_leaf)
-            }) && fields.iter().any(|field| field.literal_only() && field.is_plain(LeafKind::Number))
+            }) && fields
+                .iter()
+                .any(|field| field.literal_only() && field.is_plain(LeafKind::Number))
     };
     let mut result_slots: Option<Vec<&'static str>> = None;
-    for (message, fields) in all_messages.iter().enumerate().filter(|(_, fields)| !status_only(fields)) {
+    for (message, fields) in all_messages
+        .iter()
+        .enumerate()
+        .filter(|(_, fields)| !status_only(fields))
+    {
         let members: Vec<Vec<String>> = fields
             .iter()
-            .map(|field| field_slice(ctx, field, 2).nearest_members().into_iter().map(str::to_string).collect())
+            .map(|field| {
+                field_slice(ctx, field, 2)
+                    .nearest_members()
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect()
+            })
             .collect();
         let reads = |field: &Field, name: &str| {
             fields
@@ -71,13 +99,20 @@ pub(crate) fn bind_memory_breakdown_summary(
                 .is_some_and(|next| next.is_array())
         };
         let status = |f: &Field| f.is_plain(LeafKind::Number) && f.literal_only();
-        let entry_count = |f: &Field| f.is_plain(LeafKind::Number) && !f.literal_only() && before_array(f);
+        let entry_count =
+            |f: &Field| f.is_plain(LeafKind::Number) && !f.literal_only() && before_array(f);
         let entry = |f: &Field| f.item_fields().is_some();
         let total_bytes = |f: &Field| {
-            f.is_plain(LeafKind::Number) && !before_array(f) && reads(f, "bytes") && !reads(f, "length")
+            f.is_plain(LeafKind::Number)
+                && !before_array(f)
+                && reads(f, "bytes")
+                && !reads(f, "length")
         };
         let breakdown_count = |f: &Field| {
-            f.is_plain(LeafKind::Number) && !before_array(f) && reads(f, "breakdown") && reads(f, "length")
+            f.is_plain(LeafKind::Number)
+                && !before_array(f)
+                && reads(f, "breakdown")
+                && reads(f, "length")
         };
         let mut local = FieldBinding::new();
         solve(
@@ -101,14 +136,20 @@ pub(crate) fn bind_memory_breakdown_summary(
                 Some("status") => slots.push("status"),
                 Some("totalBytes") => slots.push("totalBytes"),
                 Some("breakdownCount") => slots.push("breakdownCount"),
-                _ => return Err(BindRefusal::new("MemoryBreakdownSummary: unnamed result field")),
+                _ => {
+                    return Err(BindRefusal::new(
+                        "MemoryBreakdownSummary: unnamed result field",
+                    ))
+                }
             }
             if let Some(name) = local.get(message, &field.key) {
                 binding.insert(message, field.key.clone(), name);
             }
         }
         if result_slots.replace(slots).is_some() {
-            return Err(BindRefusal::new("MemoryBreakdownSummary: two result messages"));
+            return Err(BindRefusal::new(
+                "MemoryBreakdownSummary: two result messages",
+            ));
         }
         for field in fields.iter().filter(|field| field.is_array()) {
             let entry = field
@@ -117,8 +158,13 @@ pub(crate) fn bind_memory_breakdown_summary(
             bind_breakdown_entry(ctx, message, &entry, &mut binding)?;
         }
     }
-    let slots = result_slots.ok_or_else(|| BindRefusal::new("MemoryBreakdownSummary: no result message"))?;
-    for (message, fields) in all_messages.iter().enumerate().filter(|(_, fields)| status_only(fields)) {
+    let slots = result_slots
+        .ok_or_else(|| BindRefusal::new("MemoryBreakdownSummary: no result message"))?;
+    for (message, fields) in all_messages
+        .iter()
+        .enumerate()
+        .filter(|(_, fields)| status_only(fields))
+    {
         // The placeholders stand at the positions of the result's data slots.
         if fields.len() != slots.len() {
             return Err(BindRefusal::new(format!(
@@ -161,11 +207,14 @@ fn bind_breakdown_entry(
             .and_then(|index| fields.get(index + 1))
     };
     let string_array = |f: &Field| matches!(f.node, LayoutNode::Array { item } if matches!(item.as_ref(), LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::String));
-    let count_of = |f: &Field, list: &dyn Fn(&Field) -> bool| f.is_plain(LeafKind::Number) && next(f).is_some_and(|n| list(n));
+    let count_of = |f: &Field, list: &dyn Fn(&Field) -> bool| {
+        f.is_plain(LeafKind::Number) && next(f).is_some_and(|n| list(n))
+    };
     let record_array = |f: &Field| f.item_fields().is_some();
     let type_count = |f: &Field| count_of(f, &string_array);
     let attribution_count = |f: &Field| count_of(f, &record_array);
-    let entry_bytes = |f: &Field| f.is_plain(LeafKind::Number) && !next(f).is_some_and(|n| n.is_array());
+    let entry_bytes =
+        |f: &Field| f.is_plain(LeafKind::Number) && !next(f).is_some_and(|n| n.is_array());
     solve(
         message,
         fields,
@@ -201,7 +250,10 @@ fn bind_attribution(
                 .leaves
                 .iter()
                 .filter(|leaf| leaf.op == LeafOp::String)
-                .filter_map(|leaf| ctx.caller_value_node(leaf).and_then(|node| ctx.read_key_path(node)))
+                .filter_map(|leaf| {
+                    ctx.caller_value_node(leaf)
+                        .and_then(|node| ctx.read_key_path(node))
+                })
                 .collect();
             paths.dedup();
             match paths.as_slice() {
@@ -220,7 +272,13 @@ fn bind_attribution(
         let slice = ctx.slice_of(value, 1);
         let members = slice.nearest_members();
         let has = |name: &str| members.contains(&name);
-        match (has("container"), has("src"), has("id"), has("scope"), has("url")) {
+        match (
+            has("container"),
+            has("src"),
+            has("id"),
+            has("scope"),
+            has("url"),
+        ) {
             (true, true, false, false, false) => Some("containerSrc"),
             (true, false, true, false, false) => Some("containerId"),
             (false, false, false, true, false) => Some("scope"),
@@ -234,12 +292,15 @@ fn bind_attribution(
         ctx.record_at(value).or_else(|| {
             let slice = ctx.slice_of(value, 1);
             match slice.definitions.as_slice() {
-                [(_, definition, _)] => ctx.definition_value(*definition).and_then(|literal| ctx.record_at(literal)),
+                [(_, definition, _)] => ctx
+                    .definition_value(*definition)
+                    .and_then(|literal| ctx.record_at(literal)),
                 _ => None,
             }
         })
     };
-    let walk = |start: &crate::signals::analysis::write_sites::RecordConstruction, path: &[String]| {
+    let walk = |start: &crate::signals::analysis::write_sites::RecordConstruction,
+                path: &[String]| {
         let mut record = start.clone();
         let mut value = *record.values.get(&path[0])?;
         for key in &path[1..] {
@@ -252,7 +313,8 @@ fn bind_attribution(
     // arm (`c = c.j` / `c = other`) keeps only its last key: it resolves
     // through the one nested record (stored under a key of the root) that
     // holds that key.
-    let resolve = |root: &crate::signals::analysis::write_sites::RecordConstruction, path: &[String]| {
+    let resolve = |root: &crate::signals::analysis::write_sites::RecordConstruction,
+                   path: &[String]| {
         if root.values.contains_key(&path[0]) {
             return walk(root, path);
         }
@@ -270,8 +332,13 @@ fn bind_attribution(
     // Whether every read key path of `root` resolves (by `step`) to a value
     // that classifies.
     let classifies = |root: &crate::signals::analysis::write_sites::RecordConstruction,
-                      step: &dyn Fn(&crate::signals::analysis::write_sites::RecordConstruction, &[String]) -> Option<oxc_semantic::NodeId>| {
-        keys.iter().flatten().all(|path| step(root, path).and_then(classify).is_some())
+                      step: &dyn Fn(
+        &crate::signals::analysis::write_sites::RecordConstruction,
+        &[String],
+    ) -> Option<oxc_semantic::NodeId>| {
+        keys.iter()
+            .flatten()
+            .all(|path| step(root, path).and_then(classify).is_some())
     };
     let mut candidates = ctx.records_with_keys(&first);
     if !candidates.iter().any(|root| classifies(root, &walk)) {
@@ -315,8 +382,15 @@ fn bind_attribution(
             .and_then(|index| stored[index])
     };
     let marker = |f: &Field| matches!(f.node, LayoutNode::Choice { .. }) && f.literal_only();
-    let named = |name: &'static str| move |f: &Field| f.writes(LeafKind::String) && class_of(f) == Some(name);
-    let (src, id, scope, url) = (named("containerSrc"), named("containerId"), named("scope"), named("url"));
+    let named = |name: &'static str| {
+        move |f: &Field| f.writes(LeafKind::String) && class_of(f) == Some(name)
+    };
+    let (src, id, scope, url) = (
+        named("containerSrc"),
+        named("containerId"),
+        named("scope"),
+        named("url"),
+    );
     solve(
         message,
         fields,

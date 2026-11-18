@@ -10,8 +10,8 @@ use oxc_parser::Parser;
 use oxc_semantic::{Scoping, SemanticBuilder, SymbolId};
 use oxc_span::SourceType;
 
-use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::analysis::roles::FinderClaim;
+use crate::signals::extract::bindings::{property_key_name, Model};
 use crate::signals::schema::Confidence;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

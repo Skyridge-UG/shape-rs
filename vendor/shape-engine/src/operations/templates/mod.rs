@@ -1224,6 +1224,6 @@ impl std::error::Error for HandlerTemplateError {}
 mod build;
 mod extract;
 
-pub(crate) use build::*;
 pub use build::POST_TO_WORKER;
+pub(crate) use build::*;
 pub use extract::*;

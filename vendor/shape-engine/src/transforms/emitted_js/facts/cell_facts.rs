@@ -3,13 +3,13 @@
 //! Unknown effects forget mutable values, but cannot undo lexical initialization.
 use super::super::adjacent_ssa::LocalReads;
 use crate::analysis;
+use crate::transforms::emitted_js::support::unwrap;
 use oxc_ast::{ast::*, AstKind};
 use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::{operator::AssignmentOperator, scope::ScopeFlags};
 use std::collections::{BTreeMap, BTreeSet};
-use crate::transforms::emitted_js::support::unwrap;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Token {
@@ -355,7 +355,8 @@ impl<'a> Scan<'_, 'a> {
             Expression::TemplateLiteral(_) => Value::scalar(),
             Expression::CallExpression(_)
                 if self.ordinary_number
-                    && super::super::numeric_coercions::number_argument(e, self.scoping).is_some() =>
+                    && super::super::numeric_coercions::number_argument(e, self.scoping)
+                        .is_some() =>
             {
                 Value::scalar()
             }

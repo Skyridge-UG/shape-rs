@@ -10,13 +10,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::encoding::{extract_encoding_properties, EncodingProperties, EncodingPropertiesError};
-use super::generator_inputs::{
-    GeneratorInputError, GeneratorInputReport,
-};
+use super::generator_inputs::{GeneratorInputError, GeneratorInputReport};
+use super::wiring::{WiringError, WiringProperties};
 use crate::signals::extract::layout::{
     extract_signal_layouts, SignalLayoutError, SignalLayoutLimits, SignalLayoutReport,
 };
-use super::wiring::{WiringError, WiringProperties};
 
 /// Version of the composed program-input report.
 pub const PROGRAM_INPUT_SCHEMA_VERSION: u32 = 1;
@@ -240,19 +238,20 @@ pub fn extract_program_inputs(source: &str) -> Result<ProgramInputReport, Progra
             message: "collector requests produced no signal emissions".into(),
         });
     }
-    let generator_inputs = match super::generator_inputs::extract_generator_inputs_with_layout(&request, &signals) {
-        Ok(report) => report,
-        Err(GeneratorInputError::Missing { .. }) => GeneratorInputReport {
-            schema_version: super::generator_inputs::GENERATOR_INPUT_SCHEMA_VERSION,
-            source: super::generator_inputs::SourceIdentity {
-                sha256: expected.sha256.clone(),
-                bytes: expected.bytes,
+    let generator_inputs =
+        match super::generator_inputs::extract_generator_inputs_with_layout(&request, &signals) {
+            Ok(report) => report,
+            Err(GeneratorInputError::Missing { .. }) => GeneratorInputReport {
+                schema_version: super::generator_inputs::GENERATOR_INPUT_SCHEMA_VERSION,
+                source: super::generator_inputs::SourceIdentity {
+                    sha256: expected.sha256.clone(),
+                    bytes: expected.bytes,
+                },
+                families: Vec::new(),
+                unresolved: Vec::new(),
             },
-            families: Vec::new(),
-            unresolved: Vec::new(),
-        },
-        Err(error) => return Err(error.into()),
-    };
+            Err(error) => return Err(error.into()),
+        };
     drop(t);
     if expected.sha256 != generator_inputs.source.sha256
         || expected.bytes != generator_inputs.source.bytes
@@ -318,7 +317,10 @@ fn add_worker_collectors(
                 })
                 .map(|request| request.function)
         } else {
-            signal.collector.as_ref().map(|owner| Span::new(owner.span.start, owner.span.end))
+            signal
+                .collector
+                .as_ref()
+                .map(|owner| Span::new(owner.span.start, owner.span.end))
         };
         let Some(owner) = owner else {
             continue;

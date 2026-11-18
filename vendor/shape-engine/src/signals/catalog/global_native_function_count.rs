@@ -1,13 +1,17 @@
 //! `GlobalNativeFunctionCount`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
 use crate::signals::analysis::{leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `GlobalNativeFunctionCount`. Card: [`CARD`].
-pub(crate) fn recognize_global_native_function_count(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_global_native_function_count(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     (native_count(view) == Some(NativeCount::GlobalRealm))
         .then(|| claim(&["counted native-code test over context.global own non-enumerable values"]))
         .flatten()

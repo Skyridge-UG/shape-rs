@@ -337,9 +337,10 @@ impl Scan<'_, '_> {
                         .get_resolved_references(input)
                         .any(|r| r.is_write())
                 || !self.locals.same_iteration(previous.span, next.span)
-                || self.scoping.get_resolved_references(input).any(|r| {
-                    self.nodes.get_node(r.node_id()).kind().span().end > next.span.end
-                })
+                || self
+                    .scoping
+                    .get_resolved_references(input)
+                    .any(|r| self.nodes.get_node(r.node_id()).kind().span().end > next.span.end)
                 || reads.iter().any(|r| {
                     self.scoping
                         .find_binding(r.scope_id(), self.scoping.symbol_ident(input))
@@ -530,8 +531,7 @@ impl Scan<'_, '_> {
             && self.ended
             && previous.undefined
             && !self.scoping.get_resolved_references(input).any(|r| {
-                r.is_write()
-                    && self.nodes.get_node(r.node_id()).kind().span().start < next.span.end
+                r.is_write() && self.nodes.get_node(r.node_id()).kind().span().start < next.span.end
             });
         let end = tail
             .iter()

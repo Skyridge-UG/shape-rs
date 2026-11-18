@@ -10,8 +10,8 @@ use super::storage_removal_emitter::{
     captured_flags_expression, captured_local, computed, cursor_declaration,
     cursor_writer_declaration, direct_writer_branch, distinct, error_state, expression_statement,
     fixed_null_branch, header_declaration, is_null, member, member_target, next_frame, null_branch,
-    number, removal_state, reseed_declaration, seed_declaration, storage_guard, stream_call,
-    symbol, writer_declaration, plain_local, pure_writer_declaration,
+    number, plain_local, pure_writer_declaration, removal_state, reseed_declaration,
+    seed_declaration, storage_guard, stream_call, symbol, writer_declaration,
 };
 use super::*;
 use oxc_semantic::SymbolId;
@@ -295,8 +295,12 @@ pub(in crate::naming) fn storage_removal(
         return None;
     };
     let error = error_state(model, site, error)?;
-    let (success, success_layout) = frame(model, site, success_tail).or_else(|| split_holder_frame(model, site, success_tail)).or_else(|| fixed_port_frame(model, site, success_tail))?;
-    let (catch, catch_layout) = frame(model, site, catch_tail).or_else(|| split_holder_frame(model, site, catch_tail)).or_else(|| fixed_port_frame(model, site, catch_tail))?;
+    let (success, success_layout) = frame(model, site, success_tail)
+        .or_else(|| split_holder_frame(model, site, success_tail))
+        .or_else(|| fixed_port_frame(model, site, success_tail))?;
+    let (catch, catch_layout) = frame(model, site, catch_tail)
+        .or_else(|| split_holder_frame(model, site, catch_tail))
+        .or_else(|| fixed_port_frame(model, site, catch_tail))?;
     // Each topology fixes its own wire order and removal/error bit positions.
     // Unaliased direct/direct keeps the parent's removal/error order (1, 2).
     // Do not reinterpret a two-arm lane swap as a new successful proof: equal
@@ -344,108 +348,264 @@ pub(in crate::naming) fn storage_removal(
 
 // Snapshot two flag lanes before the nullable old-value holder call, then read
 // the third lane afterward. Every original coercion and call order is retained.
-fn split_holder_frame(model:&Model<'_, '_>,site:FunctionSite,st:&[Statement<'_>])->Option<(VariantFrame,Layout)>{
- let [nonce,bytes,reseed,writer,flags,old,cursor,Statement::IfStatement(branch),combine,append,next]=st else{return None;};
- let seed=seed_declaration(model,nonce)?;
- let header=header_declaration(model,bytes,seed)?;
- let (seed_factory,reseed)=reseed_declaration(model,site,reseed,seed)?;
- let (writer,writer_factory)=writer_declaration(model,site,writer,seed,header)?;
- let v=one_variable(flags)?;
- let flag=plain_local(model,v)?;
- if model.binding_writes(flag)!=1{return None;}
- let (prefix,middle)=binary(v.init.as_ref()?,"|")?;
- let (low,zero)=binary(prefix,"|")?;
- let (middle,one)=binary(middle,"<<")?;
- if !number(zero,0.0)||!number(one,1.0){return None;}
- let low=captured_local(model,site,symbol(model,low)?)?;
- let middle=captured_local(model,site,symbol(model,middle)?)?;
- let (old,old_source)=alias_declaration(model,site,old,&[seed,header,writer,flag])?;
- let cursor=cursor_declaration(model,cursor,&[seed,header,writer,flag,old])?;
- let (test,null)=binary(&branch.test,"==")?;
- if symbol(model,test)!=Some(old)||!is_null(null){return None;}
- let tag=null_branch(model,header,seed,cursor,block(&branch.consequent)?)?;
- let [tuple,position]=block(branch.alternate.as_ref()?)? else{return None;};
- holder_tuple(model,tuple,writer,old,header)?;
- let position=assignment(expression_statement(position)?)?;
- if assigned_symbol(model,position)!=Some(cursor){return None;}
- holder_call(model,&position.right,writer,3.0)?;
- let combine=assignment(expression_statement(combine)?)?;
- let (prior,high)=binary(&combine.right,"|")?;
- let (high,two)=binary(high,"<<")?;
- if assigned_symbol(model,combine)!=Some(flag)||symbol(model,prior)!=Some(flag)||!number(two,2.0){return None;}
- let high=captured_local(model,site,symbol(model,high)?)?;
- let append=assignment(expression_statement(append)?)?;
- let (object,index)=member_target(&append.left)?;
- let (position,one)=binary(index,"+")?;
- let (value,stream)=binary(&append.right,"^")?;
- if symbol(model,object)!=Some(header)||symbol(model,position)!=Some(cursor)||!number(one,1.0)
-   ||symbol(model,value)!=Some(flag)||!stream_call(model,stream,seed){return None;}
- if !distinct(&[seed,header,writer,flag,old,cursor,low,middle,high,seed_factory,writer_factory]){return None;}
- Some((VariantFrame{old:old_source,observer:next_frame(model,site,header,next)?,lanes:[low,middle,high],seed_factory,writer_factory,reseed,tag,fixed:false},Layout::SplitHolder))
+fn split_holder_frame(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    st: &[Statement<'_>],
+) -> Option<(VariantFrame, Layout)> {
+    let [nonce, bytes, reseed, writer, flags, old, cursor, Statement::IfStatement(branch), combine, append, next] =
+        st
+    else {
+        return None;
+    };
+    let seed = seed_declaration(model, nonce)?;
+    let header = header_declaration(model, bytes, seed)?;
+    let (seed_factory, reseed) = reseed_declaration(model, site, reseed, seed)?;
+    let (writer, writer_factory) = writer_declaration(model, site, writer, seed, header)?;
+    let v = one_variable(flags)?;
+    let flag = plain_local(model, v)?;
+    if model.binding_writes(flag) != 1 {
+        return None;
+    }
+    let (prefix, middle) = binary(v.init.as_ref()?, "|")?;
+    let (low, zero) = binary(prefix, "|")?;
+    let (middle, one) = binary(middle, "<<")?;
+    if !number(zero, 0.0) || !number(one, 1.0) {
+        return None;
+    }
+    let low = captured_local(model, site, symbol(model, low)?)?;
+    let middle = captured_local(model, site, symbol(model, middle)?)?;
+    let (old, old_source) = alias_declaration(model, site, old, &[seed, header, writer, flag])?;
+    let cursor = cursor_declaration(model, cursor, &[seed, header, writer, flag, old])?;
+    let (test, null) = binary(&branch.test, "==")?;
+    if symbol(model, test) != Some(old) || !is_null(null) {
+        return None;
+    }
+    let tag = null_branch(model, header, seed, cursor, block(&branch.consequent)?)?;
+    let [tuple, position] = block(branch.alternate.as_ref()?)? else {
+        return None;
+    };
+    holder_tuple(model, tuple, writer, old, header)?;
+    let position = assignment(expression_statement(position)?)?;
+    if assigned_symbol(model, position) != Some(cursor) {
+        return None;
+    }
+    holder_call(model, &position.right, writer, 3.0)?;
+    let combine = assignment(expression_statement(combine)?)?;
+    let (prior, high) = binary(&combine.right, "|")?;
+    let (high, two) = binary(high, "<<")?;
+    if assigned_symbol(model, combine) != Some(flag)
+        || symbol(model, prior) != Some(flag)
+        || !number(two, 2.0)
+    {
+        return None;
+    }
+    let high = captured_local(model, site, symbol(model, high)?)?;
+    let append = assignment(expression_statement(append)?)?;
+    let (object, index) = member_target(&append.left)?;
+    let (position, one) = binary(index, "+")?;
+    let (value, stream) = binary(&append.right, "^")?;
+    if symbol(model, object) != Some(header)
+        || symbol(model, position) != Some(cursor)
+        || !number(one, 1.0)
+        || symbol(model, value) != Some(flag)
+        || !stream_call(model, stream, seed)
+    {
+        return None;
+    }
+    if !distinct(&[
+        seed,
+        header,
+        writer,
+        flag,
+        old,
+        cursor,
+        low,
+        middle,
+        high,
+        seed_factory,
+        writer_factory,
+    ]) {
+        return None;
+    }
+    Some((
+        VariantFrame {
+            old: old_source,
+            observer: next_frame(model, site, header, next)?,
+            lanes: [low, middle, high],
+            seed_factory,
+            writer_factory,
+            reseed,
+            tag,
+            fixed: false,
+        },
+        Layout::SplitHolder,
+    ))
 }
 
-fn lowered_next(model:&Model<'_, '_>,site:FunctionSite,header:Symbol,st:&[Statement<'_>])->Option<Symbol>{
- let [receiver,method,frame,set,emit]=st else{return None;};
- let receiver_v=one_variable(receiver)?;
- let receiver=plain_local(model,receiver_v)?;
- let observer=captured_local(model,site,symbol(model,receiver_v.init.as_ref()?)?)?;
- let method_v=one_variable(method)?;
- let method=plain_local(model,method_v)?;
- if symbol(model,member(method_v.init.as_ref()?,"next")?)!=Some(observer){return None;}
- let frame_v=one_variable(frame)?;
- let frame=plain_local(model,frame_v)?;
- if !matches!(frame_v.init.as_ref()?.without_parentheses(),Expression::ArrayExpression(a) if a.elements.is_empty())
-   ||[receiver,method,frame].iter().any(|s|model.binding_writes(*s)!=0){return None;}
- let set=assignment(expression_statement(set)?)?;
- let (object,index)=member_target(&set.left)?;
- if symbol(model,object)!=Some(frame)||!number(index,1.0){return None;}
- let invoke=call(&set.right)?;
- let a=arity(invoke,4)?;
- if symbol(model,a[0])!=Some(frame)||!number(a[1],0.0)||symbol(model,a[2])!=Some(header)
-   ||!matches!(a[3].without_parentheses(),Expression::ArrayExpression(a) if a.elements.is_empty()){return None;}
- let Expression::ArrowFunctionExpression(arrow)=invoke.callee.without_parentheses() else{return None;};
- if arrow.r#async||arrow.expression||arrow.params.rest.is_some()||arrow.params.items.len()!=4||!arrow.body.directives.is_empty(){return None;}
- let params:Vec<_>=arrow.params.items.iter().map(|p|{
-   if p.initializer.is_some(){return None;}
-   let BindingPattern::BindingIdentifier(id)=&p.pattern else{return None;};
-   let id=id.symbol_id.get()?;
-   (model.binding_writes(id)==0).then_some(id)
- }).collect::<Option<_>>()?;
- if !distinct(&params){return None;}
- let [write,Statement::ReturnStatement(ret)]=arrow.body.statements.as_slice() else{return None;};
- let write=assignment(expression_statement(write)?)?;
- let (object,index)=member_target(&write.left)?;
- if symbol(model,object)!=Some(params[0])||symbol(model,index)!=Some(params[1])
-   ||symbol(model,&write.right)!=Some(params[3])||symbol(model,ret.argument.as_ref()?)!=Some(params[2]){return None;}
- let emit=call(expression_statement(emit)?)?;
- if symbol(model,member(&emit.callee,"call")?)!=Some(method){return None;}
- let a=arity(emit,2)?;
- if symbol(model,a[0])!=Some(receiver)||symbol(model,a[1])!=Some(frame)
-   ||!distinct(&[receiver,method,frame,header,observer]){return None;}
- Some(observer)
+fn lowered_next(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    header: Symbol,
+    st: &[Statement<'_>],
+) -> Option<Symbol> {
+    let [receiver, method, frame, set, emit] = st else {
+        return None;
+    };
+    let receiver_v = one_variable(receiver)?;
+    let receiver = plain_local(model, receiver_v)?;
+    let observer = captured_local(model, site, symbol(model, receiver_v.init.as_ref()?)?)?;
+    let method_v = one_variable(method)?;
+    let method = plain_local(model, method_v)?;
+    if symbol(model, member(method_v.init.as_ref()?, "next")?) != Some(observer) {
+        return None;
+    }
+    let frame_v = one_variable(frame)?;
+    let frame = plain_local(model, frame_v)?;
+    if !matches!(frame_v.init.as_ref()?.without_parentheses(),Expression::ArrayExpression(a) if a.elements.is_empty())
+        || [receiver, method, frame]
+            .iter()
+            .any(|s| model.binding_writes(*s) != 0)
+    {
+        return None;
+    }
+    let set = assignment(expression_statement(set)?)?;
+    let (object, index) = member_target(&set.left)?;
+    if symbol(model, object) != Some(frame) || !number(index, 1.0) {
+        return None;
+    }
+    let invoke = call(&set.right)?;
+    let a = arity(invoke, 4)?;
+    if symbol(model, a[0]) != Some(frame)
+        || !number(a[1], 0.0)
+        || symbol(model, a[2]) != Some(header)
+        || !matches!(a[3].without_parentheses(),Expression::ArrayExpression(a) if a.elements.is_empty())
+    {
+        return None;
+    }
+    let Expression::ArrowFunctionExpression(arrow) = invoke.callee.without_parentheses() else {
+        return None;
+    };
+    if arrow.r#async
+        || arrow.expression
+        || arrow.params.rest.is_some()
+        || arrow.params.items.len() != 4
+        || !arrow.body.directives.is_empty()
+    {
+        return None;
+    }
+    let params: Vec<_> = arrow
+        .params
+        .items
+        .iter()
+        .map(|p| {
+            if p.initializer.is_some() {
+                return None;
+            }
+            let BindingPattern::BindingIdentifier(id) = &p.pattern else {
+                return None;
+            };
+            let id = id.symbol_id.get()?;
+            (model.binding_writes(id) == 0).then_some(id)
+        })
+        .collect::<Option<_>>()?;
+    if !distinct(&params) {
+        return None;
+    }
+    let [write, Statement::ReturnStatement(ret)] = arrow.body.statements.as_slice() else {
+        return None;
+    };
+    let write = assignment(expression_statement(write)?)?;
+    let (object, index) = member_target(&write.left)?;
+    if symbol(model, object) != Some(params[0])
+        || symbol(model, index) != Some(params[1])
+        || symbol(model, &write.right) != Some(params[3])
+        || symbol(model, ret.argument.as_ref()?) != Some(params[2])
+    {
+        return None;
+    }
+    let emit = call(expression_statement(emit)?)?;
+    if symbol(model, member(&emit.callee, "call")?) != Some(method) {
+        return None;
+    }
+    let a = arity(emit, 2)?;
+    if symbol(model, a[0]) != Some(receiver)
+        || symbol(model, a[1]) != Some(frame)
+        || !distinct(&[receiver, method, frame, header, observer])
+    {
+        return None;
+    }
+    Some(observer)
 }
 
-fn fixed_port_frame(model:&Model<'_, '_>,site:FunctionSite,st:&[Statement<'_>])->Option<(VariantFrame,Layout)>{
- let [nonce,bytes,reseed,writer,flags,old,Statement::IfStatement(branch),tail @ ..]=st else{return None;};
- let seed=seed_declaration(model,nonce)?;
- let header=header_declaration(model,bytes,seed)?;
- let (seed_factory,reseed)=reseed_declaration(model,site,reseed,seed)?;
- let (writer,writer_factory)=pure_writer_declaration(model,site,writer,seed,header)?;
- let flags=assignment(expression_statement(flags)?)?;
- let (object,index)=member_target(&flags.left)?;
- let (flags,stream)=binary(&flags.right,"^")?;
- if symbol(model,object)!=Some(header)||!number(index,4.0)||!stream_call(model,stream,seed){return None;}
- let (low,middle,high)=captured_flags_expression(model,flags)?;
- for id in [low,middle,high]{captured_local(model,site,id)?;}
- let (old,old_source)=alias_declaration(model,site,old,&[seed,header,writer])?;
- let (test,null)=binary(&branch.test,"==")?;
- if symbol(model,test)!=Some(old)||!is_null(null){return None;}
- let tag=fixed_null_branch(model,header,seed,block(&branch.consequent)?)?;
- let [invoke]=block(branch.alternate.as_ref()?)? else{return None;};
- let invoke=call(expression_statement(invoke)?)?;
- let a=arity(invoke,3)?;
- if symbol(model,&invoke.callee)!=Some(writer)||symbol(model,a[0])!=Some(old)
-  ||symbol(model,a[1])!=Some(header)||!number(a[2],4.0){return None;}
- if !distinct(&[seed,header,writer,old,low,middle,high,seed_factory,writer_factory]){return None;}
- Some((VariantFrame{old:old_source,observer:lowered_next(model,site,header,tail)?,lanes:[low,middle,high],seed_factory,writer_factory,reseed,tag,fixed:true},Layout::FixedPort))
+fn fixed_port_frame(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    st: &[Statement<'_>],
+) -> Option<(VariantFrame, Layout)> {
+    let [nonce, bytes, reseed, writer, flags, old, Statement::IfStatement(branch), tail @ ..] = st
+    else {
+        return None;
+    };
+    let seed = seed_declaration(model, nonce)?;
+    let header = header_declaration(model, bytes, seed)?;
+    let (seed_factory, reseed) = reseed_declaration(model, site, reseed, seed)?;
+    let (writer, writer_factory) = pure_writer_declaration(model, site, writer, seed, header)?;
+    let flags = assignment(expression_statement(flags)?)?;
+    let (object, index) = member_target(&flags.left)?;
+    let (flags, stream) = binary(&flags.right, "^")?;
+    if symbol(model, object) != Some(header)
+        || !number(index, 4.0)
+        || !stream_call(model, stream, seed)
+    {
+        return None;
+    }
+    let (low, middle, high) = captured_flags_expression(model, flags)?;
+    for id in [low, middle, high] {
+        captured_local(model, site, id)?;
+    }
+    let (old, old_source) = alias_declaration(model, site, old, &[seed, header, writer])?;
+    let (test, null) = binary(&branch.test, "==")?;
+    if symbol(model, test) != Some(old) || !is_null(null) {
+        return None;
+    }
+    let tag = fixed_null_branch(model, header, seed, block(&branch.consequent)?)?;
+    let [invoke] = block(branch.alternate.as_ref()?)? else {
+        return None;
+    };
+    let invoke = call(expression_statement(invoke)?)?;
+    let a = arity(invoke, 3)?;
+    if symbol(model, &invoke.callee) != Some(writer)
+        || symbol(model, a[0]) != Some(old)
+        || symbol(model, a[1]) != Some(header)
+        || !number(a[2], 4.0)
+    {
+        return None;
+    }
+    if !distinct(&[
+        seed,
+        header,
+        writer,
+        old,
+        low,
+        middle,
+        high,
+        seed_factory,
+        writer_factory,
+    ]) {
+        return None;
+    }
+    Some((
+        VariantFrame {
+            old: old_source,
+            observer: lowered_next(model, site, header, tail)?,
+            lanes: [low, middle, high],
+            seed_factory,
+            writer_factory,
+            reseed,
+            tag,
+            fixed: true,
+        },
+        Layout::FixedPort,
+    ))
 }

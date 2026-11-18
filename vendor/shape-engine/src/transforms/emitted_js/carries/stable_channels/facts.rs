@@ -82,7 +82,8 @@ pub(super) struct Facts<'a> {
     pub(super) previous: BTreeMap<Span, &'a Statement<'a>>,
     pub(super) lists: BTreeMap<Span, Span>,
     pub(super) copies: BTreeMap<SymbolId, Vec<CopyOut<'a>>>,
-    pub(super) declarations: BTreeMap<SymbolId, (&'a VariableDeclaration<'a>, &'a VariableDeclarator<'a>)>,
+    pub(super) declarations:
+        BTreeMap<SymbolId, (&'a VariableDeclaration<'a>, &'a VariableDeclarator<'a>)>,
     pub(super) stores: BTreeMap<SymbolId, Vec<(Span, Span, Input)>>,
     pub(super) discarded: BTreeMap<Span, (Span, bool)>,
     pub(super) nonvalues: BTreeSet<Span>,

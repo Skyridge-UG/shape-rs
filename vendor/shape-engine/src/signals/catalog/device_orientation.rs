@@ -1,11 +1,12 @@
 //! `DeviceOrientation`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `DeviceOrientation`. Card: [`CARD`].
 pub(crate) fn recognize_device_orientation(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -13,8 +14,16 @@ pub(crate) fn recognize_device_orientation(view: &SlotView, ctx: &FinderCtx) -> 
         return None;
     }
     let facts = slot_facts(view, ctx);
-    (facts.has_event(&["deviceorientation"]) && facts.any_member("alpha") && facts.any_member("beta") && facts.any_member("gamma"))
-        .then(|| Claim::new(["deviceorientation listener state", "alpha/beta/gamma running statistics"]))
+    (facts.has_event(&["deviceorientation"])
+        && facts.any_member("alpha")
+        && facts.any_member("beta")
+        && facts.any_member("gamma"))
+    .then(|| {
+        Claim::new([
+            "deviceorientation listener state",
+            "alpha/beta/gamma running statistics",
+        ])
+    })
 }
 
 pub(crate) fn bind_device_orientation(

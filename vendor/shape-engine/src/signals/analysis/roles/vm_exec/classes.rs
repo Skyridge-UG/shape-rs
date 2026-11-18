@@ -38,10 +38,10 @@ use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator};
 
 use crate::analysis;
 
-use crate::signals::extract::bindings::{object_members_of, property_key_name, ParameterSlots};
 use crate::signals::analysis::roles::purposes::{find_purposes, PurposeOutcome};
-use crate::signals::schema::Confidence;
 use crate::signals::analysis::roles::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::signals::extract::bindings::{object_members_of, property_key_name, ParameterSlots};
+use crate::signals::schema::Confidence;
 
 const ELAPSED_FACTORY: &str = "elapsed_timer_factory";
 const ELAPSED_DATE_CLOCK: &str = "elapsed_timer_date_clock";

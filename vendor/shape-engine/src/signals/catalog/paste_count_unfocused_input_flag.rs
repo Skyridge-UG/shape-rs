@@ -1,23 +1,38 @@
 //! `PasteCountUnfocusedInputFlag`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{shape_is, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    shape_is, BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use value_facts::slot_facts;
 
 /// `PasteCountUnfocusedInputFlag`. Card: [`CARD`].
-pub(crate) fn recognize_paste_count_unfocused_input_flag(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_paste_count_unfocused_input_flag(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     // RAW4 NUMBER BYTE in either order; the flag byte may be a choice of
     // two literal bytes (`flag ? a : b`).
     let flag_choice = !view.emissions().is_empty()
         && view.emissions().iter().all(|emission| {
-            let top: Vec<LeafOp> = emission.leaves.iter().filter(|leaf| leaf.choice_depth == 0).map(|leaf| leaf.op).collect();
-            let chosen: Vec<&crate::signals::analysis::LeafView> = emission.leaves.iter().filter(|leaf| leaf.choice_depth > 0).collect();
+            let top: Vec<LeafOp> = emission
+                .leaves
+                .iter()
+                .filter(|leaf| leaf.choice_depth == 0)
+                .map(|leaf| leaf.op)
+                .collect();
+            let chosen: Vec<&crate::signals::analysis::LeafView> = emission
+                .leaves
+                .iter()
+                .filter(|leaf| leaf.choice_depth > 0)
+                .collect();
             top == [LeafOp::Number]
                 && chosen.len() == 2
-                && chosen.iter().all(|leaf| leaf.op == LeafOp::Byte && leaf.choice_depth == 1 && leaf.repeat_depth == 0)
+                && chosen.iter().all(|leaf| {
+                    leaf.op == LeafOp::Byte && leaf.choice_depth == 1 && leaf.repeat_depth == 0
+                })
         });
     if !(shape_is(view, "RAW4 NUMBER BYTE") || shape_is(view, "RAW4 BYTE NUMBER") || flag_choice) {
         return None;
@@ -25,8 +40,12 @@ pub(crate) fn recognize_paste_count_unfocused_input_flag(view: &SlotView, ctx: &
     let facts = slot_facts(view, ctx);
     // `inputType` is read by the value or by the input handler that
     // counts (`if (e.inputType === "insertFromPaste") ++count`).
-    let handler_reads = facts.handler_members.get("input").is_some_and(|members| members.contains("inputType"));
-    (facts.has_event(&["input"]) && (facts.any_member("inputType") || leaf_transform(view, ".inputType") || handler_reads))
+    let handler_reads = facts
+        .handler_members
+        .get("input")
+        .is_some_and(|members| members.contains("inputType"));
+    (facts.has_event(&["input"])
+        && (facts.any_member("inputType") || leaf_transform(view, ".inputType") || handler_reads))
         .then(|| Claim::new(["input listener counts inputType pastes", "RAW4 NUMBER BYTE"]))
 }
 

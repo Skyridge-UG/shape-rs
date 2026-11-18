@@ -1,4 +1,4 @@
-﻿//! Seed->container: derive the p8komysnbc family from the per-response
+//! Seed->container: derive the p8komysnbc family from the per-response
 //! seed blob (recon 'seed mechanism'). The seed IS the engine layout state
 //! in custom-alphabet b64; this module bridges seed bytes -> cipher state
 //! -> family headers, and the a-carrier when the engine feature is on.
@@ -7,12 +7,16 @@ use crate::bandai;
 use crate::error::{Error, Result};
 
 /// The bandai custom alphabet (recon 'bandai alphabet extracted').
-pub const BANDAI_ALPHABET: &str = "-0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZ_acdefghijklmnopqrstuvwxyz";
+pub const BANDAI_ALPHABET: &str =
+    "-0123456789=ABCDEFGHIJKLMNOPQRSTUVWXYZ_acdefghijklmnopqrstuvwxyz";
 
 /// Custom-b64 decode (6-bit big-endian pack, per the engine symbol table).
 pub fn seed_decode(text: &str) -> Vec<u8> {
-    let map: std::collections::HashMap<char, u8> =
-        BANDAI_ALPHABET.chars().enumerate().map(|(i, c)| (c, i as u8)).collect();
+    let map: std::collections::HashMap<char, u8> = BANDAI_ALPHABET
+        .chars()
+        .enumerate()
+        .map(|(i, c)| (c, i as u8))
+        .collect();
     let mut out = Vec::new();
     let mut acc = 0u32;
     let mut bits = 0u32;
@@ -85,7 +89,10 @@ pub fn generate_from_seed(
     let mut mac = [0u8; 8];
     let tail = &seed[32.min(seed.len())..];
     for (i, b) in mac.iter_mut().enumerate() {
-        *b = tail.get(i).copied().unwrap_or((request_seed >> (i % 4 * 8)) as u8);
+        *b = tail
+            .get(i)
+            .copied()
+            .unwrap_or((request_seed >> (i % 4 * 8)) as u8);
     }
 
     let mut state_f = [0u8; 48];
@@ -105,9 +112,10 @@ pub fn generate_from_seed(
         a: String::new(), // wired by caller via encode_headers
         #[cfg(not(feature = "engine"))]
         a: bandai::b64url(&c),
-        b: bandai::generate_b(request_seed, u32::from_le_bytes([
-            seed[0], seed[1], seed[2], seed[3],
-        ])),
+        b: bandai::generate_b(
+            request_seed,
+            u32::from_le_bytes([seed[0], seed[1], seed[2], seed[3]]),
+        ),
         c: bandai::b64url(&c),
         d: bandai::b64url(&d),
         f: bandai::b64url(&f),
@@ -132,7 +140,11 @@ mod tests {
     fn family_from_live_seed_is_wellformed() {
         let fam = generate_from_seed("p8kOmysnbc", PAGE_SEED, 19).unwrap();
         assert_eq!(fam.family, "p8kOmysnbc");
-        assert_eq!(fam.c.len(), 66, "50B framed blob b64url (48 state + stamp pad)");
+        assert_eq!(
+            fam.c.len(),
+            66,
+            "50B framed blob b64url (48 state + stamp pad)"
+        );
         assert!(!fam.d.is_empty());
         assert_eq!(fam.z, "q");
         // determinism

@@ -15,7 +15,9 @@
 //! nothing further: the descriptive names no longer match the generated
 //! spellings, and the role recognizers never key on a spelling.
 
-use crate::naming::semantic_names::{plan_semantic_names, NamingCandidate, SemanticNamesError, SemanticNamingPlan};
+use crate::naming::semantic_names::{
+    plan_semantic_names, NamingCandidate, SemanticNamesError, SemanticNamingPlan,
+};
 use crate::signals::schema::SourceSpan;
 
 use super::anonymous_names::{

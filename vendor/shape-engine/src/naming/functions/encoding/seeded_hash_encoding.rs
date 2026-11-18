@@ -856,12 +856,14 @@ fn emit_descending_hash(
     // history is needed. Fractional and other Hash families keep their prior
     // agreement/governance behavior.
     if integer
-        && crate::naming::functions::observables::seeded_signal_frame::evaluate(model, site, facts, proposals)
-            .iter()
-            .any(|claim| {
-                claim.name == "emitSeededSignalFrame"
-                    && claim.evaluator == "signals_seeded_signal_frame"
-            })
+        && crate::naming::functions::observables::seeded_signal_frame::evaluate(
+            model, site, facts, proposals,
+        )
+        .iter()
+        .any(|claim| {
+            claim.name == "emitSeededSignalFrame"
+                && claim.evaluator == "signals_seeded_signal_frame"
+        })
     {
         return None;
     }

@@ -317,7 +317,13 @@ impl Scan<'_, '_> {
         let Some((declaration, item)) = creation(statements, next) else {
             return;
         };
-        let handoff = Handoff { declaration, item, commit, old, next };
+        let handoff = Handoff {
+            declaration,
+            item,
+            commit,
+            old,
+            next,
+        };
         if !self.creation_allowed(&handoff) || !self.exceptions_allow(old, body) {
             return;
         }
@@ -362,7 +368,13 @@ impl Scan<'_, '_> {
     }
     /// Whether the creation of `next` can store into `old` from the start.
     fn creation_allowed(&self, handoff: &Handoff<'_, '_>) -> bool {
-        let Handoff { declaration, item, old, next, .. } = *handoff;
+        let Handoff {
+            declaration,
+            item,
+            old,
+            next,
+            ..
+        } = *handoff;
         if item.init.is_none() != self.finished {
             return false;
         }
@@ -423,7 +435,13 @@ impl Scan<'_, '_> {
     /// Whether nothing between the creation and the commit can expose the
     /// advanced store or rebind the source.
     fn interval_clear(&self, statements: &[&Statement<'_>], handoff: &Handoff<'_, '_>) -> bool {
-        let Handoff { declaration, commit, old, next, .. } = *handoff;
+        let Handoff {
+            declaration,
+            commit,
+            old,
+            next,
+            ..
+        } = *handoff;
         let mut hazards = Hazards {
             before: commit.span.start,
             bad: false,
@@ -442,7 +460,10 @@ impl Scan<'_, '_> {
         // A sloppy block function declaration named like the source stores
         // the source var (Annex B) where no reference shows it; reads of the
         // source after it would see the function, not the copy.
-        let mut named = NamedFunction { name: self.scoping.symbol_name(next), found: false };
+        let mut named = NamedFunction {
+            name: self.scoping.symbol_name(next),
+            found: false,
+        };
         for statement in statements {
             if declaration.span.end <= statement.span().start {
                 named.visit_statement(statement);
@@ -477,7 +498,13 @@ impl Scan<'_, '_> {
     /// Whether every path from the creation to the commit assigns `next`
     /// before reading it, and reads no `old` afterwards.
     fn must_write(&self, statements: &[&Statement<'_>], handoff: &Handoff<'_, '_>) -> bool {
-        let Handoff { declaration, commit, old, next, .. } = *handoff;
+        let Handoff {
+            declaration,
+            commit,
+            old,
+            next,
+            ..
+        } = *handoff;
         let mut proof = MustWrite {
             scoping: self.scoping,
             target: next,
@@ -544,7 +571,13 @@ impl Scan<'_, '_> {
         boundary: u32,
         mut first_write: u32,
     ) -> Option<u32> {
-        let Handoff { declaration, commit, old, next, .. } = *handoff;
+        let Handoff {
+            declaration,
+            commit,
+            old,
+            next,
+            ..
+        } = *handoff;
         for r in self.scoping.get_resolved_references(next) {
             let span = self.nodes.get_node(r.node_id()).kind().span();
             if span.start < declaration.span.end
@@ -576,7 +609,12 @@ impl Scan<'_, '_> {
         definitely_written: bool,
         first_write: u32,
     ) -> bool {
-        let Handoff { declaration, commit, old, .. } = *handoff;
+        let Handoff {
+            declaration,
+            commit,
+            old,
+            ..
+        } = *handoff;
         for r in self.scoping.get_resolved_references(old) {
             let span = self.nodes.get_node(r.node_id()).kind().span();
             if span.start >= declaration.span.end && span.end <= commit.span.end {
@@ -598,7 +636,13 @@ impl Scan<'_, '_> {
         simple_copy: bool,
         stored: bool,
     ) -> Vec<analysis::Edit> {
-        let Handoff { declaration, item, commit, old, next } = *handoff;
+        let Handoff {
+            declaration,
+            item,
+            commit,
+            old,
+            next,
+        } = *handoff;
         let old_name = self.scoping.symbol_name(old);
         let intro = if stored {
             String::new()

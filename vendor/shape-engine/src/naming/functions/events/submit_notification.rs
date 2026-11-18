@@ -6,8 +6,8 @@
 //! forwarder independently proves its whole body and its own published slot,
 //! then links to the fully proved notifier by SymbolId. A sibling with similar
 //! source cannot supply that link.
-use crate::naming::support::seeded_flow::*;
 use super::*;
+use crate::naming::support::seeded_flow::*;
 use oxc_span::GetSpan;
 mod parent;
 

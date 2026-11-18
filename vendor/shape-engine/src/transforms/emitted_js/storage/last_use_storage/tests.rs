@@ -16,8 +16,7 @@ fn finished_header_storage_crosses_ten_new_parent_activation_forms() {
             "INNER",
             "for(let $SSA_next=0;$SSA_next<3;$SSA_next++){use($SSA_next);}",
         );
-        let source =
-            format!("function f(flag){{let $CARRY_old=read();use($CARRY_old);{nested}}}");
+        let source = format!("function f(flag){{let $CARRY_old=read();use($CARRY_old);{nested}}}");
         let (code, count) =
             super::recycle_ended_cells(&source, &Default::default(), false).unwrap();
         assert_eq!(count, 1, "{source}\n{code}");
@@ -476,7 +475,9 @@ fn initialized_successor_storage_is_invariant_through_structured_regions() {
         "switch(flag){case 1:$CARRY_next=$SSA_old+1;}",
         "label:{if(flag)break label;$CARRY_next=$SSA_old+1;}",
     ] {
-        let source=format!("function f(flag){{let $SSA_old=read();let $CARRY_next;{middle}return $CARRY_next;}}");
+        let source = format!(
+            "function f(flag){{let $SSA_old=read();let $CARRY_next;{middle}return $CARRY_next;}}"
+        );
         let (code, count) =
             super::recycle_last_inputs(&source, &Default::default(), false).unwrap();
         assert_eq!(count, 0, "{code}");

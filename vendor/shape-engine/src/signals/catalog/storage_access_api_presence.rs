@@ -1,18 +1,27 @@
 //! `StorageAccessApiPresence`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use crate::signals::analysis::{leaf_checks::*, property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, leaf_checks::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `StorageAccessApiPresence`. Card: [`CARD`].
-pub(crate) fn recognize_storage_access_api_presence(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_storage_access_api_presence(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let census = census(view, ctx);
     (one_byte(view)
         && probes_all(view, &census, &["hasStorageAccess", "requestStorageAccess"])
         && !outranked(&census, "StorageAccessApiPresence"))
-        .then(|| Claim::new(["Document.prototype hasStorageAccess / requestStorageAccess", "one flag byte"]))
+    .then(|| {
+        Claim::new([
+            "Document.prototype hasStorageAccess / requestStorageAccess",
+            "one flag byte",
+        ])
+    })
 }
 
 pub(crate) fn bind_storage_access_api_presence(

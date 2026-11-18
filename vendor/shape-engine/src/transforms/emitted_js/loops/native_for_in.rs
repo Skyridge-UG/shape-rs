@@ -26,8 +26,8 @@ use oxc_semantic::{Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, UnaryOperator, UpdateOperator};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn native_for_in_loops(source: &str) -> Result<(String, usize), String> {
     // A loop nested in another rewritten one goes in the next round.
@@ -53,17 +53,33 @@ fn native_for_in_once(source: &str) -> Result<(String, usize), String> {
     let canonical = crate::tracing::symbolic::HELPERS
         .iter()
         .find(|(name, _)| *name == "vmForInKeys")
-        .map(|(_, text)| analysis::parse_program(&allocator, text).map(|parsed| analysis::codegen(&parsed)))
+        .map(|(_, text)| {
+            analysis::parse_program(&allocator, text).map(|parsed| analysis::codegen(&parsed))
+        })
         .transpose()?
         .ok_or("no canonical vmForInKeys")?;
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, canonical, allocator: &allocator, helpers: Vec::new(), loops: Vec::new() };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        canonical,
+        allocator: &allocator,
+        helpers: Vec::new(),
+        loops: Vec::new(),
+    };
     scan.visit_program(&program);
     let mut edits = Vec::new();
     let mut calls = BTreeMap::<SymbolId, usize>::new();
-    scan.loops.sort_by_key(|found| (found.span.start, std::cmp::Reverse(found.span.end)));
+    scan.loops
+        .sort_by_key(|found| (found.span.start, std::cmp::Reverse(found.span.end)));
     let mut end = 0;
     for found in &scan.loops {
-        if !scan.helpers.iter().any(|(symbol, _)| *symbol == found.helper) || found.span.start < end {
+        if !scan
+            .helpers
+            .iter()
+            .any(|(symbol, _)| *symbol == found.helper)
+            || found.span.start < end
+        {
             continue;
         }
         end = found.span.end;
@@ -122,7 +138,9 @@ fn identifier<'s, 'a>(expression: &'s Expression<'a>) -> Option<&'s IdentifierRe
 }
 
 /// `K[i]`, `K["length"]` or `K.length`: the object and the key.
-fn member_of<'s, 'a>(expression: &'s Expression<'a>) -> Option<(&'s IdentifierReference<'a>, &'s Expression<'a>)> {
+fn member_of<'s, 'a>(
+    expression: &'s Expression<'a>,
+) -> Option<(&'s IdentifierReference<'a>, &'s Expression<'a>)> {
     match expression {
         Expression::ComputedMemberExpression(member) if !member.optional => {
             Some((identifier(&member.object)?, &member.expression))
@@ -157,7 +175,9 @@ fn names_of(expression: &Expression<'_>, names: &mut Vec<SymbolId>, scoping: &Sc
         Expression::ComputedMemberExpression(member) if !member.optional => {
             names_of(&member.object, names, scoping) && names_of(&member.expression, names, scoping)
         }
-        Expression::StaticMemberExpression(member) if !member.optional => names_of(&member.object, names, scoping),
+        Expression::StaticMemberExpression(member) if !member.optional => {
+            names_of(&member.object, names, scoping)
+        }
         Expression::NumericLiteral(_) | Expression::StringLiteral(_) => true,
         _ => false,
     }
@@ -173,7 +193,10 @@ impl Scan<'_, '_> {
             // Statements between the snapshot and the loop: the counter's
             // declaration and stores of literals, which run nothing.
             let mut end = at + 1;
-            while statements.get(end).is_some_and(|statement| self.inert(statement)) {
+            while statements
+                .get(end)
+                .is_some_and(|statement| self.inert(statement))
+            {
                 end += 1;
             }
             let Some(loop_) = statements.get(end) else {
@@ -190,20 +213,26 @@ impl Scan<'_, '_> {
         let literal = |expression: &Expression<'_>| {
             matches!(
                 expression,
-                Expression::NumericLiteral(_) | Expression::StringLiteral(_) | Expression::BooleanLiteral(_) | Expression::NullLiteral(_)
+                Expression::NumericLiteral(_)
+                    | Expression::StringLiteral(_)
+                    | Expression::BooleanLiteral(_)
+                    | Expression::NullLiteral(_)
             ) || matches!(expression, Expression::UnaryExpression(unary) if unary.operator == UnaryOperator::Void && matches!(unary.argument, Expression::NumericLiteral(_)))
         };
         match statement {
             Statement::VariableDeclaration(declaration) => {
                 declaration.kind == VariableDeclarationKind::Let
                     && declaration.declarations.iter().all(|declarator| {
-                        matches!(declarator.id, BindingPattern::BindingIdentifier(_)) && declarator.init.as_ref().is_none_or(literal)
+                        matches!(declarator.id, BindingPattern::BindingIdentifier(_))
+                            && declarator.init.as_ref().is_none_or(literal)
                     })
             }
-            Statement::ExpressionStatement(expression) => matches!(&expression.expression, Expression::AssignmentExpression(assignment)
+            Statement::ExpressionStatement(expression) => {
+                matches!(&expression.expression, Expression::AssignmentExpression(assignment)
                 if assignment.operator == AssignmentOperator::Assign
                     && matches!(assignment.left, AssignmentTarget::AssignmentTargetIdentifier(_))
-                    && literal(&assignment.right)),
+                    && literal(&assignment.right))
+            }
             _ => false,
         }
     }
@@ -219,9 +248,20 @@ impl Scan<'_, '_> {
                     if analysis::identifier_symbol(name, self.scoping) == Some(index)))
     }
 
-    fn lowered<'s, 'a>(&self, first: &'s Statement<'a>, between: &'s [Statement<'a>], second: &'s Statement<'a>) -> Option<Found> {
+    fn lowered<'s, 'a>(
+        &self,
+        first: &'s Statement<'a>,
+        between: &'s [Statement<'a>],
+        second: &'s Statement<'a>,
+    ) -> Option<Found> {
         let (keys, helper, object) = self.snapshot(first)?;
-        let Counter { body, update, init, index, symbol: index_symbol } = self.counter(between, second, keys)?;
+        let Counter {
+            body,
+            update,
+            init,
+            index,
+            symbol: index_symbol,
+        } = self.counter(between, second, keys)?;
         let (check, increments, inner_step) = self.presence_check(body, update, index_symbol)?;
         if !self.checks_presence(check, keys, index_symbol, object) {
             return None;
@@ -229,7 +269,11 @@ impl Scan<'_, '_> {
         if !self.object_fixed(object, between, second, &check.consequent) {
             return None;
         }
-        let steps = if update.is_some() { 1 } else { increments.len() };
+        let steps = if update.is_some() {
+            1
+        } else {
+            increments.len()
+        };
         let slots = self.key_slots(check, keys, index_symbol, inner_step, steps)?;
         let name = index.name.as_str();
         let body = self.native_body(check.consequent.span(), &slots, name, inner_step);
@@ -241,19 +285,30 @@ impl Scan<'_, '_> {
         };
         let mut text = String::new();
         for statement in between {
-            if matches!(statement, Statement::VariableDeclaration(declaration) if std::ptr::eq(&**declaration, init)) {
+            if matches!(statement, Statement::VariableDeclaration(declaration) if std::ptr::eq(&**declaration, init))
+            {
                 continue;
             }
             text.push_str(self.text(statement.span()));
             text.push('\n');
             text.push_str(indent);
         }
-        text.push_str(&format!("for (const {name} in {}) {body}", self.text(object.span())));
-        Some(Found { span: Span::new(first.span().start, second.span().end), helper, text })
+        text.push_str(&format!(
+            "for (const {name} in {}) {body}",
+            self.text(object.span())
+        ));
+        Some(Found {
+            span: Span::new(first.span().start, second.span().end),
+            helper,
+            text,
+        })
     }
 
     /// `let K = vmForInKeys(O);`: the snapshot, the helper, and `O`.
-    fn snapshot<'s, 'a>(&self, first: &'s Statement<'a>) -> Option<(SymbolId, SymbolId, &'s Expression<'a>)> {
+    fn snapshot<'s, 'a>(
+        &self,
+        first: &'s Statement<'a>,
+    ) -> Option<(SymbolId, SymbolId, &'s Expression<'a>)> {
         let Statement::VariableDeclaration(declaration) = first else {
             return None;
         };
@@ -278,10 +333,16 @@ impl Scan<'_, '_> {
 
     /// Whether `expression` is a bare read of `symbol`.
     fn reads(&self, expression: &Expression<'_>, symbol: SymbolId) -> bool {
-        identifier(expression).and_then(|name| analysis::identifier_symbol(name, self.scoping)) == Some(symbol)
+        identifier(expression).and_then(|name| analysis::identifier_symbol(name, self.scoping))
+            == Some(symbol)
     }
 
-    fn counter<'s, 'a>(&self, between: &'s [Statement<'a>], second: &'s Statement<'a>, keys: SymbolId) -> Option<Counter<'s, 'a>> {
+    fn counter<'s, 'a>(
+        &self,
+        between: &'s [Statement<'a>],
+        second: &'s Statement<'a>,
+        keys: SymbolId,
+    ) -> Option<Counter<'s, 'a>> {
         // `for (let i = 0; i < K["length"]; i++)`, or `while (i < K["length"])`
         // counting with `++i` itself; the counter may be declared before.
         let (test, body, update, init) = match second {
@@ -291,7 +352,12 @@ impl Scan<'_, '_> {
                     None => None,
                     _ => return None,
                 };
-                (loop_.test.as_ref()?, &loop_.body, Some(loop_.update.as_ref()?), init)
+                (
+                    loop_.test.as_ref()?,
+                    &loop_.body,
+                    Some(loop_.update.as_ref()?),
+                    init,
+                )
             }
             Statement::WhileStatement(loop_) => (&loop_.test, &loop_.body, None, None),
             _ => return None,
@@ -299,7 +365,8 @@ impl Scan<'_, '_> {
         let Expression::BinaryExpression(test) = test else {
             return None;
         };
-        let index_symbol = identifier(&test.left).and_then(|name| analysis::identifier_symbol(name, self.scoping))?;
+        let index_symbol = identifier(&test.left)
+            .and_then(|name| analysis::identifier_symbol(name, self.scoping))?;
         // `let i = 0`, in the loop head or in its own declaration before it.
         let declares_index = |declaration: &VariableDeclaration<'_>| {
             matches!(declaration.declarations.as_slice(), [declarator]
@@ -307,7 +374,9 @@ impl Scan<'_, '_> {
         };
         let declared_before = || {
             between.iter().find_map(|statement| match statement {
-                Statement::VariableDeclaration(declaration) if declares_index(declaration) => Some(&**declaration),
+                Statement::VariableDeclaration(declaration) if declares_index(declaration) => {
+                    Some(&**declaration)
+                }
                 _ => None,
             })
         };
@@ -340,7 +409,13 @@ impl Scan<'_, '_> {
         if update.is_some_and(|update| !self.increment(update, index_symbol)) {
             return None;
         }
-        Some(Counter { body, update, init, index, symbol: index_symbol })
+        Some(Counter {
+            body,
+            update,
+            init,
+            index,
+            symbol: index_symbol,
+        })
     }
 
     /// The `if (K[i] in O)` the body runs under, the counter steps a `while`
@@ -361,7 +436,9 @@ impl Scan<'_, '_> {
         let mut increments: Vec<Span> = Vec::new();
         let check = match (update.is_some(), statements) {
             (true, [only]) => only,
-            (false, [only @ Statement::IfStatement(_), last]) if self.increments(last, index_symbol) => {
+            (false, [only @ Statement::IfStatement(_), last])
+                if self.increments(last, index_symbol) =>
+            {
                 increments.push(last.span());
                 only
             }
@@ -386,8 +463,11 @@ impl Scan<'_, '_> {
                 let Statement::BlockStatement(consequent) = &check.consequent else {
                     return None;
                 };
-                let steps: Vec<&Statement<'_>> =
-                    consequent.body.iter().filter(|statement| self.increments(statement, index_symbol)).collect();
+                let steps: Vec<&Statement<'_>> = consequent
+                    .body
+                    .iter()
+                    .filter(|statement| self.increments(statement, index_symbol))
+                    .collect();
                 let ([own], true) = (steps.as_slice(), self.increments(step, index_symbol)) else {
                     return None;
                 };
@@ -409,7 +489,13 @@ impl Scan<'_, '_> {
     }
 
     /// The check's test is `K[i] in O`, with `O` spelled as in the snapshot.
-    fn checks_presence(&self, check: &IfStatement<'_>, keys: SymbolId, index_symbol: SymbolId, object: &Expression<'_>) -> bool {
+    fn checks_presence(
+        &self,
+        check: &IfStatement<'_>,
+        keys: SymbolId,
+        index_symbol: SymbolId,
+        object: &Expression<'_>,
+    ) -> bool {
         let Expression::BinaryExpression(present) = &check.test else {
             return false;
         };
@@ -425,17 +511,27 @@ impl Scan<'_, '_> {
     /// `O` is the same object at every check: it reads only names neither
     /// the loop nor the statements before it assign, and the body does not
     /// change a property on the way to it.
-    fn object_fixed(&self, object: &Expression<'_>, between: &[Statement<'_>], second: &Statement<'_>, consequent: &Statement<'_>) -> bool {
+    fn object_fixed(
+        &self,
+        object: &Expression<'_>,
+        between: &[Statement<'_>],
+        second: &Statement<'_>,
+        consequent: &Statement<'_>,
+    ) -> bool {
         // O reads names the loop never assigns.
         let mut names = Vec::new();
         if !names_of(object, &mut names, self.scoping) {
             return false;
         }
         let assigned_inside = |symbol: SymbolId| {
-            self.scoping.get_resolved_references(symbol).any(|reference| {
-                let at = self.span_of_reference(reference);
-                reference.is_write() && second.span().start <= at.start && at.end <= second.span().end
-            })
+            self.scoping
+                .get_resolved_references(symbol)
+                .any(|reference| {
+                    let at = self.span_of_reference(reference);
+                    reference.is_write()
+                        && second.span().start <= at.start
+                        && at.end <= second.span().end
+                })
         };
         // Nor do the stores the snapshot now follows.
         let assigned_between = between.iter().any(|statement| {
@@ -449,7 +545,13 @@ impl Scan<'_, '_> {
         // A property of a name the body stores through or hands to a call
         // could change: then `O` must be that name itself.
         if !matches!(object, Expression::Identifier(_)) {
-            let mut handed = Handed { source: self.source, object: self.text(object.span()), names: &names, scoping: self.scoping, found: false };
+            let mut handed = Handed {
+                source: self.source,
+                object: self.text(object.span()),
+                names: &names,
+                scoping: self.scoping,
+                found: false,
+            };
             handed.visit_statement(consequent);
             if handed.found {
                 return false;
@@ -460,12 +562,28 @@ impl Scan<'_, '_> {
 
     /// The `K[i]` slots in the body, when they and the counting are the only
     /// uses of `K` and `i`.
-    fn key_slots(&self, check: &IfStatement<'_>, keys: SymbolId, index_symbol: SymbolId, inner_step: Option<Span>, steps: usize) -> Option<Vec<Span>> {
+    fn key_slots(
+        &self,
+        check: &IfStatement<'_>,
+        keys: SymbolId,
+        index_symbol: SymbolId,
+        inner_step: Option<Span>,
+        steps: usize,
+    ) -> Option<Vec<Span>> {
         // K only in the test and as `K[i]`; i only there, in the check and
         // in its steps. Past an inner step `K[i]` is the next key.
-        let mut uses = KeyUses { keys, index: index_symbol, scoping: self.scoping, slots: Vec::new(), other: false, skip: inner_step };
+        let mut uses = KeyUses {
+            keys,
+            index: index_symbol,
+            scoping: self.scoping,
+            slots: Vec::new(),
+            other: false,
+            skip: inner_step,
+        };
         uses.visit_statement(&check.consequent);
-        if uses.other || inner_step.is_some_and(|step| uses.slots.iter().any(|slot| slot.start > step.start)) {
+        if uses.other
+            || inner_step.is_some_and(|step| uses.slots.iter().any(|slot| slot.start > step.start))
+        {
             return None;
         }
         let allowed_key_refs = uses.slots.len() + 2; // the test and the check
@@ -480,7 +598,13 @@ impl Scan<'_, '_> {
 
     /// The check's consequent as the native loop's body: each `K[i]` read as
     /// `i`, the inner step's line gone, one level shallower.
-    fn native_body(&self, body_span: Span, slots: &[Span], name: &str, inner_step: Option<Span>) -> String {
+    fn native_body(
+        &self,
+        body_span: Span,
+        slots: &[Span],
+        name: &str,
+        inner_step: Option<Span>,
+    ) -> String {
         let mut cuts: Vec<(Span, &str)> = slots.iter().map(|slot| (*slot, name)).collect();
         if let Some(step) = inner_step {
             cuts.push((whole_line(self.source, step), ""));
@@ -504,7 +628,17 @@ impl Scan<'_, '_> {
 
 /// The consequent sat one level deeper than the new loop's body.
 fn dedent(body: &str) -> String {
-    body.split('\n').enumerate().map(|(index, line)| if index == 0 { line } else { line.strip_prefix('\t').unwrap_or(line) }).collect::<Vec<_>>().join("\n")
+    body.split('\n')
+        .enumerate()
+        .map(|(index, line)| {
+            if index == 0 {
+                line
+            } else {
+                line.strip_prefix('\t').unwrap_or(line)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// A `continue` that reaches the loop: unlabeled outside inner loops, or
@@ -553,7 +687,8 @@ impl Handed<'_> {
         match expression {
             Expression::Identifier(_) => self.root(expression),
             Expression::ComputedMemberExpression(_) | Expression::StaticMemberExpression(_) => {
-                let text = &self.source[expression.span().start as usize..expression.span().end as usize];
+                let text =
+                    &self.source[expression.span().start as usize..expression.span().end as usize];
                 self.root(expression) && self.object.starts_with(text) && self.object != text
             }
             _ => false,
@@ -562,9 +697,8 @@ impl Handed<'_> {
 
     fn root(&self, expression: &Expression<'_>) -> bool {
         match expression {
-            Expression::Identifier(name) => {
-                analysis::identifier_symbol(name, self.scoping).is_some_and(|symbol| self.names.contains(&symbol))
-            }
+            Expression::Identifier(name) => analysis::identifier_symbol(name, self.scoping)
+                .is_some_and(|symbol| self.names.contains(&symbol)),
             Expression::ComputedMemberExpression(member) => self.root(&member.object),
             Expression::StaticMemberExpression(member) => self.root(&member.object),
             _ => false,
@@ -580,7 +714,10 @@ impl<'a> Visit<'a> for Handed<'_> {
         walk::walk_assignment_expression(self, assignment);
     }
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
-        self.found |= call.arguments.iter().any(|argument| argument.as_expression().is_some_and(|a| self.handed(a)));
+        self.found |= call
+            .arguments
+            .iter()
+            .any(|argument| argument.as_expression().is_some_and(|a| self.handed(a)));
         if let Some(member) = call.callee.as_member_expression() {
             self.found |= self.handed(member.object());
         }
@@ -608,9 +745,12 @@ impl<'a> Visit<'a> for KeyUses<'_> {
     }
     fn visit_expression(&mut self, expression: &Expression<'a>) {
         if let Some((keys, index)) = member_of(expression) {
-            let index_is_counter = identifier(index)
-                .is_some_and(|name| analysis::identifier_symbol(name, self.scoping) == Some(self.index));
-            if analysis::identifier_symbol(keys, self.scoping) == Some(self.keys) && index_is_counter {
+            let index_is_counter = identifier(index).is_some_and(|name| {
+                analysis::identifier_symbol(name, self.scoping) == Some(self.index)
+            });
+            if analysis::identifier_symbol(keys, self.scoping) == Some(self.keys)
+                && index_is_counter
+            {
                 self.slots.push(expression.span());
                 return;
             }
@@ -664,7 +804,10 @@ mod tests {
         let source = format!("function f(o, out) {{\n{HELPER}\tlet K = vmForInKeys(o);\n\tfor (let i = 0; i < K[\"length\"]; i++) {{\n\t\tif (K[i] in o) {{\n\t\t\tout.push(K[i]);\n\t\t}}\n\t}}\n}}\n");
         let (code, count) = native_for_in_loops(&source).unwrap();
         assert_eq!(count, 1);
-        assert_eq!(code, "function f(o, out) {\n\tfor (const i in o) {\n\t\tout.push(i);\n\t}\n}\n");
+        assert_eq!(
+            code,
+            "function f(o, out) {\n\tfor (const i in o) {\n\t\tout.push(i);\n\t}\n}\n"
+        );
     }
 
     #[test]
@@ -673,7 +816,10 @@ mod tests {
         let (code, _) = native_for_in_loops(&source).unwrap();
         assert!(!code.contains("vmForInKeys"), "{code}");
         assert!(code.contains("for (const i in a[j]) {"), "{code}");
-        assert!(code.contains("for (const k in out) {\n\t\t\tout[k] = a[j][i];"), "{code}");
+        assert!(
+            code.contains("for (const k in out) {\n\t\t\tout[k] = a[j][i];"),
+            "{code}"
+        );
     }
 
     #[test]

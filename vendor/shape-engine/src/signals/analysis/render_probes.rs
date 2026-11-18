@@ -10,10 +10,13 @@
 //! `OfflineAudioRenderSamples`, `VideoCanPlayType`, `WebGlContext`,
 //! `WebGlRenderHash`.
 
-use crate::signals::extract::contracts::SourceClass;
 use super::shape_text::{compact_shapes, permutation_of, top_items};
-use super::slot_closures::{self, any_api_depth, api_depth, guard_slices, value_slices, value_slices_within, LocalFacts, FED_DEPTH, MAX_EVIDENCE_DEPTH};
+use super::slot_closures::{
+    self, any_api_depth, api_depth, guard_slices, value_slices, value_slices_within, LocalFacts,
+    FED_DEPTH, MAX_EVIDENCE_DEPTH,
+};
 use super::{Claim, FinderCtx, LeafOp, SlotView};
+use crate::signals::extract::contracts::SourceClass;
 
 /// One candidate signal of a shape class with its evidence.
 pub(crate) struct Candidate {
@@ -58,10 +61,15 @@ pub(crate) fn classify(view: &SlotView, ctx: &FinderCtx) -> Vec<(&'static str, S
             continue;
         }
         let transform = candidate.leaf_transforms.iter().find(|transform| {
-            view.leaves().any(|leaf| leaf.transforms.iter().any(|t| t == *transform))
+            view.leaves()
+                .any(|leaf| leaf.transforms.iter().any(|t| t == *transform))
         });
         if let Some(transform) = transform {
-            proven.push((0, candidate.signal, format!("value derived from {transform}")));
+            proven.push((
+                0,
+                candidate.signal,
+                format!("value derived from {transform}"),
+            ));
         }
     }
     // `all`: every API of the candidate is reached (closures); otherwise
@@ -73,26 +81,42 @@ pub(crate) fn classify(view: &SlotView, ctx: &FinderCtx) -> Vec<(&'static str, S
     } else {
         LocalFacts::default()
     };
-    let by_api = |facts: &LocalFacts, closure: &str, all: bool| -> Vec<(usize, &'static str, String)> {
-        candidates
-            .iter()
-            .filter(|candidate| !candidate.apis.is_empty())
-            .filter(|candidate| {
-                // Fed: the value slices reach the API, or the value roots'
-                // own statements call every API of the candidate.
-                !candidate.fed
-                    || any_api_depth(&fed_slices, candidate.apis).is_some()
-                    || api_depth(&local.value, candidate.apis) == Some(0)
-            })
-            .filter(|candidate| !proven.iter().any(|(_, signal, _)| *signal == candidate.signal))
-            .filter_map(|candidate| {
-                let depth = if all { api_depth(facts, candidate.apis)? } else { any_api_depth(facts, candidate.apis)? };
-                (depth <= candidate.max_depth).then(|| {
-                    (depth, candidate.signal, format!("{closure} closure reaches {:?} within {depth} hops", candidate.apis))
+    let by_api =
+        |facts: &LocalFacts, closure: &str, all: bool| -> Vec<(usize, &'static str, String)> {
+            candidates
+                .iter()
+                .filter(|candidate| !candidate.apis.is_empty())
+                .filter(|candidate| {
+                    // Fed: the value slices reach the API, or the value roots'
+                    // own statements call every API of the candidate.
+                    !candidate.fed
+                        || any_api_depth(&fed_slices, candidate.apis).is_some()
+                        || api_depth(&local.value, candidate.apis) == Some(0)
                 })
-            })
-            .collect()
-    };
+                .filter(|candidate| {
+                    !proven
+                        .iter()
+                        .any(|(_, signal, _)| *signal == candidate.signal)
+                })
+                .filter_map(|candidate| {
+                    let depth = if all {
+                        api_depth(facts, candidate.apis)?
+                    } else {
+                        any_api_depth(facts, candidate.apis)?
+                    };
+                    (depth <= candidate.max_depth).then(|| {
+                        (
+                            depth,
+                            candidate.signal,
+                            format!(
+                                "{closure} closure reaches {:?} within {depth} hops",
+                                candidate.apis
+                            ),
+                        )
+                    })
+                })
+                .collect()
+        };
     let mut evidence = by_api(&local.value, "value", true);
     if evidence.is_empty() {
         evidence = by_api(&slices, "value-slice", true);
@@ -116,9 +140,18 @@ pub(crate) fn classify(view: &SlotView, ctx: &FinderCtx) -> Vec<(&'static str, S
         let tied: Vec<(usize, &'static str, String)> = closest(evidence.clone())
             .into_iter()
             .filter_map(|(signal, text)| {
-                let candidate = candidates.iter().find(|candidate| candidate.signal == signal)?;
+                let candidate = candidates
+                    .iter()
+                    .find(|candidate| candidate.signal == signal)?;
                 let depth = any_api_depth(&slices, candidate.apis)?;
-                Some((depth, signal, format!("{text}; value slices reach one of {:?} within {depth} hops", candidate.apis)))
+                Some((
+                    depth,
+                    signal,
+                    format!(
+                        "{text}; value slices reach one of {:?} within {depth} hops",
+                        candidate.apis
+                    ),
+                ))
             })
             .collect();
         if !tied.is_empty() && closest(tied.clone()).len() == 1 {
@@ -172,7 +205,12 @@ pub(crate) const EMOJI_CHANNEL: Candidate = Candidate {
 pub(crate) const FONT_METRICS: Candidate = Candidate {
     signal: "FontMetrics",
     apis: &["measureText", "actualBoundingBoxAscent"],
-    roles: &["seeded_font_metrics_digest", "seeded_font_metrics_probe", "font_family_metrics", "font_metric_hash_mapper"],
+    roles: &[
+        "seeded_font_metrics_digest",
+        "seeded_font_metrics_probe",
+        "font_family_metrics",
+        "font_metric_hash_mapper",
+    ],
     max_depth: 4,
     leaf_transforms: &[],
     fed: false,
@@ -333,7 +371,9 @@ pub(crate) fn shape_class_of(shapes: &[String], facts: LeafFacts) -> &'static [C
         return &[READBACK];
     }
     if all(&|s| {
-        permutation_of(s, &["S", "N", "N"]) || permutation_of(s, &["S", "B", "N"]) || permutation_of(s, &["S", "N"])
+        permutation_of(s, &["S", "N", "N"])
+            || permutation_of(s, &["S", "B", "N"])
+            || permutation_of(s, &["S", "N"])
     }) && shapes.iter().any(|s| !s.contains('B'))
     {
         return &[DATA_URL];
@@ -344,7 +384,11 @@ pub(crate) fn shape_class_of(shapes: &[String], facts: LeafFacts) -> &'static [C
     // Messages the contract pass left (partly) unresolved — the tracer's
     // packed-register buffers (`b = [[], []]; b[1][i] = …`) — say nothing
     // either way while the resolved ones outnumber them.
-    let unresolved = |s: &str| top_items(s).iter().any(|item| item.contains('U') || item.contains('O'));
+    let unresolved = |s: &str| {
+        top_items(s)
+            .iter()
+            .any(|item| item.contains('U') || item.contains('O'))
+    };
     let resolved: Vec<&String> = shapes.iter().filter(|s| !unresolved(s)).collect();
     if !resolved.is_empty()
         && resolved.len() > shapes.len() - resolved.len()
@@ -367,7 +411,9 @@ pub(crate) fn shape_class_of(shapes: &[String], facts: LeafFacts) -> &'static [C
 pub(crate) fn is_readback_shape(shape: &str) -> bool {
     let items = top_items(shape);
     let repeats: Vec<&&str> = items.iter().filter(|item| item.starts_with("R{")).collect();
-    let [record] = repeats.as_slice() else { return false };
+    let [record] = repeats.as_slice() else {
+        return false;
+    };
     let scalars = items.iter().filter(|item| **item == "N").count();
     scalars + 1 == items.len()
         && (1..=2).contains(&scalars)
@@ -380,7 +426,9 @@ pub(crate) fn is_readback_shape(shape: &str) -> bool {
 pub(crate) fn is_render_hash_shape(shape: &str) -> bool {
     let items = top_items(shape);
     items.len() == 3
-        && items.iter().all(|item| matches!(*item, "B" | "N" | "C{B|N}" | "C{N|B}"))
+        && items
+            .iter()
+            .all(|item| matches!(*item, "B" | "N" | "C{B|N}" | "C{N|B}"))
         && items.iter().any(|item| *item == "B")
 }
 
@@ -390,17 +438,26 @@ pub(crate) fn literal_tag_bytes(view: &SlotView) -> bool {
     let counts: Vec<usize> = view
         .emissions()
         .iter()
-        .filter(|emission| !emission.shape.contains("UNRESOLVED") && !emission.shape.contains("OPAQUE"))
+        .filter(|emission| {
+            !emission.shape.contains("UNRESOLVED") && !emission.shape.contains("OPAQUE")
+        })
         .map(|emission| {
             emission
                 .leaves
                 .iter()
-                .filter(|leaf| leaf.repeat_depth == 0 && leaf.choice_depth == 0 && leaf.op == LeafOp::Byte)
-                .filter(|leaf| leaf.transforms.is_empty() && leaf.classes.iter().all(|c| *c == SourceClass::Literal))
+                .filter(|leaf| {
+                    leaf.repeat_depth == 0 && leaf.choice_depth == 0 && leaf.op == LeafOp::Byte
+                })
+                .filter(|leaf| {
+                    leaf.transforms.is_empty()
+                        && leaf.classes.iter().all(|c| *c == SourceClass::Literal)
+                })
                 .count()
         })
         .collect();
-    !counts.is_empty() && counts.iter().all(|count| *count >= 1) && counts.iter().any(|count| *count >= 2)
+    !counts.is_empty()
+        && counts.iter().all(|count| *count >= 1)
+        && counts.iter().any(|count| *count >= 2)
 }
 
 /// FontAvailability family B: count, packed presence bytes (a byte repeat
@@ -411,12 +468,16 @@ pub(crate) fn is_font_bits_shape(shape: &str) -> bool {
     let partial = |item: &str| matches!(item, "B" | "C{B|}" | "C{|B}");
     items.iter().filter(|item| bits(item)).count() == 1
         && items.iter().filter(|item| **item == "N").count() == 2
-        && items.iter().all(|item| *item == "N" || bits(item) || partial(item))
+        && items
+            .iter()
+            .all(|item| *item == "N" || bits(item) || partial(item))
 }
 
 /// Many getParameter-style fields: at least 20 leaves, several strings.
 pub(crate) fn is_webgl_context(view: &SlotView) -> bool {
-    view.emissions().iter().all(|emission| emission.leaves.len() >= 20)
+    view.emissions()
+        .iter()
+        .all(|emission| emission.leaves.len() >= 20)
         && view.leaf_count(LeafOp::String) >= 5
 }
 
@@ -431,7 +492,11 @@ pub(crate) fn claim_for(view: &SlotView, ctx: &FinderCtx, signal: &str) -> Optio
             if found.len() > 1 {
                 lines.push(format!(
                     "tied with {:?}",
-                    found.iter().map(|(name, _)| *name).filter(|name| *name != signal).collect::<Vec<_>>()
+                    found
+                        .iter()
+                        .map(|(name, _)| *name)
+                        .filter(|name| *name != signal)
+                        .collect::<Vec<_>>()
                 ));
             }
             Claim::new(lines)
@@ -448,15 +513,24 @@ mod tests {
 
     fn class_with(shapes: &[&str], facts: LeafFacts) -> Vec<&'static str> {
         let shapes: Vec<String> = shapes.iter().map(|shape| shape.to_string()).collect();
-        shape_class_of(&shapes, facts).iter().map(|c| c.signal).collect()
+        shape_class_of(&shapes, facts)
+            .iter()
+            .map(|c| c.signal)
+            .collect()
     }
 
     /// `count, R{N}` is shared by three signals; the two-halves layout is its
     /// own class (EmojiChannelSamples vs EmojiChannelSampleHalves).
     #[test]
     fn tie_emoji_samples_vs_halves() {
-        assert_eq!(class(&["N R{N}"]), vec!["VideoCanPlayType", "EmojiChannelSamples"]);
-        let delivered = LeafFacts { delivered_count: true, ..LeafFacts::default() };
+        assert_eq!(
+            class(&["N R{N}"]),
+            vec!["VideoCanPlayType", "EmojiChannelSamples"]
+        );
+        let delivered = LeafFacts {
+            delivered_count: true,
+            ..LeafFacts::default()
+        };
         assert_eq!(class_with(&["N R{N}"], delivered), vec!["FontMetrics"]);
         assert_eq!(class_with(&["N R{C{N|}}"], delivered), vec!["FontMetrics"]);
         assert_eq!(class(&["N R{N} N R{N}"]), vec!["EmojiChannelSampleHalves"]);
@@ -507,10 +581,19 @@ mod tests {
     /// (BrowserApiProxyFlags) are not a render hash.
     #[test]
     fn tie_render_hash_vs_flag_bytes() {
-        let tags = LeafFacts { literal_tags: true, ..LeafFacts::default() };
-        assert_eq!(class_with(&["B B N", "C{B|N} B B"], tags), vec!["WebGlRenderHash"]);
+        let tags = LeafFacts {
+            literal_tags: true,
+            ..LeafFacts::default()
+        };
+        assert_eq!(
+            class_with(&["B B N", "C{B|N} B B"], tags),
+            vec!["WebGlRenderHash"]
+        );
         assert!(class(&["B B B"]).is_empty());
-        let webgl = LeafFacts { webgl: true, ..LeafFacts::default() };
+        let webgl = LeafFacts {
+            webgl: true,
+            ..LeafFacts::default()
+        };
         assert_eq!(class_with(&["C{|B} C{N|B}"], webgl), vec!["WebGlContext"]);
     }
 
@@ -518,10 +601,19 @@ mod tests {
     /// one wins otherwise.
     #[test]
     fn closest_keeps_ties() {
-        let tied = closest(vec![(1, "EmojiChannelSamples", String::new()), (1, "VideoCanPlayType", String::new())]);
+        let tied = closest(vec![
+            (1, "EmojiChannelSamples", String::new()),
+            (1, "VideoCanPlayType", String::new()),
+        ]);
         assert_eq!(tied.len(), 2);
-        let won = closest(vec![(2, "EmojiChannelSamples", String::new()), (1, "VideoCanPlayType", String::new())]);
-        assert_eq!(won.iter().map(|(name, _)| *name).collect::<Vec<_>>(), vec!["VideoCanPlayType"]);
+        let won = closest(vec![
+            (2, "EmojiChannelSamples", String::new()),
+            (1, "VideoCanPlayType", String::new()),
+        ]);
+        assert_eq!(
+            won.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+            vec!["VideoCanPlayType"]
+        );
         assert!(closest(Vec::new()).is_empty());
     }
 }

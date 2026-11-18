@@ -1,12 +1,13 @@
 //! `LifecyclePhaseTimings`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use std::collections::BTreeSet;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use value_facts::{slot_facts, Desc};
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use std::collections::BTreeSet;
+use value_facts::{slot_facts, Desc};
 
 /// The phase whose callback assigns this lifecycle timestamp.
 fn phase_field(desc: &Desc) -> Option<&'static str> {
@@ -39,7 +40,12 @@ pub(crate) fn recognize_lifecycle_phase_timings(view: &SlotView, ctx: &FinderCtx
         let names: BTreeSet<&str> = descs.iter().filter_map(phase_field).collect();
         names.len() == 4
     });
-    named.then(|| Claim::new(["setup Date epoch", "Date deltas assigned in init/collection/last_chance"]))
+    named.then(|| {
+        Claim::new([
+            "setup Date epoch",
+            "Date deltas assigned in init/collection/last_chance",
+        ])
+    })
 }
 
 pub(crate) fn bind_lifecycle_phase_timings(

@@ -25,7 +25,10 @@ pub fn page_stem(signal: &str) -> String {
         if index > 0 && c.is_ascii_uppercase() {
             let previous = chars[index - 1];
             let next_lower = chars.get(index + 1).is_some_and(|n| n.is_ascii_lowercase());
-            if previous.is_ascii_lowercase() || previous.is_ascii_digit() || (previous.is_ascii_uppercase() && next_lower) {
+            if previous.is_ascii_lowercase()
+                || previous.is_ascii_digit()
+                || (previous.is_ascii_uppercase() && next_lower)
+            {
                 out.push('_');
             }
         }
@@ -36,7 +39,10 @@ pub fn page_stem(signal: &str) -> String {
 
 /// HTML-escape and fold line breaks (with their surrounding blanks).
 fn esc(text: &str) -> String {
-    let escaped = text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+    let escaped = text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
     let mut out = String::new();
     let mut pending = String::new();
     let mut newline = false;
@@ -89,7 +95,11 @@ fn first_sentence(text: &str, max: usize) -> String {
         }
         let rest = &chars[index + 1..];
         let blanks = rest.iter().take_while(|c| c.is_whitespace()).count();
-        let ends = rest.is_empty() || (blanks > 0 && rest.get(blanks).is_some_and(|c| c.is_ascii_uppercase() || *c == '('));
+        let ends = rest.is_empty()
+            || (blanks > 0
+                && rest
+                    .get(blanks)
+                    .is_some_and(|c| c.is_ascii_uppercase() || *c == '('));
         if ends {
             sentence = chars[..=index].to_vec();
             break;
@@ -101,7 +111,8 @@ fn first_sentence(text: &str, max: usize) -> String {
     }
     let cut = String::from_utf16_lossy(&units[..max]);
     let cut = &cut[..cut.rfind(' ').unwrap_or(0)];
-    let cut = cut.trim_end_matches(|c: char| matches!(c, ',' | ';' | ':' | '(') || c.is_whitespace());
+    let cut =
+        cut.trim_end_matches(|c: char| matches!(c, ',' | ';' | ':' | '(') || c.is_whitespace());
     format!("{cut} …")
 }
 
@@ -124,20 +135,34 @@ fn type_label(field: &CardField) -> String {
 }
 
 /// Table rows of `fields`; nested groups use `parent[].child`.
-fn rows(fields: &[CardField], prefix: &str, out: &mut Vec<String>, flag_lists: &mut Vec<(String, &'static [&'static str])>) {
+fn rows(
+    fields: &[CardField],
+    prefix: &str,
+    out: &mut Vec<String>,
+    flag_lists: &mut Vec<(String, &'static [&'static str])>,
+) {
     for field in fields {
         let name = format!("{prefix}{}", field.name);
         let meaning = match field.kind {
             CardFieldKind::Group(_) => "One entry per repetition with the fields below.",
             _ => field.meaning,
         };
-        out.push(format!("| {} | {} | {} |", code(&name), cell(&type_label(field)), cell(meaning)));
+        out.push(format!(
+            "| {} | {} | {} |",
+            code(&name),
+            cell(&type_label(field)),
+            cell(meaning)
+        ));
         if !field.flags.is_empty() {
             flag_lists.push((name.clone(), field.flags));
         }
         let nested = field.fields();
         if !nested.is_empty() {
-            let separator = if field.repeat.is_some_and(|r| !r.is_empty()) { "[]." } else { "." };
+            let separator = if field.repeat.is_some_and(|r| !r.is_empty()) {
+                "[]."
+            } else {
+                "."
+            };
             rows(nested, &format!("{name}{separator}"), out, flag_lists);
         }
     }
@@ -147,7 +172,10 @@ fn field_table(fields: &[CardField]) -> String {
     if fields.is_empty() {
         return "No fields: the message is empty.\n".to_string();
     }
-    let mut lines = vec!["| Field | Type | Meaning |".to_string(), "| --- | --- | --- |".to_string()];
+    let mut lines = vec![
+        "| Field | Type | Meaning |".to_string(),
+        "| --- | --- | --- |".to_string(),
+    ];
     let mut flag_lists = Vec::new();
     rows(fields, "", &mut lines, &mut flag_lists);
     let mut text = lines.join("\n") + "\n";
@@ -156,7 +184,13 @@ fn field_table(fields: &[CardField]) -> String {
             "\nFlag names of {} (card order; the bit of each flag is per build, see the schema's `bits`):\n\n",
             code(&name)
         ));
-        text.push_str(&flags.iter().map(|flag| format!("- {}", code(flag))).collect::<Vec<_>>().join("\n"));
+        text.push_str(
+            &flags
+                .iter()
+                .map(|flag| format!("- {}", code(flag)))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
         text.push('\n');
     }
     text
@@ -176,7 +210,9 @@ fn schema_note(card: &Card) -> String {
     let has_flags = fields.iter().any(|field| !field.flags.is_empty());
     let repeats = |field: &CardField| field.repeat.is_some_and(|r| !r.is_empty());
     let has_repeat = fields.iter().any(|field| repeats(field));
-    let has_group = fields.iter().any(|field| repeats(field) && !field.fields().is_empty());
+    let has_group = fields
+        .iter()
+        .any(|field| repeats(field) && !field.fields().is_empty());
     let mut out = vec![
         format!(
             "In `shape signals <program.js> --json` output this signal is `signals.{}` (see [schema format](schema.md)). \
@@ -213,7 +249,11 @@ fn schema_note(card: &Card) -> String {
     if has_repeat {
         out.push(format!(
             "- Repeated fields are `type: \"array\"` with an `item`{}",
-            if has_group { "; a repeated group's item is a `record` with its own `order` and `fields`." } else { "." }
+            if has_group {
+                "; a repeated group's item is a `record` with its own `order` and `fields`."
+            } else {
+                "."
+            }
         ));
     }
     if has_flags {
@@ -239,9 +279,12 @@ pub const SAMPLE_NOTE: &str = "Captured decoded values. The field tables describ
 pub fn render_sample(card: &Card) -> String {
     let body = match card.sample_payload {
         Some(sample) => {
-            let value: serde_json::Value = serde_json::from_str(sample)
-                .expect("catalogue sample_payload must be valid JSON");
-            format!("```json\n{}\n```", serde_json::to_string_pretty(&value).unwrap())
+            let value: serde_json::Value =
+                serde_json::from_str(sample).expect("catalogue sample_payload must be valid JSON");
+            format!(
+                "```json\n{}\n```",
+                serde_json::to_string_pretty(&value).unwrap()
+            )
         }
         None if card.no_data() => "No payload emitted.".into(),
         None => "No decoded sample available.".into(),
@@ -251,12 +294,17 @@ pub fn render_sample(card: &Card) -> String {
 
 /// Catalogue text, without page-relative documentation links.
 pub fn render_catalogue(card: &Card) -> String {
-    let mut text = format!("# {}\n\n{}\n\n## Why\n\n{}\n\n## Fields\n\n", card.signal, card.summary, card.why);
+    let mut text = format!(
+        "# {}\n\n{}\n\n## Why\n\n{}\n\n## Fields\n\n",
+        card.signal, card.summary, card.why
+    );
     if card.no_data() {
         text.push_str("No data: completion only.\n\n");
     } else {
         if card.by_name {
-            text.push_str("Sent by name through the generic encoder; routing keys vary by seed.\n\n");
+            text.push_str(
+                "Sent by name through the generic encoder; routing keys vary by seed.\n\n",
+            );
         }
         for (when, fields) in card.messages() {
             if let Some(when) = when {
@@ -285,9 +333,12 @@ pub fn catalogue_json(card: &Card) -> serde_json::Value {
             ).collect::<Vec<_>>()});
     // Null here is metadata absence. `no_data` distinguishes completion-only
     // cards from data cards whose decoded sample has not been captured yet.
-    out["sample_payload"] = card.sample_payload.map(|sample| {
-        serde_json::from_str(sample).expect("catalogue sample_payload must be valid JSON")
-    }).unwrap_or(Value::Null);
+    out["sample_payload"] = card
+        .sample_payload
+        .map(|sample| {
+            serde_json::from_str(sample).expect("catalogue sample_payload must be valid JSON")
+        })
+        .unwrap_or(Value::Null);
     out
 }
 
@@ -327,7 +378,10 @@ pub fn render_page(card: &Card) -> String {
     }
     match card.body {
         CardBody::Messages(messages) => {
-            out.push(format!("This signal sends one of {} message shapes.", messages.len()));
+            out.push(format!(
+                "This signal sends one of {} message shapes.",
+                messages.len()
+            ));
             out.push(String::new());
             for (index, message) in messages.iter().enumerate() {
                 out.push(format!("### Message {}: {}", index + 1, esc(message.when)));
@@ -414,7 +468,10 @@ pub fn render_index(cards: &[&Card], has_sample: impl Fn(&str) -> bool) -> Strin
     }
     if !missing.is_empty() {
         out.push(String::new());
-        out.push(format!("No data-shape example exists for: {}.", missing.join(", ")));
+        out.push(format!(
+            "No data-shape example exists for: {}.",
+            missing.join(", ")
+        ));
     }
     out.join("\n") + "\n"
 }
@@ -428,8 +485,10 @@ fn index_key(signal: &str) -> (String, String) {
 /// `(file name, text)` for each `<signal>.md` and `README.md`.
 pub fn render_pages(has_sample: impl Fn(&str) -> bool) -> Vec<(String, String)> {
     let cards: Vec<&Card> = crate::signals::catalog::cards().collect();
-    let mut pages: Vec<(String, String)> =
-        cards.iter().map(|card| (format!("{}.md", page_stem(card.signal)), render_page(card))).collect();
+    let mut pages: Vec<(String, String)> = cards
+        .iter()
+        .map(|card| (format!("{}.md", page_stem(card.signal)), render_page(card)))
+        .collect();
     pages.push(("README.md".into(), render_index(&cards, has_sample)));
     pages
 }
@@ -456,7 +515,10 @@ mod tests {
                 stale.push(name);
             }
         }
-        assert!(stale.is_empty(), "stale docs/signals pages (run `shape signals docs docs/signals`): {stale:?}");
+        assert!(
+            stale.is_empty(),
+            "stale docs/signals pages (run `shape signals docs docs/signals`): {stale:?}"
+        );
     }
 
     /// Every page stem is its signal's catalog file name.
@@ -465,7 +527,11 @@ mod tests {
         let catalog = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/signals/catalog");
         for card in crate::signals::catalog::cards() {
             let stem = page_stem(card.signal);
-            assert!(catalog.join(format!("{stem}.rs")).exists(), "{}: {stem}.rs", card.signal);
+            assert!(
+                catalog.join(format!("{stem}.rs")).exists(),
+                "{}: {stem}.rs",
+                card.signal
+            );
         }
     }
 }

@@ -56,7 +56,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::analysis;
 
-use crate::signals::extract::bindings::{numeric_index, object_members_of, property_key_name, ParameterSlots};
+use crate::signals::extract::bindings::{
+    numeric_index, object_members_of, property_key_name, ParameterSlots,
+};
 use crate::signals::schema::{Confidence, SourceSpan};
 
 // ===========================================================================

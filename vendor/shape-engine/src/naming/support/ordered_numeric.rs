@@ -23,10 +23,7 @@ pub(in crate::naming) fn field(x: E, k: &str) -> E {
 pub(in crate::naming) fn op(k: &str, a: E, b: E) -> E {
     Op(k.into(), Box::new(a), Box::new(b))
 }
-pub(in crate::naming) fn expr(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-) -> Option<E> {
+pub(in crate::naming) fn expr(model: &Model<'_, '_>, e: &Expression<'_>) -> Option<E> {
     fn inner(model: &Model<'_, '_>, e: &Expression<'_>, depth: usize) -> Option<E> {
         if depth > 32 {
             return None;
@@ -54,11 +51,7 @@ pub(in crate::naming) fn expr(
     }
     inner(model, e, 0)
 }
-pub(in crate::naming) fn eq(
-    model: &Model<'_, '_>,
-    e: &Expression<'_>,
-    want: E,
-) -> bool {
+pub(in crate::naming) fn eq(model: &Model<'_, '_>, e: &Expression<'_>, want: E) -> bool {
     expr(model, e) == Some(want)
 }
 /// A clock may be a direct callable or the result of the existing independently

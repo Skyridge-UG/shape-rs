@@ -364,7 +364,11 @@ fn prove(m: &Model<'_, '_>, site: FunctionSite) -> Option<()> {
     }
     Some(())
 }
-pub(in crate::naming) fn evaluate(m: &Model<'_, '_>, site: FunctionSite, facts: &Facts<'_>) -> Vec<Proposal> {
+pub(in crate::naming) fn evaluate(
+    m: &Model<'_, '_>,
+    site: FunctionSite,
+    facts: &Facts<'_>,
+) -> Vec<Proposal> {
     if prove(m, site).is_none() {
         return vec![];
     }

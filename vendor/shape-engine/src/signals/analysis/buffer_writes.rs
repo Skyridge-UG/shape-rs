@@ -39,9 +39,9 @@ use oxc_span::GetSpan;
 use oxc_syntax::operator::BinaryOperator;
 use oxc_syntax::scope::ScopeFlags;
 
-use crate::signals::extract::wiring::LifecycleRole;
 use super::slot_view::generated;
 use super::{FinderCtx, LeafOp, SlotView};
+use crate::signals::extract::wiring::LifecycleRole;
 
 /// Facts of a slice or a context.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -69,8 +69,10 @@ impl Facts {
         self.globals.extend(other.globals.iter().cloned());
         self.calls.extend(other.calls.iter().cloned());
         self.param_console |= other.param_console;
-        self.callback_regex.extend(other.callback_regex.iter().cloned());
-        self.callback_calls.extend(other.callback_calls.iter().cloned());
+        self.callback_regex
+            .extend(other.callback_regex.iter().cloned());
+        self.callback_calls
+            .extend(other.callback_calls.iter().cloned());
     }
 
     /// A member `name` was read.
@@ -265,12 +267,19 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 _ => return None,
             };
             let named = match callee.without_parentheses() {
-                Expression::Identifier(identifier) => identifier.name == "RegExp" && self.symbol(identifier).is_none(),
+                Expression::Identifier(identifier) => {
+                    identifier.name == "RegExp" && self.symbol(identifier).is_none()
+                }
                 Expression::StaticMemberExpression(member) => member.property.name == "RegExp",
                 _ => false,
             };
-            match arguments.first().and_then(|argument| argument.as_expression()) {
-                Some(Expression::StringLiteral(literal)) if named => Some(vec![literal.value.to_string()]),
+            match arguments
+                .first()
+                .and_then(|argument| argument.as_expression())
+            {
+                Some(Expression::StringLiteral(literal)) if named => {
+                    Some(vec![literal.value.to_string()])
+                }
                 _ => None,
             }
         };
@@ -278,7 +287,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let declaration = self.scoping().symbol_declaration(symbol);
         if let AstKind::VariableDeclarator(declarator) = self.nodes().kind(declaration) {
             if let Some(init) = &declarator.init {
-                let Some(found) = pattern(init) else { return Vec::new() };
+                let Some(found) = pattern(init) else {
+                    return Vec::new();
+                };
                 out.extend(found);
             }
         }
@@ -286,10 +297,17 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             if !reference.is_write() {
                 continue;
             }
-            let AstKind::AssignmentExpression(assignment) = self.nodes().parent_kind(reference.node_id()) else {
+            let AstKind::AssignmentExpression(assignment) =
+                self.nodes().parent_kind(reference.node_id())
+            else {
                 return Vec::new();
             };
-            let Some(found) = assignment.operator.is_assign().then(|| pattern(&assignment.right)).flatten() else {
+            let Some(found) = assignment
+                .operator
+                .is_assign()
+                .then(|| pattern(&assignment.right))
+                .flatten()
+            else {
                 return Vec::new();
             };
             out.extend(found);
@@ -313,7 +331,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     fn is_parameter(&self, symbol: SymbolId) -> bool {
         let declaration = self.scoping().symbol_declaration(symbol);
         matches!(self.nodes().kind(declaration), AstKind::FormalParameter(_))
-            || matches!(self.nodes().parent_kind(declaration), AstKind::FormalParameter(_))
+            || matches!(
+                self.nodes().parent_kind(declaration),
+                AstKind::FormalParameter(_)
+            )
     }
 
     /// The buffer an emission site sends: `obs.next([[], buf])`, or
@@ -346,7 +367,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let Some(symbol) = self.symbol(pair) else {
             return Vec::new();
         };
-        let defs: Vec<Def<'a>> = self.defs(symbol).into_iter().filter(|def| def.end <= call.span.start).collect();
+        let defs: Vec<Def<'a>> = self
+            .defs(symbol)
+            .into_iter()
+            .filter(|def| def.end <= call.span.start)
+            .collect();
         let Some(last) = defs.iter().max_by_key(|def| def.end) else {
             return Vec::new();
         };
@@ -366,7 +391,8 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     if start < last.end || start >= call.span.start {
                         return None;
                     }
-                    let AstKind::ComputedMemberExpression(member) = self.nodes().parent_kind(id) else {
+                    let AstKind::ComputedMemberExpression(member) = self.nodes().parent_kind(id)
+                    else {
                         return None;
                     };
                     if !matches!(member.expression.without_parentheses(),
@@ -375,15 +401,20 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                         return None;
                     }
                     let member_id = self.nodes().parent_id(id);
-                    self.nodes().ancestor_ids(member_id).take(2).find_map(|ancestor| match self.nodes().kind(ancestor) {
-                        AstKind::AssignmentExpression(assignment) if assignment.left.span() == member.span => {
-                            match assignment.right.without_parentheses() {
-                                Expression::Identifier(buffer) => Some(&**buffer),
-                                _ => None,
+                    self.nodes()
+                        .ancestor_ids(member_id)
+                        .take(2)
+                        .find_map(|ancestor| match self.nodes().kind(ancestor) {
+                            AstKind::AssignmentExpression(assignment)
+                                if assignment.left.span() == member.span =>
+                            {
+                                match assignment.right.without_parentheses() {
+                                    Expression::Identifier(buffer) => Some(&**buffer),
+                                    _ => None,
+                                }
                             }
-                        }
-                        _ => None,
-                    })
+                            _ => None,
+                        })
                 })
                 .collect();
             return match stored.as_slice() {
@@ -395,8 +426,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             .iter()
             .filter(|def| def.end == last.end || self.exclusive(def.node, last.start))
             .collect();
-        let buffers: Vec<&'a IdentifierReference<'a>> =
-            arms.iter().filter_map(|def| def.rhs.and_then(pair_buffer)).collect();
+        let buffers: Vec<&'a IdentifierReference<'a>> = arms
+            .iter()
+            .filter_map(|def| def.rhs.and_then(pair_buffer))
+            .collect();
         if buffers.len() == arms.len() {
             buffers
         } else {
@@ -438,11 +471,18 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let Some(symbol) = self.symbol(pair) else {
             return Vec::new();
         };
-        let defs: Vec<Def<'a>> = self.defs(symbol).into_iter().filter(|def| def.end <= call.span.start).collect();
+        let defs: Vec<Def<'a>> = self
+            .defs(symbol)
+            .into_iter()
+            .filter(|def| def.end <= call.span.start)
+            .collect();
         let Some(last) = defs.iter().max_by_key(|def| def.end) else {
             return Vec::new();
         };
-        if defs.iter().any(|def| def.end != last.end && self.exclusive(def.node, last.start)) {
+        if defs
+            .iter()
+            .any(|def| def.end != last.end && self.exclusive(def.node, last.start))
+        {
             return Vec::new();
         }
         if let Some(buffer) = last.rhs.and_then(|rhs| self.pair_ref(rhs)) {
@@ -471,16 +511,27 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 continue;
             }
             let member_id = self.nodes().parent_id(id);
-            let value = self.nodes().ancestor_ids(member_id).take(2).find_map(|ancestor| match self.nodes().kind(ancestor) {
-                AstKind::AssignmentExpression(assignment) if assignment.left.span() == member.span => Some(&assignment.right),
-                _ => None,
-            });
+            let value =
+                self.nodes()
+                    .ancestor_ids(member_id)
+                    .take(2)
+                    .find_map(|ancestor| match self.nodes().kind(ancestor) {
+                        AstKind::AssignmentExpression(assignment)
+                            if assignment.left.span() == member.span =>
+                        {
+                            Some(&assignment.right)
+                        }
+                        _ => None,
+                    });
             let Some(value) = value else {
                 continue;
             };
             let value = match value.without_parentheses() {
                 Expression::CallExpression(store) => {
-                    match crate::signals::extract::layout::inline_store_returned(store, self.scoping()) {
+                    match crate::signals::extract::layout::inline_store_returned(
+                        store,
+                        self.scoping(),
+                    ) {
                         Some(returned) => returned,
                         None => return Vec::new(),
                     }
@@ -506,18 +557,28 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         if pair.elements.len() != 2 {
             return None;
         }
-        if matches!(pair.elements[0], ArrayExpressionElement::SpreadElement(_) | ArrayExpressionElement::Elision(_)) {
+        if matches!(
+            pair.elements[0],
+            ArrayExpressionElement::SpreadElement(_) | ArrayExpressionElement::Elision(_)
+        ) {
             return None;
         }
         let buffer = pair.elements[1].as_expression()?;
-        if !matches!(buffer.without_parentheses(), Expression::ComputedMemberExpression(_)) {
+        if !matches!(
+            buffer.without_parentheses(),
+            Expression::ComputedMemberExpression(_)
+        ) {
             return None;
         }
         self.buffer_ref(buffer)
     }
 
     fn slot(&self, view: &SlotView) -> SlotInfo {
-        let mut found: Vec<(Option<LifecycleRole>, Vec<(bool, &'a Expression<'a>, u32)>, bool)> = Vec::new();
+        let mut found: Vec<(
+            Option<LifecycleRole>,
+            Vec<(bool, &'a Expression<'a>, u32)>,
+            bool,
+        )> = Vec::new();
         let mut seen_sites = HashSet::new();
         for anchor in view.anchors() {
             for id in self.nodes_at(*anchor) {
@@ -537,14 +598,30 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     let phase = view
                         .callback_spans()
                         .iter()
-                        .filter(|(_, span)| span.start <= call.span.start && call.span.start < span.end)
+                        .filter(|(_, span)| {
+                            span.start <= call.span.start && call.span.start < span.end
+                        })
                         .min_by_key(|(_, span)| span.end - span.start)
                         .map(|(role, _)| *role);
                     let mut writes = Vec::new();
-                    self.packed_writes(function, BufferRef::Literal(*start, *end), *end, 4, call.span.start, &mut writes);
+                    self.packed_writes(
+                        function,
+                        BufferRef::Literal(*start, *end),
+                        *end,
+                        4,
+                        call.span.start,
+                        &mut writes,
+                    );
                     writes.sort_by_key(|(_, _, _, end)| *end);
                     writes.dedup_by_key(|(_, _, start, end)| (*start, *end));
-                    found.push((phase, writes.into_iter().map(|(byte, value, start, _)| (byte, value, start)).collect(), true));
+                    found.push((
+                        phase,
+                        writes
+                            .into_iter()
+                            .map(|(byte, value, start, _)| (byte, value, start))
+                            .collect(),
+                        true,
+                    ));
                     continue;
                 }
                 let symbols: Vec<SymbolId> = buffers
@@ -590,14 +667,29 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 }
                 writes.sort_by_key(|(_, _, _, end)| *end);
                 writes.dedup_by_key(|(_, _, start, end)| (*start, *end));
-                found.push((phase, writes.into_iter().map(|(byte, value, start, _)| (byte, value, start)).collect(), packed));
+                found.push((
+                    phase,
+                    writes
+                        .into_iter()
+                        .map(|(byte, value, start, _)| (byte, value, start))
+                        .collect(),
+                    packed,
+                ));
             }
         }
         let mut info = SlotInfo::default();
         let mut store_sites = HashSet::new();
         for emission in view.emissions() {
-            let ops: Vec<bool> = emission.leaves.iter().map(|leaf| leaf.op == LeafOp::Byte).collect();
-            let candidates: Vec<&(Option<LifecycleRole>, Vec<(bool, &'a Expression<'a>, u32)>, bool)> = found
+            let ops: Vec<bool> = emission
+                .leaves
+                .iter()
+                .map(|leaf| leaf.op == LeafOp::Byte)
+                .collect();
+            let candidates: Vec<&(
+                Option<LifecycleRole>,
+                Vec<(bool, &'a Expression<'a>, u32)>,
+                bool,
+            )> = found
                 .iter()
                 .filter(|(phase, writes, _)| {
                     *phase == emission.phase
@@ -608,7 +700,14 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             for (_, writes, packed) in &candidates {
                 let mut out = EmissionInfo::default();
                 for (byte, value, at) in writes {
-                    let write = self.write_info(*byte, value, *at, *packed, &mut info.stores, &mut store_sites);
+                    let write = self.write_info(
+                        *byte,
+                        value,
+                        *at,
+                        *packed,
+                        &mut info.stores,
+                        &mut store_sites,
+                    );
                     info.facts.extend(&write.facts);
                     if let Some(padded) = &write.padded {
                         info.facts.extend(padded);
@@ -635,7 +734,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 .into_iter()
                 .filter(|def| def.end <= before)
                 .filter_map(|def| match def.rhs.map(Expression::without_parentheses) {
-                    Some(Expression::Identifier(source)) => self.symbol(source).map(|source| (source, def)),
+                    Some(Expression::Identifier(source)) => {
+                        self.symbol(source).map(|source| (source, def))
+                    }
                     _ => None,
                 })
                 .collect()
@@ -659,9 +760,17 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             })
             .collect();
         if let Some(latest) = defs.iter().max_by_key(|def| def.end) {
-            for def in defs.iter().filter(|def| def.end == latest.end || self.exclusive(def.node, latest.start)) {
-                if let Some(Expression::Identifier(source)) = def.rhs.map(Expression::without_parentheses) {
-                    if let Some(source) = self.symbol(source).filter(|source| *source != buffer && !out.contains(source)) {
+            for def in defs
+                .iter()
+                .filter(|def| def.end == latest.end || self.exclusive(def.node, latest.start))
+            {
+                if let Some(Expression::Identifier(source)) =
+                    def.rhs.map(Expression::without_parentheses)
+                {
+                    if let Some(source) = self
+                        .symbol(source)
+                        .filter(|source| *source != buffer && !out.contains(source))
+                    {
                         out.push(source);
                     }
                 }
@@ -671,9 +780,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             if *other == buffer || out.contains(other) {
                 continue;
             }
-            let back = copies(*other)
-                .into_iter()
-                .any(|(source, reverse)| source == buffer && self.exclusive(reverse.node, def.start));
+            let back = copies(*other).into_iter().any(|(source, reverse)| {
+                source == buffer && self.exclusive(reverse.node, def.start)
+            });
             if back {
                 out.push(*other);
             }
@@ -715,7 +824,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// and every definition in the other arm of an `if` with it are
     /// `alias = buffer` (a reused register holds something else).
     fn holds_copy(&self, alias: SymbolId, buffer: SymbolId, at: u32) -> bool {
-        let defs: Vec<Def<'a>> = self.defs(alias).into_iter().filter(|def| def.end <= at).collect();
+        let defs: Vec<Def<'a>> = self
+            .defs(alias)
+            .into_iter()
+            .filter(|def| def.end <= at)
+            .collect();
         let Some(last) = defs.iter().max_by_key(|def| def.end) else {
             return false;
         };
@@ -728,7 +841,13 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     }
 
     /// Writes into `buffer` inside `function` before the emission at `before`.
-    fn writes(&self, function: NodeId, buffer: SymbolId, before: u32, packed: &mut bool) -> Vec<(bool, &'a Expression<'a>, u32, u32)> {
+    fn writes(
+        &self,
+        function: NodeId,
+        buffer: SymbolId,
+        before: u32,
+        packed: &mut bool,
+    ) -> Vec<(bool, &'a Expression<'a>, u32, u32)> {
         let mut out: Vec<(bool, &'a Expression<'a>, u32, u32)> = Vec::new();
         // A buffer register may be reused: only writes after its latest
         // array (raw prefix) definition before the emission count. When
@@ -738,7 +857,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             .defs(buffer)
             .into_iter()
             .filter(|def| def.end <= before)
-            .filter(|def| def.rhs.is_some_and(|rhs| matches!(rhs.without_parentheses(), Expression::ArrayExpression(_))))
+            .filter(|def| {
+                def.rhs.is_some_and(|rhs| {
+                    matches!(rhs.without_parentheses(), Expression::ArrayExpression(_))
+                })
+            })
             // `buf = [[], buf]` re-binds the buffer as the sent pair; it
             // is not a raw prefix.
             .filter(|def| def.rhs.is_none_or(|rhs| pair_buffer(rhs).is_none()))
@@ -758,14 +881,18 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let prefix_len = prefixes
             .iter()
             .filter(|def| def.end >= since)
-            .any(|def| matches!(def.rhs.map(Expression::without_parentheses),
-                Some(Expression::ArrayExpression(array)) if array.elements.len() < 4))
+            .any(|def| {
+                matches!(def.rhs.map(Expression::without_parentheses),
+                Some(Expression::ArrayExpression(array)) if array.elements.len() < 4)
+            })
             .then_some(4)
             .unwrap_or(0);
         // `[s >>> 24, …, s & 255, v ^ ks()]`: elements after the four
         // prefix bytes of the latest allocation are byte writes.
         if let Some(last) = prefixes.iter().max_by_key(|def| def.end) {
-            if let Some(Expression::ArrayExpression(array)) = last.rhs.map(Expression::without_parentheses) {
+            if let Some(Expression::ArrayExpression(array)) =
+                last.rhs.map(Expression::without_parentheses)
+            {
                 for element in array.elements.iter().skip(4) {
                     if let Some(value) = element.as_expression() {
                         out.push((true, value, value.span().start, value.span().end));
@@ -778,38 +905,48 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             let span = self.nodes().kind(id).span();
             if span.start >= before
                 || span.start < since
-                || !self.nodes().ancestor_ids(id).any(|ancestor| ancestor == function)
+                || !self
+                    .nodes()
+                    .ancestor_ids(id)
+                    .any(|ancestor| ancestor == function)
             {
                 continue;
             }
             match self.nodes().parent_kind(id) {
                 AstKind::ComputedMemberExpression(member) if member.object.span() == span => {
                     let member_id = self.nodes().parent_id(id);
-                    let assignment = self.nodes().ancestor_ids(member_id).take(2).find_map(|ancestor| {
-                        match self.nodes().kind(ancestor) {
+                    let assignment = self.nodes().ancestor_ids(member_id).take(2).find_map(
+                        |ancestor| match self.nodes().kind(ancestor) {
                             AstKind::AssignmentExpression(assignment)
                                 if assignment.left.span() == member.span =>
                             {
                                 Some(assignment)
                             }
                             _ => None,
-                        }
-                    });
+                        },
+                    );
                     // `buf = [s >>> 24]; buf[1] = s >> 16 & 255; …`: stores
                     // completing a short prefix literal are prefix bytes.
                     let prefix_store = matches!(member.expression.without_parentheses(),
                         Expression::NumericLiteral(index) if index.value < prefix_len as f64);
                     if let Some(assignment) = assignment.filter(|_| !prefix_store) {
-                        out.push((true, &assignment.right, assignment.span.start, assignment.span.end));
+                        out.push((
+                            true,
+                            &assignment.right,
+                            assignment.span.start,
+                            assignment.span.end,
+                        ));
                     }
                 }
                 // `writer(mask, value, cond ? buf : other, pos)`: the
                 // buffer argument chosen by a conditional is still a write.
                 AstKind::ConditionalExpression(conditional)
-                    if conditional.consequent.span() == span || conditional.alternate.span() == span =>
+                    if conditional.consequent.span() == span
+                        || conditional.alternate.span() == span =>
                 {
                     let conditional_id = self.nodes().parent_id(id);
-                    if let AstKind::CallExpression(call) = self.nodes().parent_kind(conditional_id) {
+                    if let AstKind::CallExpression(call) = self.nodes().parent_kind(conditional_id)
+                    {
                         if emitted_buffer(call).is_none() {
                             let position = call
                                 .arguments
@@ -834,7 +971,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                         .iter()
                         .position(|argument| argument.span() == span);
                     if let Some(position) = position {
-                        if let Some(value) = inline_helper_value(call, position).or_else(|| self.named_helper_value(call, position)) {
+                        if let Some(value) = inline_helper_value(call, position)
+                            .or_else(|| self.named_helper_value(call, position))
+                        {
                             out.push((false, value, call.span.start, call.span.end));
                         } else if position > 0 && !is_inline_function(&call.callee) {
                             if let Some(value) = call.arguments[position - 1].as_expression() {
@@ -850,9 +989,19 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         // tuples (`p = [t[0], i]; p[0][p[1]] = v`) that the reference walk
         // above does not see.
         let mut extra = Vec::new();
-        self.packed_writes(function, BufferRef::Binding(buffer), since, prefix_len, before, &mut extra);
+        self.packed_writes(
+            function,
+            BufferRef::Binding(buffer),
+            since,
+            prefix_len,
+            before,
+            &mut extra,
+        );
         for write in extra {
-            if !out.iter().any(|(_, _, start, end)| (*start, *end) == (write.2, write.3)) {
+            if !out
+                .iter()
+                .any(|(_, _, start, end)| (*start, *end) == (write.2, write.3))
+            {
                 *packed = true;
                 out.push(write);
             }
@@ -866,21 +1015,36 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// [`inline_helper_value`] for a helper the tracer outlined as a local
     /// function declaration (`function h(w, m, hi, lo, pad, p, b) { return
     /// w(m, hi + (lo ^ pad), b, p); }`) bound once and never reassigned.
-    fn named_helper_value(&self, call: &'a CallExpression<'a>, position: usize) -> Option<&'a Expression<'a>> {
+    fn named_helper_value(
+        &self,
+        call: &'a CallExpression<'a>,
+        position: usize,
+    ) -> Option<&'a Expression<'a>> {
         let Expression::Identifier(callee) = call.callee.without_parentheses() else {
             return None;
         };
         let symbol = self.symbol(callee)?;
-        if self.scoping().get_resolved_references(symbol).any(|reference| reference.is_write()) {
+        if self
+            .scoping()
+            .get_resolved_references(symbol)
+            .any(|reference| reference.is_write())
+        {
             return None;
         }
-        let AstKind::Function(function) = self.nodes().kind(self.scoping().symbol_declaration(symbol)) else {
+        let AstKind::Function(function) =
+            self.nodes().kind(self.scoping().symbol_declaration(symbol))
+        else {
             return None;
         };
         if function.r#async || function.generator {
             return None;
         }
-        helper_body_value(&function.params, &function.body.as_ref()?.statements, call, position)
+        helper_body_value(
+            &function.params,
+            &function.body.as_ref()?.statements,
+            call,
+            position,
+        )
     }
 
     /// `t[k]` (read at its own offset) when `t`'s only reaching definition
@@ -888,7 +1052,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// `t` or lets it escape between that definition and the read: element
     /// `k`, followed through further tuples. The tracer packs registers this
     /// way (`t = [buf, i, ks()]; t[0][t[1]] = t[2] ^ c`).
-    fn tuple_element(&self, expression: &Expression<'a>, depth: usize) -> Option<&'a Expression<'a>> {
+    fn tuple_element(
+        &self,
+        expression: &Expression<'a>,
+        depth: usize,
+    ) -> Option<&'a Expression<'a>> {
         let Expression::ComputedMemberExpression(member) = expression.without_parentheses() else {
             return None;
         };
@@ -901,7 +1069,13 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         self.tuple_element_at(object, index.value, member.span.start, depth)
     }
 
-    fn tuple_element_at(&self, object: &IdentifierReference<'a>, index: f64, read: u32, depth: usize) -> Option<&'a Expression<'a>> {
+    fn tuple_element_at(
+        &self,
+        object: &IdentifierReference<'a>,
+        index: f64,
+        read: u32,
+        depth: usize,
+    ) -> Option<&'a Expression<'a>> {
         if depth == 0 || index < 0.0 || index.fract() != 0.0 {
             return None;
         }
@@ -932,8 +1106,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             }
             let element_read = match self.nodes().parent_kind(id) {
                 AstKind::ComputedMemberExpression(outer) => {
-                    matches!(outer.expression.without_parentheses(), Expression::NumericLiteral(_))
-                        && outer.object.span() == self.nodes().kind(id).span()
+                    matches!(
+                        outer.expression.without_parentheses(),
+                        Expression::NumericLiteral(_)
+                    ) && outer.object.span() == self.nodes().kind(id).span()
                         && !self.is_store_target(self.nodes().parent_id(id))
                 }
                 _ => false,
@@ -943,7 +1119,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             }
         }
         Some(match element.without_parentheses() {
-            Expression::ComputedMemberExpression(_) => self.tuple_element(element, depth - 1).unwrap_or(element),
+            Expression::ComputedMemberExpression(_) => {
+                self.tuple_element(element, depth - 1).unwrap_or(element)
+            }
             _ => element,
         })
     }
@@ -951,11 +1129,14 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// The member expression `id` is the target of an assignment or update.
     fn is_store_target(&self, id: NodeId) -> bool {
         let span = self.nodes().kind(id).span();
-        self.nodes().ancestor_ids(id).take(3).any(|ancestor| match self.nodes().kind(ancestor) {
-            AstKind::AssignmentExpression(assignment) => assignment.left.span() == span,
-            AstKind::UpdateExpression(update) => update.argument.span() == span,
-            _ => false,
-        })
+        self.nodes()
+            .ancestor_ids(id)
+            .take(3)
+            .any(|ancestor| match self.nodes().kind(ancestor) {
+                AstKind::AssignmentExpression(assignment) => assignment.left.span() == span,
+                AstKind::UpdateExpression(update) => update.argument.span() == span,
+                _ => false,
+            })
     }
 
     /// The buffer an expression names: a binding, or one read out of a
@@ -965,20 +1146,40 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             Expression::Identifier(identifier) => self.symbol(identifier).map(BufferRef::Binding),
             // An inline register tuple (`[k, buf][1][i] = v`).
             Expression::ComputedMemberExpression(member)
-                if matches!(member.object.without_parentheses(), Expression::ArrayExpression(_)) =>
+                if matches!(
+                    member.object.without_parentheses(),
+                    Expression::ArrayExpression(_)
+                ) =>
             {
-                let Expression::ArrayExpression(array) = member.object.without_parentheses() else { return None };
-                let Expression::NumericLiteral(index) = member.expression.without_parentheses() else { return None };
+                let Expression::ArrayExpression(array) = member.object.without_parentheses() else {
+                    return None;
+                };
+                let Expression::NumericLiteral(index) = member.expression.without_parentheses()
+                else {
+                    return None;
+                };
                 if index.value < 0.0 || index.value.fract() != 0.0 {
                     return None;
                 }
-                match array.elements.get(index.value as usize)?.as_expression()?.without_parentheses() {
-                    Expression::Identifier(identifier) => self.symbol(identifier).map(BufferRef::Binding),
+                match array
+                    .elements
+                    .get(index.value as usize)?
+                    .as_expression()?
+                    .without_parentheses()
+                {
+                    Expression::Identifier(identifier) => {
+                        self.symbol(identifier).map(BufferRef::Binding)
+                    }
                     _ => None,
                 }
             }
-            Expression::ComputedMemberExpression(_) => match self.tuple_element(expression, TUPLE_DEPTH)?.without_parentheses() {
-                Expression::Identifier(identifier) => self.symbol(identifier).map(BufferRef::Binding),
+            Expression::ComputedMemberExpression(_) => match self
+                .tuple_element(expression, TUPLE_DEPTH)?
+                .without_parentheses()
+            {
+                Expression::Identifier(identifier) => {
+                    self.symbol(identifier).map(BufferRef::Binding)
+                }
                 Expression::ArrayExpression(array) if array.elements.is_empty() => {
                     Some(BufferRef::Literal(array.span.start, array.span.end))
                 }
@@ -991,10 +1192,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// The written value of a packed store: `t[j] ^ c` with `t[j]` a
     /// keystream draw is `c`; a value read out of a tuple is its element.
     fn packed_value(&self, value: &'a Expression<'a>) -> &'a Expression<'a> {
-        let resolve = |expression: &'a Expression<'a>| self.tuple_element(expression, TUPLE_DEPTH).unwrap_or(expression);
-        let draw = |expression: &'a Expression<'a>| {
-            matches!(resolve(expression).without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty())
+        let resolve = |expression: &'a Expression<'a>| {
+            self.tuple_element(expression, TUPLE_DEPTH)
+                .unwrap_or(expression)
         };
+        let draw = |expression: &'a Expression<'a>| matches!(resolve(expression).without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty());
         if let Expression::BinaryExpression(binary) = value.without_parentheses() {
             if binary.operator == BinaryOperator::BitwiseXOR {
                 if draw(&binary.left) && !draw(&binary.right) {
@@ -1022,7 +1224,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         out: &mut Vec<(bool, &'a Expression<'a>, u32, u32)>,
     ) {
         let function_span = self.nodes().kind(function).span();
-        let first = self.starts.partition_point(|(start, _)| *start < since.max(function_span.start));
+        let first = self
+            .starts
+            .partition_point(|(start, _)| *start < since.max(function_span.start));
         for (start, id) in &self.starts[first..] {
             if *start >= before || *start >= function_span.end {
                 break;
@@ -1034,7 +1238,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                         continue;
                     };
                     if assignment.span.end > before
-                        || !matches!(store.object.without_parentheses(), Expression::ComputedMemberExpression(_))
+                        || !matches!(
+                            store.object.without_parentheses(),
+                            Expression::ComputedMemberExpression(_)
+                        )
                         || self.buffer_ref(&store.object) != Some(target)
                     {
                         continue;
@@ -1044,7 +1251,12 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     {
                         continue;
                     }
-                    out.push((true, self.packed_value(&assignment.right), assignment.span.start, assignment.span.end));
+                    out.push((
+                        true,
+                        self.packed_value(&assignment.right),
+                        assignment.span.start,
+                        assignment.span.end,
+                    ));
                 }
                 AstKind::CallExpression(call) => {
                     if call.span.end > before || emitted_buffer(call).is_some() {
@@ -1052,8 +1264,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     }
                     let position = call.arguments.iter().position(|argument| {
                         argument.as_expression().is_some_and(|expression| {
-                            matches!(expression.without_parentheses(), Expression::ComputedMemberExpression(_))
-                                && self.buffer_ref(expression) == Some(target)
+                            matches!(
+                                expression.without_parentheses(),
+                                Expression::ComputedMemberExpression(_)
+                            ) && self.buffer_ref(expression) == Some(target)
                         })
                     });
                     let Some(position) = position.filter(|position| *position > 0) else {
@@ -1077,10 +1291,19 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// Writes through a tuple literal holding the buffer (element `id`):
     /// every call before `before` passing `t[k]` (the buffer's element)
     /// writes the argument before it, read back through the tuple.
-    fn tuple_writes(&self, id: NodeId, array: &'a ArrayExpression<'a>, before: u32) -> Vec<(bool, &'a Expression<'a>, u32, u32)> {
+    fn tuple_writes(
+        &self,
+        id: NodeId,
+        array: &'a ArrayExpression<'a>,
+        before: u32,
+    ) -> Vec<(bool, &'a Expression<'a>, u32, u32)> {
         let mut out = Vec::new();
         let span = self.nodes().kind(id).span();
-        let Some(slot) = array.elements.iter().position(|element| element.span() == span) else {
+        let Some(slot) = array
+            .elements
+            .iter()
+            .position(|element| element.span() == span)
+        else {
             return out;
         };
         let array_id = self.nodes().parent_id(id);
@@ -1099,7 +1322,8 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             return out;
         };
         let element_of = |expression: &Expression<'a>| -> Option<usize> {
-            let Expression::ComputedMemberExpression(member) = expression.without_parentheses() else {
+            let Expression::ComputedMemberExpression(member) = expression.without_parentheses()
+            else {
                 return None;
             };
             let Expression::Identifier(object) = member.object.without_parentheses() else {
@@ -1109,13 +1333,19 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 return None;
             }
             match member.expression.without_parentheses() {
-                Expression::NumericLiteral(index) if index.value.fract() == 0.0 && index.value >= 0.0 => Some(index.value as usize),
+                Expression::NumericLiteral(index)
+                    if index.value.fract() == 0.0 && index.value >= 0.0 =>
+                {
+                    Some(index.value as usize)
+                }
                 _ => None,
             }
         };
         for reference in self.scoping().get_resolved_references(tuple) {
             let read = reference.node_id();
-            if self.nodes().kind(read).span().start >= before || self.nodes().kind(read).span().start < array.span.end {
+            if self.nodes().kind(read).span().start >= before
+                || self.nodes().kind(read).span().start < array.span.end
+            {
                 continue;
             }
             let AstKind::ComputedMemberExpression(member) = self.nodes().parent_kind(read) else {
@@ -1127,7 +1357,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             if let AstKind::ComputedMemberExpression(store) = self.nodes().parent_kind(member_id) {
                 let store_id = self.nodes().parent_id(member_id);
                 if store.object.span() == member.span && element_of(&store.object) == Some(slot) {
-                    if let AstKind::AssignmentExpression(assignment) = self.nodes().parent_kind(store_id) {
+                    if let AstKind::AssignmentExpression(assignment) =
+                        self.nodes().parent_kind(store_id)
+                    {
                         if assignment.left.span() == store.span && assignment.span.end <= before {
                             let drawn = |side: &Expression<'a>| {
                                 element_of(side)
@@ -1136,19 +1368,22 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                                     .is_some_and(|element| matches!(element.without_parentheses(),
                                         Expression::CallExpression(draw) if draw.arguments.is_empty()))
                             };
-                            let value: &'a Expression<'a> = match assignment.right.without_parentheses() {
-                                Expression::BinaryExpression(binary)
-                                    if binary.operator == BinaryOperator::BitwiseXOR && drawn(&binary.left) =>
-                                {
-                                    &binary.right
-                                }
-                                Expression::BinaryExpression(binary)
-                                    if binary.operator == BinaryOperator::BitwiseXOR && drawn(&binary.right) =>
-                                {
-                                    &binary.left
-                                }
-                                _ => &assignment.right,
-                            };
+                            let value: &'a Expression<'a> =
+                                match assignment.right.without_parentheses() {
+                                    Expression::BinaryExpression(binary)
+                                        if binary.operator == BinaryOperator::BitwiseXOR
+                                            && drawn(&binary.left) =>
+                                    {
+                                        &binary.right
+                                    }
+                                    Expression::BinaryExpression(binary)
+                                        if binary.operator == BinaryOperator::BitwiseXOR
+                                            && drawn(&binary.right) =>
+                                    {
+                                        &binary.left
+                                    }
+                                    _ => &assignment.right,
+                                };
                             out.push((true, value, assignment.span.start, assignment.span.end));
                         }
                     }
@@ -1159,10 +1394,19 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 continue;
             };
             let member_span = member.span;
-            let Some(position) = call.arguments.iter().position(|argument| argument.span() == member_span) else {
+            let Some(position) = call
+                .arguments
+                .iter()
+                .position(|argument| argument.span() == member_span)
+            else {
                 continue;
             };
-            if position == 0 || call.arguments[position].as_expression().and_then(element_of) != Some(slot) {
+            if position == 0
+                || call.arguments[position]
+                    .as_expression()
+                    .and_then(element_of)
+                    != Some(slot)
+            {
                 continue;
             }
             let Some(value) = call.arguments[position - 1].as_expression() else {
@@ -1196,7 +1440,17 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let mut facts = Facts::default();
         let mut budget = SLICE_BUDGET;
         let mut visited = HashSet::new();
-        self.slice(value, at, SLICE_DEPTH, packed, &mut budget, &mut visited, &mut facts, stores, store_sites);
+        self.slice(
+            value,
+            at,
+            SLICE_DEPTH,
+            packed,
+            &mut budget,
+            &mut visited,
+            &mut facts,
+            stores,
+            store_sites,
+        );
         let below_one = |test: &Expression<'a>| {
             matches!(test.without_parentheses(), Expression::BinaryExpression(test)
                 if test.operator == BinaryOperator::LessThan
@@ -1208,7 +1462,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let below_one_test = |test: &'a Expression<'a>| {
             below_one(test)
                 || (matches!(test.without_parentheses(), Expression::Identifier(_))
-                    && self.single_def(test, at).and_then(|def| def.rhs).is_some_and(|rhs| below_one(rhs)))
+                    && self
+                        .single_def(test, at)
+                        .and_then(|def| def.rhs)
+                        .is_some_and(|rhs| below_one(rhs)))
         };
         let fraction = matches!(value, Expression::ConditionalExpression(conditional) if below_one_test(&conditional.test))
             || {
@@ -1231,7 +1488,17 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             let mut visited = HashSet::new();
             let mut ignored = Vec::new();
             let mut ignored_sites = HashSet::new();
-            self.slice(operand, from, SLICE_DEPTH, packed, &mut budget, &mut visited, &mut facts, &mut ignored, &mut ignored_sites);
+            self.slice(
+                operand,
+                from,
+                SLICE_DEPTH,
+                packed,
+                &mut budget,
+                &mut visited,
+                &mut facts,
+                &mut ignored,
+                &mut ignored_sites,
+            );
             facts
         });
         let folded = operand.and_then(|(operand, from)| self.folded_literal(operand, from));
@@ -1265,7 +1532,11 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     }
 
     /// The `x` of a padded value whose `x & 255` part was bound to a local.
-    fn padded_through_locals(&self, value: &'a Expression<'a>, at: u32) -> Option<(&'a Expression<'a>, u32)> {
+    fn padded_through_locals(
+        &self,
+        value: &'a Expression<'a>,
+        at: u32,
+    ) -> Option<(&'a Expression<'a>, u32)> {
         match value.without_parentheses() {
             Expression::BinaryExpression(binary) => self
                 .padded_through_locals(&binary.left, at)
@@ -1327,7 +1598,17 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     if matches!(rhs.without_parentheses(), Expression::ArrayExpression(_)) {
                         self.element_stores(symbol, stores, store_sites);
                     }
-                    self.slice(rhs, def.start, depth - 1, packed, budget, visited, facts, stores, store_sites);
+                    self.slice(
+                        rhs,
+                        def.start,
+                        depth - 1,
+                        packed,
+                        budget,
+                        visited,
+                        facts,
+                        stores,
+                        store_sites,
+                    );
                 }
                 let _ = def.end;
             }
@@ -1337,7 +1618,13 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
     /// The definitions of `symbol` reaching a read at `at`: the textually
     /// latest one in the reader's function, else the latest earlier one,
     /// else (state written elsewhere) up to four definitions.
-    fn reaching(&self, symbol: SymbolId, at: u32, read: u32, function: Option<NodeId>) -> Vec<Def<'a>> {
+    fn reaching(
+        &self,
+        symbol: SymbolId,
+        at: u32,
+        read: u32,
+        function: Option<NodeId>,
+    ) -> Vec<Def<'a>> {
         let mut defs = self.defs(symbol);
         defs.sort_by_key(|def| def.start);
         let before: Vec<&Def<'a>> = defs
@@ -1359,7 +1646,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                     .filter(|def| def.start != start && self.exclusive(def.node, start))
                     .map(|def| def.start)
                     .collect();
-                defs.into_iter().filter(|def| def.start == start || arms.contains(&def.start)).collect()
+                defs.into_iter()
+                    .filter(|def| def.start == start || arms.contains(&def.start))
+                    .collect()
             }
             None => defs.into_iter().take(4).collect(),
         }
@@ -1381,14 +1670,18 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let AstKind::IfStatement(statement) = self.nodes().kind(branch) else {
             return true;
         };
-        let arm = if statement.consequent.span().start <= start && start < statement.consequent.span().end {
+        let arm = if statement.consequent.span().start <= start
+            && start < statement.consequent.span().end
+        {
             Some(&statement.consequent)
         } else {
             statement.alternate.as_ref()
         };
         let loops_back = match arm {
             Some(Statement::ContinueStatement(_)) => true,
-            Some(Statement::BlockStatement(block)) => matches!(block.body.last(), Some(Statement::ContinueStatement(_))),
+            Some(Statement::BlockStatement(block)) => {
+                matches!(block.body.last(), Some(Statement::ContinueStatement(_)))
+            }
             _ => false,
         };
         if !loops_back {
@@ -1420,12 +1713,14 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
         let inside = |span: oxc_span::Span, offset: u32| span.start <= offset && offset < span.end;
         for ancestor in self.nodes().ancestor_ids(def) {
             let (consequent, alternate) = match self.nodes().kind(ancestor) {
-                AstKind::IfStatement(statement) => {
-                    (statement.consequent.span(), statement.alternate.as_ref().map(|a| a.span()))
-                }
-                AstKind::ConditionalExpression(conditional) => {
-                    (conditional.consequent.span(), Some(conditional.alternate.span()))
-                }
+                AstKind::IfStatement(statement) => (
+                    statement.consequent.span(),
+                    statement.alternate.as_ref().map(|a| a.span()),
+                ),
+                AstKind::ConditionalExpression(conditional) => (
+                    conditional.consequent.span(),
+                    Some(conditional.alternate.span()),
+                ),
                 AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) => return None,
                 _ => continue,
             };
@@ -1461,7 +1756,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             let start = self.nodes().kind(id).span().start;
             for ancestor in self.nodes().ancestor_ids(id).take(4) {
                 match self.nodes().kind(ancestor) {
-                    AstKind::AssignmentExpression(assignment) if assignment.left.span().start == start => {
+                    AstKind::AssignmentExpression(assignment)
+                        if assignment.left.span().start == start =>
+                    {
                         out.push(Def {
                             node: ancestor,
                             start: assignment.span.start,
@@ -1496,16 +1793,18 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 continue;
             };
             let member_id = self.nodes().parent_id(id);
-            let assignment = self.nodes().ancestor_ids(member_id).take(2).find_map(|ancestor| {
-                match self.nodes().kind(ancestor) {
+            let assignment = self
+                .nodes()
+                .ancestor_ids(member_id)
+                .take(2)
+                .find_map(|ancestor| match self.nodes().kind(ancestor) {
                     AstKind::AssignmentExpression(assignment)
                         if assignment.left.span() == member.span =>
                     {
                         Some(ancestor)
                     }
                     _ => None,
-                }
-            });
+                });
             let Some(assignment) = assignment else {
                 continue;
             };
@@ -1571,7 +1870,10 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
             Statement::BlockStatement(block) => block.body.last(),
             other => Some(other),
         };
-        if !matches!(last, Some(Statement::ReturnStatement(_) | Statement::BreakStatement(_))) {
+        if !matches!(
+            last,
+            Some(Statement::ReturnStatement(_) | Statement::BreakStatement(_))
+        ) {
             return false;
         }
         for ancestor in self.nodes().ancestor_ids(statement) {
@@ -1581,7 +1883,9 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
                 | AstKind::ForStatement(_)
                 | AstKind::ForInStatement(_)
                 | AstKind::ForOfStatement(_) => return true,
-                AstKind::Function(_) | AstKind::ArrowFunctionExpression(_) | AstKind::Program(_) => return false,
+                AstKind::Function(_)
+                | AstKind::ArrowFunctionExpression(_)
+                | AstKind::Program(_) => return false,
                 _ => {}
             }
         }
@@ -1608,7 +1912,12 @@ impl<'w, 'c, 's, 'a> Walker<'w, 'c, 's, 'a> {
 fn same_writes(left: &EmissionInfo, right: &EmissionInfo) -> bool {
     left.writes.len() == right.writes.len()
         && left.writes.iter().zip(&right.writes).all(|(a, b)| {
-            a.byte == b.byte && a.literal == b.literal && a.facts == b.facts && a.fraction == b.fraction && a.padded == b.padded && a.folded == b.folded
+            a.byte == b.byte
+                && a.literal == b.literal
+                && a.facts == b.facts
+                && a.fraction == b.fraction
+                && a.padded == b.padded
+                && a.folded == b.folded
         })
 }
 
@@ -1626,10 +1935,15 @@ fn is_inline_function(callee: &Expression<'_>) -> bool {
 /// buffer formal; its value argument reads formals, and the caller
 /// argument bound to the formal holding `x & 255` (else the first formal
 /// read) is the value.
-fn inline_helper_value<'a>(call: &'a CallExpression<'a>, position: usize) -> Option<&'a Expression<'a>> {
+fn inline_helper_value<'a>(
+    call: &'a CallExpression<'a>,
+    position: usize,
+) -> Option<&'a Expression<'a>> {
     let (params, statements) = match call.callee.without_parentheses() {
         Expression::ArrowFunctionExpression(arrow) => (&arrow.params, &arrow.body.statements),
-        Expression::FunctionExpression(function) => (&function.params, &function.body.as_ref()?.statements),
+        Expression::FunctionExpression(function) => {
+            (&function.params, &function.body.as_ref()?.statements)
+        }
         _ => return None,
     };
     helper_body_value(params, statements, call, position)
@@ -1668,7 +1982,11 @@ fn helper_body_value<'a>(
     let value = inner.arguments.get(at.checked_sub(1)?)?.as_expression()?;
     let mut read = Vec::new();
     formal_reads(value, &names, &mut read);
-    let actual = |index: usize| call.arguments.get(index).and_then(|argument| argument.as_expression());
+    let actual = |index: usize| {
+        call.arguments
+            .get(index)
+            .and_then(|argument| argument.as_expression())
+    };
     read.iter()
         .copied()
         .find(|index| actual(*index).is_some_and(|argument| and_255_operand(argument).is_some()))
@@ -1679,7 +1997,10 @@ fn helper_body_value<'a>(
 fn formal_reads(expression: &Expression<'_>, names: &[&str], out: &mut Vec<usize>) {
     match expression.without_parentheses() {
         Expression::Identifier(identifier) => {
-            if let Some(index) = names.iter().position(|name| *name == identifier.name.as_str()) {
+            if let Some(index) = names
+                .iter()
+                .position(|name| *name == identifier.name.as_str())
+            {
                 out.push(index);
             }
         }
@@ -1724,9 +2045,7 @@ fn pair_buffer<'a>(pair: &'a Expression<'a>) -> Option<&'a IdentifierReference<'
 fn unmask<'a>(value: &'a Expression<'a>) -> &'a Expression<'a> {
     if let Expression::BinaryExpression(binary) = value.without_parentheses() {
         if binary.operator == BinaryOperator::BitwiseXOR {
-            let keystream = |expression: &Expression<'_>| {
-                matches!(expression.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty())
-            };
+            let keystream = |expression: &Expression<'_>| matches!(expression.without_parentheses(), Expression::CallExpression(call) if call.arguments.is_empty());
             if keystream(&binary.right) && !keystream(&binary.left) {
                 return &binary.left;
             }
@@ -1784,11 +2103,13 @@ impl<'v, 'w, 'c, 's, 'a> FactCollector<'v, 'w, 'c, 's, 'a> {
     }
 }
 
-
 impl<'a> Visit<'a> for FactCollector<'_, '_, '_, '_, 'a> {
     fn visit_identifier_reference(&mut self, identifier: &IdentifierReference<'a>) {
         match self.walker.symbol(identifier) {
-            Some(symbol) => self.reads.push((symbol, identifier.span.start, identifier.node_id.get())),
+            Some(symbol) => {
+                self.reads
+                    .push((symbol, identifier.span.start, identifier.node_id.get()))
+            }
             None if !generated(&identifier.name) => {
                 self.facts.globals.insert(identifier.name.to_string());
             }
@@ -1802,7 +2123,11 @@ impl<'a> Visit<'a> for FactCollector<'_, '_, '_, '_, 'a> {
             self.facts.members.insert(name.to_string());
             if name == "console" {
                 if let Expression::Identifier(object) = member.object.without_parentheses() {
-                    if self.walker.symbol(object).is_some_and(|symbol| self.walker.is_parameter(symbol)) {
+                    if self
+                        .walker
+                        .symbol(object)
+                        .is_some_and(|symbol| self.walker.is_parameter(symbol))
+                    {
                         self.facts.param_console = true;
                     }
                 }
@@ -1813,10 +2138,16 @@ impl<'a> Visit<'a> for FactCollector<'_, '_, '_, '_, 'a> {
 
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
         if self.packed {
-            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) =
-                (member.object.without_parentheses(), member.expression.without_parentheses())
-            {
-                if let Some(element) = self.walker.tuple_element_at(object, index.value, member.span.start, TUPLE_DEPTH) {
+            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) = (
+                member.object.without_parentheses(),
+                member.expression.without_parentheses(),
+            ) {
+                if let Some(element) = self.walker.tuple_element_at(
+                    object,
+                    index.value,
+                    member.span.start,
+                    TUPLE_DEPTH,
+                ) {
                     self.visit_expression(element);
                     return;
                 }
@@ -1848,7 +2179,9 @@ impl<'a> Visit<'a> for FactCollector<'_, '_, '_, '_, 'a> {
                     self.facts.globals.insert(identifier.name.to_string());
                 }
                 // A local callee is a program function: not followed.
-                call.arguments.iter().for_each(|argument| self.visit_argument(argument));
+                call.arguments
+                    .iter()
+                    .for_each(|argument| self.visit_argument(argument));
                 return;
             }
             Expression::StaticMemberExpression(member) => {

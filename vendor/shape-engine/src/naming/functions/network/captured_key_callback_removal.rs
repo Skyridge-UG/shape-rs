@@ -1,7 +1,7 @@
 //! Complete captured-key removal protocol. Captured objects and methods are
 //! opaque: this does not establish fetch identity or lifecycle activation.
-use crate::naming::support::interaction::*;
 use super::*;
+use crate::naming::support::interaction::*;
 
 fn computed<'a>(e: &'a Expression<'a>) -> Option<(&'a Expression<'a>, &'a Expression<'a>)> {
     let Expression::ComputedMemberExpression(m) = e else {

@@ -43,11 +43,11 @@ use oxc_syntax::scope::ScopeFlags;
 
 use super::super::inline_tuple_helpers::FreshNames;
 use super::super::purity::expression_is_pure;
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
-mod hoist;
 mod found;
+mod hoist;
 mod loops;
 mod sites;
 #[cfg(test)]
@@ -125,7 +125,10 @@ fn expand_helpers(source: &str, exact: bool) -> Result<InlinedSmallHelpers, Stri
             continue;
         }
         end = site.span.end;
-        edits.push(analysis::Edit::replace(site.span, render_site(source, &helpers, &planned, index)));
+        edits.push(analysis::Edit::replace(
+            site.span,
+            render_site(source, &helpers, &planned, index),
+        ));
     }
     for site in &planned {
         *counts.entry(site.helper).or_default() += 1;
@@ -137,7 +140,10 @@ fn expand_helpers(source: &str, exact: bool) -> Result<InlinedSmallHelpers, Stri
     for (helper, count) in &counts {
         expanded += count;
         if scoping.get_resolved_reference_ids(*helper).len() == *count {
-            edits.push(analysis::Edit::delete(whole_line(source, helpers[helper].declaration)));
+            edits.push(analysis::Edit::delete(whole_line(
+                source,
+                helpers[helper].declaration,
+            )));
         }
     }
     let applied = analysis::apply_edits(source, edits);
@@ -233,7 +239,8 @@ fn hoist_calls(source: &str, exact: bool) -> Result<InlinedSmallHelpers, String>
         return Err("helper call hoists overlap".into());
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("helper call hoist output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("helper call hoist output: {error}"))?;
     Ok(InlinedSmallHelpers {
         code: applied.output,
         expanded: done,
@@ -260,4 +267,3 @@ fn unchanged(source: &str) -> InlinedSmallHelpers {
         expanded: 0,
     }
 }
-

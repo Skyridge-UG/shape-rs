@@ -1,7 +1,7 @@
 //! Whole ordered first/second-moment update, including guarded error forwarding.
+use super::*;
 use crate::naming::support::media_entropy::*;
 use crate::naming::support::ordered_numeric::{eq, field, n, op, s};
-use super::*;
 fn target(model: &Model<'_, '_>, site: FunctionSite, st: &Statement<'_>) -> Option<Symbol> {
     capture_symbol(model, site, assigned_symbol(model, &assignment(st)?.left)?)
 }

@@ -319,10 +319,18 @@ let absent=!output;
 return output[absent?"isArray":"join"]("");
 }"#;
 
-pub(in crate::naming) fn evaluate_code_units_to_string(model: &Model<'_, '_>, site: FunctionSite, f: &Facts<'_>) -> Vec<Proposal> {
-    if !f.members.contains("forEach") { return vec![]; }
-    if [CODE_UNITS_TRUTHY, CODE_UNITS_COMPUTED].iter().any(|s|
-        super::aes_gcm_packing::complete_uncaptured(model, site, s)) {
+pub(in crate::naming) fn evaluate_code_units_to_string(
+    model: &Model<'_, '_>,
+    site: FunctionSite,
+    f: &Facts<'_>,
+) -> Vec<Proposal> {
+    if !f.members.contains("forEach") {
+        return vec![];
+    }
+    if [CODE_UNITS_TRUTHY, CODE_UNITS_COMPUTED]
+        .iter()
+        .any(|s| super::aes_gcm_packing::complete_uncaptured(model, site, s))
+    {
         let mut claim = proposal("codeUnitsToString", "encoding_code_units_truthy", "Complete own body: fresh local array, null-guarded formal.forEach, single owned callback pushes String.fromCharCode of its sole formal; exact truthy-array or boolean-selected join receiver and empty separator; every binding, callback, effect and returned value matched, no captures or extra writers; String must be unshadowed", f);
         claim.evidence = vec![site.span.into()];
         return vec![claim];

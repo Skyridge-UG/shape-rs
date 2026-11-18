@@ -22,7 +22,10 @@ use crate::analysis;
 pub(crate) fn dotted_properties(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
-    let mut scan = Scan { source, edits: Vec::new() };
+    let mut scan = Scan {
+        source,
+        edits: Vec::new(),
+    };
     scan.visit_program(&program);
     let count = scan.edits.len();
     if count == 0 {
@@ -36,12 +39,18 @@ pub(crate) fn dotted_properties(source: &str) -> Result<(String, usize), String>
 /// property names.
 fn identifier_name(name: &str) -> bool {
     let mut chars = name.chars();
-    chars.next().is_some_and(|c| c == '$' || c == '_' || c.is_ascii_alphabetic()) && chars.all(|c| c == '$' || c == '_' || c.is_ascii_alphanumeric())
+    chars
+        .next()
+        .is_some_and(|c| c == '$' || c == '_' || c.is_ascii_alphabetic())
+        && chars.all(|c| c == '$' || c == '_' || c.is_ascii_alphanumeric())
 }
 
 /// `"0"`, `"12"`: the string a small non-negative integer prints as.
 fn canonical_index(name: &str) -> bool {
-    !name.is_empty() && name.len() <= 15 && name.bytes().all(|b| b.is_ascii_digit()) && (name == "0" || !name.starts_with('0'))
+    !name.is_empty()
+        && name.len() <= 15
+        && name.bytes().all(|b| b.is_ascii_digit())
+        && (name == "0" || !name.starts_with('0'))
 }
 
 struct Scan<'s> {
@@ -61,7 +70,10 @@ impl<'a> Visit<'a> for Scan<'_> {
         let Some(open) = self.source[..key.span.start as usize].rfind('[') else {
             return;
         };
-        if !self.source[open + 1..key.span.start as usize].trim().is_empty() {
+        if !self.source[open + 1..key.span.start as usize]
+            .trim()
+            .is_empty()
+        {
             return;
         }
         let start = if member.optional {
@@ -79,17 +91,28 @@ impl<'a> Visit<'a> for Scan<'_> {
             return;
         }
         let link = if member.optional { "?." } else { "" };
-        if identifier_name(name) && !matches!(member.object.get_inner_expression(), Expression::NumericLiteral(_) | Expression::BigIntLiteral(_)) {
+        if identifier_name(name)
+            && !matches!(
+                member.object.get_inner_expression(),
+                Expression::NumericLiteral(_) | Expression::BigIntLiteral(_)
+            )
+        {
             let dot = if member.optional { "?." } else { "." };
-            self.edits.push(analysis::Edit::replace(brackets, format!("{dot}{name}")));
+            self.edits
+                .push(analysis::Edit::replace(brackets, format!("{dot}{name}")));
         } else if canonical_index(name) {
-            self.edits.push(analysis::Edit::replace(brackets, format!("{link}[{name}]")));
+            self.edits
+                .push(analysis::Edit::replace(brackets, format!("{link}[{name}]")));
         }
     }
 
     fn visit_object_property(&mut self, property: &ObjectProperty<'a>) {
         walk::walk_object_property(self, property);
-        if !property.computed || property.kind != PropertyKind::Init || property.method || property.shorthand {
+        if !property.computed
+            || property.kind != PropertyKind::Init
+            || property.method
+            || property.shorthand
+        {
             return;
         }
         let Some(Expression::StringLiteral(key)) = property.key.as_expression() else {
@@ -104,11 +127,19 @@ impl<'a> Visit<'a> for Scan<'_> {
         let Some(close) = rest.find(']') else {
             return;
         };
-        if !rest[..close].trim().is_empty() || !self.source[property.span.start as usize..key.span.start as usize].trim().eq("[") {
+        if !rest[..close].trim().is_empty()
+            || !self.source[property.span.start as usize..key.span.start as usize]
+                .trim()
+                .eq("[")
+        {
             return;
         }
         let brackets = Span::new(property.span.start, key.span.end + close as u32 + 1);
-        let plain = if identifier_name(name) { name.to_string() } else { self.source[key.span.start as usize..key.span.end as usize].to_string() };
+        let plain = if identifier_name(name) {
+            name.to_string()
+        } else {
+            self.source[key.span.start as usize..key.span.end as usize].to_string()
+        };
         self.edits.push(analysis::Edit::replace(brackets, plain));
     }
 }

@@ -1,11 +1,12 @@
 //! `JsonParseFingerprint`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*};
+use crate::signals::analysis::{
+    bind_in_order, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView,
+};
+use crate::signals::analysis::{leaf_checks::*, shape_text::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `JsonParseFingerprint`. Card: [`CARD`].
 pub(crate) fn recognize_json_parse_fingerprint(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -20,7 +21,11 @@ pub(crate) fn recognize_json_parse_fingerprint(view: &SlotView, ctx: &FinderCtx)
         });
     let json = view.reads_global("JSON") && !view.call_string_args("parse").is_empty();
     if top_count_is(&view.shapes(), 1) && digest && json {
-        return claim(&["one NUMBER", "hash of a mapped table joined", "producer calls JSON.parse"]);
+        return claim(&[
+            "one NUMBER",
+            "hash of a mapped table joined",
+            "producer calls JSON.parse",
+        ]);
     }
     None
 }

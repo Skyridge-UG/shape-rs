@@ -184,16 +184,31 @@ impl<'a> Visit<'a> for Facts<'_> {
         // `defineProperty.call(this, target, …)` / `.apply(this, [target, …])`.
         if let Some((function, method)) = member(&call.callee) {
             let mutator = |expression: &Expression<'_>| {
-                member(expression).is_some_and(|(_, name)| matches!(name, "defineProperty" | "defineProperties" | "setPrototypeOf"))
-                    || path(expression, self.scoping, &self.aliases).is_some_and(|p| {
-                        p.last().is_some_and(|name| matches!(name.as_str(), "defineProperty" | "defineProperties" | "setPrototypeOf"))
+                member(expression).is_some_and(|(_, name)| {
+                    matches!(
+                        name,
+                        "defineProperty" | "defineProperties" | "setPrototypeOf"
+                    )
+                }) || path(expression, self.scoping, &self.aliases).is_some_and(|p| {
+                    p.last().is_some_and(|name| {
+                        matches!(
+                            name.as_str(),
+                            "defineProperty" | "defineProperties" | "setPrototypeOf"
+                        )
                     })
+                })
             };
             if matches!(method, "call" | "apply") && mutator(function) {
                 let target = match method {
-                    "call" => call.arguments.get(1).filter(|a| !a.is_spread()).map(|a| a.to_expression()),
+                    "call" => call
+                        .arguments
+                        .get(1)
+                        .filter(|a| !a.is_spread())
+                        .map(|a| a.to_expression()),
                     _ => match call.arguments.get(1) {
-                        Some(Argument::ArrayExpression(array)) => array.elements.first().and_then(|e| e.as_expression()),
+                        Some(Argument::ArrayExpression(array)) => {
+                            array.elements.first().and_then(|e| e.as_expression())
+                        }
                         _ => None,
                     },
                 };

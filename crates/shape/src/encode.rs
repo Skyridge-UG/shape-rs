@@ -1,4 +1,4 @@
-﻿//! Header encoding: named signals -> per-sensor wire bytes -> the `x-â€¦` bundle.
+//! Header encoding: named signals -> per-sensor wire bytes -> the `x-â€¦` bundle.
 //!
 //! The structural frame (container sections, outer cipher, chunking) is the
 //! vendored engine's encode path behind the `engine` feature; this module
@@ -89,14 +89,18 @@ impl MaskedWriter<'_> {
                 1..=0x7f => self.buf.push((unit as u8) ^ mask),
                 0x80..=0x7ff => {
                     self.buf.push(((unit >> 6) as u8 | 0xc0) ^ mask);
-                    self.buf.push(((unit & 0x3f) as u8 | 0x80) ^ self.stream.next());
+                    self.buf
+                        .push(((unit & 0x3f) as u8 | 0x80) ^ self.stream.next());
                 }
-                0xd800..=0xdfff => return Err(crate::error::Error::Encode("lone surrogate".into())),
+                0xd800..=0xdfff => {
+                    return Err(crate::error::Error::Encode("lone surrogate".into()));
+                }
                 _ => {
                     self.buf.push(((unit >> 12) as u8 | 0xe0) ^ mask);
                     self.buf
                         .push(((((unit >> 6) & 0x3f) as u8) | 0x80) ^ self.stream.next());
-                    self.buf.push(((unit & 0x3f) as u8 | 0x80) ^ self.stream.next());
+                    self.buf
+                        .push(((unit & 0x3f) as u8 | 0x80) ^ self.stream.next());
                 }
             }
         }
@@ -128,9 +132,9 @@ pub fn encode_headers(
         .map(|(_, value)| {
             let engine_value = match value {
                 crate::signal::Value::Bool(b) => E::Bool(*b),
-                crate::signal::Value::Number(n) => {
-                    E::Number(shape_engine::signals::payload::superpack::Number(n.0.to_bits()))
-                }
+                crate::signal::Value::Number(n) => E::Number(
+                    shape_engine::signals::payload::superpack::Number(n.0.to_bits()),
+                ),
                 crate::signal::Value::String(s) => E::String(s.clone()),
                 crate::signal::Value::Bytes(b) => E::Binary(b.clone()),
                 crate::signal::Value::Undefined => E::Undefined,

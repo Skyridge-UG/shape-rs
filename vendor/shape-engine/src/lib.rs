@@ -5,17 +5,17 @@
 //! transformed and printed by the Oxc crates.
 
 pub mod kernel;
-pub mod operations;
 pub mod naming;
+pub mod operations;
 pub(crate) mod transforms;
 
 pub mod dispatch;
 pub(crate) mod js_number;
 pub mod oxc;
 pub mod profile;
+pub mod sdk;
 pub mod seeds;
 pub mod signals;
-pub mod sdk;
 pub mod source;
 pub mod trace;
 
@@ -59,7 +59,6 @@ pub use kernel::{
 // Keep the established public module paths while grouping implementation files
 // by responsibility under `transforms`.
 pub use transforms::deob::{native_cleanup, string_decode, wasm_bindings};
-
 
 pub use dispatch::{
     prepare_dispatch_from_report, prepare_prefix_from_report, prepare_prefix_from_saved_report,

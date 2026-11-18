@@ -1,7 +1,7 @@
 //! Complete elapsed-interval recorder with mutually exclusive extrema updates.
+use super::*;
 use crate::naming::support::media_entropy::*;
 use crate::naming::support::ordered_numeric::{eq, op, s, E};
-use super::*;
 fn write(model: &Model<'_, '_>, st: &Statement<'_>, id: Symbol, value: E) -> Option<()> {
     let a = assignment(st)?;
     (assigned_symbol(model, &a.left) == Some(id) && eq(model, &a.right, value)).then_some(())
@@ -15,8 +15,12 @@ fn prove(model: &Model<'_, '_>, site: FunctionSite) -> Option<bool> {
         return None;
     }
     let (clock, old, save, put, init, inc, completion) = match b.statements.as_slice() {
-        [clock, old, save, put, Statement::IfStatement(init), inc] => (clock, old, save, put, init, inc, None),
-        [clock, old, save, put, Statement::IfStatement(init), inc, done] => (clock, old, save, put, init, inc, Some(done)),
+        [clock, old, save, put, Statement::IfStatement(init), inc] => {
+            (clock, old, save, put, init, inc, None)
+        }
+        [clock, old, save, put, Statement::IfStatement(init), inc, done] => {
+            (clock, old, save, put, init, inc, Some(done))
+        }
         _ => return None,
     };
     let v = one_variable(clock)?;
@@ -34,9 +38,13 @@ fn prove(model: &Model<'_, '_>, site: FunctionSite) -> Option<bool> {
     let (previous, delta) = if let Some(previous) = capture(model, site, v.init.as_ref()?) {
         (previous, op("-", s(now), s(old)))
     } else {
-        let Expression::BinaryExpression(sub) = v.init.as_ref()?.without_parentheses() else { return None; };
+        let Expression::BinaryExpression(sub) = v.init.as_ref()?.without_parentheses() else {
+            return None;
+        };
         let previous = capture(model, site, &sub.right)?;
-        if sub.operator.as_str() != "-" || !eq(model, &sub.left, s(now)) { return None; }
+        if sub.operator.as_str() != "-" || !eq(model, &sub.left, s(now)) {
+            return None;
+        }
         (previous, s(old))
     };
     write(model, save, previous, s(now))?;
@@ -104,11 +112,17 @@ fn prove(model: &Model<'_, '_>, site: FunctionSite) -> Option<bool> {
         crate::analysis::identifier_symbol(id, model.scoping)?,
     )?;
     let distinct: BTreeSet<_> = [previous, ring, max, min, count].into_iter().collect();
-    if distinct.len() != 5 { return None; }
+    if distinct.len() != 5 {
+        return None;
+    }
     if let Some(done) = completion {
         let a = assignment(done)?;
         let flag = capture_symbol(model, site, assigned_symbol(model, &a.left)?)?;
-        if distinct.contains(&flag) || !matches!(a.right.without_parentheses(), Expression::BooleanLiteral(b) if b.value) { return None; }
+        if distinct.contains(&flag)
+            || !matches!(a.right.without_parentheses(), Expression::BooleanLiteral(b) if b.value)
+        {
+            return None;
+        }
     }
     Some(completion.is_some())
 }

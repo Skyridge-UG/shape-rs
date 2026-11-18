@@ -672,8 +672,8 @@ impl ReceiverWrites {
     }
 }
 
-mod program;
 mod object_literals;
+mod program;
 pub(crate) use object_literals::fold_descriptor_literals;
 pub(crate) use program::simplify_thread_property_writes;
 pub use program::{simplify_program_property_writes, simplify_readable_program_property_writes};
@@ -763,4 +763,3 @@ fn span_pair(span: Span) -> (u32, u32) {
 // ---------------------------------------------------------------------------
 // Symbol planning
 // ---------------------------------------------------------------------------
-

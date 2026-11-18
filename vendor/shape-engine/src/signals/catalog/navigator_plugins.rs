@@ -1,18 +1,25 @@
 //! `NavigatorPlugins`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `NavigatorPlugins`. Card: [`CARD`].
 pub(crate) fn recognize_navigator_plugins(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
     let leaves = leaves_of(view);
-    let repeat_string = leaves.iter().any(|leaf| leaf.repeat_depth == 1 && leaf.op == LeafOp::String);
-    let repeat_number = leaves.iter().any(|leaf| leaf.repeat_depth == 1 && leaf.op == LeafOp::Number);
+    let repeat_string = leaves
+        .iter()
+        .any(|leaf| leaf.repeat_depth == 1 && leaf.op == LeafOp::String);
+    let repeat_number = leaves
+        .iter()
+        .any(|leaf| leaf.repeat_depth == 1 && leaf.op == LeafOp::Number);
     let length = leaves.iter().any(|leaf| {
-        leaf.repeat_depth == 0 && has_api(leaf, "navigator.plugins") && has_transform(leaf, ".length")
+        leaf.repeat_depth == 0
+            && has_api(leaf, "navigator.plugins")
+            && has_transform(leaf, ".length")
     });
     if length && repeat_string && repeat_number && top_count_is(&view.shapes(), 3) {
         return claim(&["navigator.plugins.length", "repeat of {STRING, NUMBER}"]);
@@ -34,7 +41,11 @@ pub(crate) fn bind_navigator_plugins(
         solve(
             message,
             &fields,
-            &[("pluginsLength", &plugins_length), ("entryCount", &entry_count), ("plugin", &plugin)],
+            &[
+                ("pluginsLength", &plugins_length),
+                ("entryCount", &entry_count),
+                ("plugin", &plugin),
+            ],
             &mut binding,
         )?;
         for field in fields.iter().filter(|field| field.is_array()) {

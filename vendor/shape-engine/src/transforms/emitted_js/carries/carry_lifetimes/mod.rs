@@ -13,14 +13,14 @@ use oxc_span::{GetSpan, Span};
 use oxc_syntax::scope::ScopeFlags;
 use std::collections::{BTreeMap, BTreeSet};
 
-mod scan;
+#[cfg(test)]
+mod finished_channel_semantics_tests;
 mod hazards;
+mod scan;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod uninitialized_channels_tests;
-#[cfg(test)]
-mod finished_channel_semantics_tests;
 
 use hazards::*;
 
@@ -170,4 +170,3 @@ struct Scan<'s, 'a> {
 // short-circuit expressions. An initial undefined observation keeps the reset.
 // Complex control is deliberately a barrier; lexical captures were excluded
 // separately by the live-range proof.
-

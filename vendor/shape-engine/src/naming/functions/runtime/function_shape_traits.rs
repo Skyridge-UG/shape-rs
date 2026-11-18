@@ -1,7 +1,7 @@
 //! Whole-body trait collection. Captured source reader, tester and predicate
 //! retain opaque identities; no native API origin is inferred from their uses.
-use crate::naming::support::seeded_flow as q;
 use super::*;
+use crate::naming::support::seeded_flow as q;
 type S = SymbolId;
 fn id(m: &Model<'_, '_>, e: &Expression<'_>) -> Option<S> {
     q::symbol(m, e)
@@ -281,13 +281,17 @@ fn five_field_proof(m: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> 
     if !boolean(store(m, absent, source)?, false) {
         return None;
     }
-    let (prototype, None) = plain(m, proto_decl)? else { return None; };
+    let (prototype, None) = plain(m, proto_decl)? else {
+        return None;
+    };
     let (test, yes, no) = branch(proto_branch)?;
     if id(m, test) != Some(callable) {
         return None;
     }
     let [copy, check] = yes else { return None };
-    if m.site_parameter_slot(store(m, copy, value)?, site) != Some(0) { return None; }
+    if m.site_parameter_slot(store(m, copy, value)?, site) != Some(0) {
+        return None;
+    }
     let c = q::call(store(m, check, prototype)?)?;
     q::data_capture(m, site, &c.callee)?;
     let args = q::arity(c, 2)?;
@@ -299,13 +303,24 @@ fn five_field_proof(m: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> 
         return None;
     }
     let (test, yes, no) = branch(reader_branch)?;
-    if id(m, test) != Some(callable) { return None; }
-    let [read] = yes else { return None; };
+    if id(m, test) != Some(callable) {
+        return None;
+    }
+    let [read] = yes else {
+        return None;
+    };
     let read = q::call(store(m, read, value)?)?;
     if id(m, q::member(&read.callee, "call")?) != Some(reader_identity)
-        || m.site_parameter_slot(q::arity(read, 1)?[0], site) != Some(0) { return None; }
-    let [absent] = no else { return None; };
-    if !q::string(store(m, absent, value)?, "") { return None; }
+        || m.site_parameter_slot(q::arity(read, 1)?[0], site) != Some(0)
+    {
+        return None;
+    }
+    let [absent] = no else {
+        return None;
+    };
+    if !q::string(store(m, absent, value)?, "") {
+        return None;
+    }
     let (deleted, None) = plain(m, delete_decl)? else {
         return None;
     };
@@ -313,7 +328,10 @@ fn five_field_proof(m: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> 
     let Expression::LogicalExpression(t) = test else {
         return None;
     };
-    if t.operator.as_str() != "&&" || id(m, &t.left) != Some(callable) || !not(m, &t.right, prototype) {
+    if t.operator.as_str() != "&&"
+        || id(m, &t.left) != Some(callable)
+        || !not(m, &t.right, prototype)
+    {
         return None;
     }
     let [initial, Statement::TryStatement(attempt)] = yes else {
@@ -349,32 +367,56 @@ fn five_field_proof(m: &Model<'_, '_>, site: FunctionSite, f: &Function<'_>) -> 
     }
     let (record, fields, finish) = match tail {
         [record, finish] => (record, None, finish),
-        [record, d, e, finish] => (record, Some((d,e)), finish),
+        [record, d, e, finish] => (record, Some((d, e)), finish),
         _ => return None,
     };
-    let Expression::ObjectExpression(o) = store(m, record, callable)? else { return None; };
-    if o.properties.len() != 5 { return None; }
+    let Expression::ObjectExpression(o) = store(m, record, callable)? else {
+        return None;
+    };
+    if o.properties.len() != 5 {
+        return None;
+    }
     for (p, key) in o.properties.iter().zip(["a", "b", "c", "d", "e"]) {
-        let ObjectPropertyKind::ObjectProperty(p) = p else { return None; };
-        if p.computed || p.method || p.shorthand || p.kind != PropertyKind::Init
-            || property_key_name(&p.key).as_deref() != Some(key) { return None; }
+        let ObjectPropertyKind::ObjectProperty(p) = p else {
+            return None;
+        };
+        if p.computed
+            || p.method
+            || p.shorthand
+            || p.kind != PropertyKind::Init
+            || property_key_name(&p.key).as_deref() != Some(key)
+        {
+            return None;
+        }
         let ok = match key {
             "a" => id(m, &p.value) == Some(callable),
             "b" => id(m, &p.value) == Some(source),
             "c" => not(m, &p.value, prototype),
             "d" if fields.is_none() => id(m, &p.value) == Some(deleted),
             "e" if fields.is_none() => id(m, &p.value) == Some(value),
-            _ => matches!(&p.value, Expression::UnaryExpression(u) if u.operator.as_str()=="void" && matches!(&u.argument,Expression::NumericLiteral(n) if n.value==0.0)),
+            _ => {
+                matches!(&p.value, Expression::UnaryExpression(u) if u.operator.as_str()=="void" && matches!(&u.argument,Expression::NumericLiteral(n) if n.value==0.0))
+            }
         };
-        if !ok { return None; }
+        if !ok {
+            return None;
+        }
     }
-    if let Some((d,e)) = fields {
-        field(m,d,callable,"d")?;
-        field(m,e,callable,"e")?;
-        if id(m,&q::assignment(d)?.right)!=Some(deleted) || id(m,&q::assignment(e)?.right)!=Some(value) { return None; }
+    if let Some((d, e)) = fields {
+        field(m, d, callable, "d")?;
+        field(m, e, callable, "e")?;
+        if id(m, &q::assignment(d)?.right) != Some(deleted)
+            || id(m, &q::assignment(e)?.right) != Some(value)
+        {
+            return None;
+        }
     }
-    let Statement::ReturnStatement(r) = finish else { return None; };
-    if id(m,r.argument.as_ref()?)!=Some(callable) { return None; }
+    let Statement::ReturnStatement(r) = finish else {
+        return None;
+    };
+    if id(m, r.argument.as_ref()?) != Some(callable) {
+        return None;
+    }
     // Exact local write inventories prevent outside mutation/donor facts.
     if m.binding_writes(value) != 4
         || m.binding_writes(prototype) != 2

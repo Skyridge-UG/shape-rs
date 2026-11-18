@@ -1,7 +1,7 @@
 //! Returned lazy hook registries. Class identity, base transport and the called
 //! installer are independent obligations; p09 role labels are not proof inputs.
-use crate::signals::extract::bindings::{call_arguments, property_key_name, FunctionSite, Model};
 use crate::signals::analysis::roles::FinderClaim;
+use crate::signals::extract::bindings::{call_arguments, property_key_name, FunctionSite, Model};
 use crate::signals::schema::Confidence;
 use oxc_ast::{ast::*, AstKind};
 use oxc_semantic::SymbolId;

@@ -1,11 +1,13 @@
 //! `MathOwnPropertyNames`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp, SignalLayout, SlotView};
 use crate::signals::analysis::LayoutNode;
-use crate::signals::analysis::{property_census::*, census_probes::*};
+use crate::signals::analysis::{
+    bind_in_order, top_level_ops, BindRefusal, Claim, FieldBinding, FinderCtx, LeafOp,
+    SignalLayout, SlotView,
+};
+use crate::signals::analysis::{census_probes::*, property_census::*};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `MathOwnPropertyNames`. Card: [`CARD`].
 pub(crate) fn recognize_math_own_property_names(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
@@ -13,8 +15,15 @@ pub(crate) fn recognize_math_own_property_names(view: &SlotView, ctx: &FinderCtx
     (probes(view, &census, "Math")
         && census.calls("getOwnPropertyNames")
         && top_level_ops(view) == [LeafOp::Number, LeafOp::Number]
-        && view.leaves().any(|leaf| leaf.op == LeafOp::String && leaf.repeat_depth == 1))
-        .then(|| Claim::new(["Object.getOwnPropertyNames(Math)", "hash, count, repeated names"]))
+        && view
+            .leaves()
+            .any(|leaf| leaf.op == LeafOp::String && leaf.repeat_depth == 1))
+    .then(|| {
+        Claim::new([
+            "Object.getOwnPropertyNames(Math)",
+            "hash, count, repeated names",
+        ])
+    })
 }
 
 pub(crate) fn bind_math_own_property_names(
@@ -25,18 +34,27 @@ pub(crate) fn bind_math_own_property_names(
     let leaves = first_emission_top_leaves(view);
     let mut names = Vec::new();
     let mut next_leaf = 0;
-    for field in layout.messages.first().map(|m| m.fields.as_slice()).unwrap_or_default() {
+    for field in layout
+        .messages
+        .first()
+        .map(|m| m.fields.as_slice())
+        .unwrap_or_default()
+    {
         names.push(match &field.node {
             LayoutNode::Array { item } if matches!(**item, LayoutNode::Leaf(_)) => "propertyName",
             LayoutNode::Leaf(_) => {
-                let leaf = leaves.get(next_leaf).ok_or_else(|| BindRefusal::new("leaf/field mismatch"))?;
+                let leaf = leaves
+                    .get(next_leaf)
+                    .ok_or_else(|| BindRefusal::new("leaf/field mismatch"))?;
                 next_leaf += 1;
                 if leaf.transforms.iter().any(|t| t == ".join()") {
                     "namesHash"
                 } else if leaf.transforms.first().map(String::as_str) == Some(".length") {
                     "nameCount"
                 } else {
-                    return Err(BindRefusal::new("number field is neither the names hash nor the count"));
+                    return Err(BindRefusal::new(
+                        "number field is neither the names hash nor the count",
+                    ));
                 }
             }
             _ => return Err(BindRefusal::new("unexpected Math field shape")),

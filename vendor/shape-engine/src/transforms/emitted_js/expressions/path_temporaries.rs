@@ -31,14 +31,20 @@ use oxc_ast_visit::{walk, Visit};
 use oxc_semantic::{AstNodes, Scoping};
 use oxc_span::{GetSpan, Span};
 
-use crate::analysis;
 use super::super::support::whole_line;
+use crate::analysis;
 
 pub(crate) fn inline_path_temporaries(source: &str) -> Result<(String, usize), String> {
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, edits: Vec::new(), inlined: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        edits: Vec::new(),
+        inlined: 0,
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.inlined == 0 {
         return Ok((source.into(), 0));
@@ -59,13 +65,19 @@ struct Scan<'s, 'a> {
 fn path(expression: &Expression<'_>) -> Option<bool> {
     match expression.without_parentheses() {
         Expression::Identifier(_) | Expression::ThisExpression(_) => Some(false),
-        Expression::StaticMemberExpression(member) => path(&member.object).map(|optional| optional || member.optional),
-        Expression::ComputedMemberExpression(member) if matches!(member.expression, Expression::StringLiteral(_)) => {
+        Expression::StaticMemberExpression(member) => {
+            path(&member.object).map(|optional| optional || member.optional)
+        }
+        Expression::ComputedMemberExpression(member)
+            if matches!(member.expression, Expression::StringLiteral(_)) =>
+        {
             path(&member.object).map(|optional| optional || member.optional)
         }
         Expression::ChainExpression(chain) => match &chain.expression {
             ChainElement::StaticMemberExpression(member) => path(&member.object).map(|_| true),
-            ChainElement::ComputedMemberExpression(member) if matches!(member.expression, Expression::StringLiteral(_)) => {
+            ChainElement::ComputedMemberExpression(member)
+                if matches!(member.expression, Expression::StringLiteral(_)) =>
+            {
                 path(&member.object).map(|_| true)
             }
             _ => None,
@@ -73,7 +85,6 @@ fn path(expression: &Expression<'_>) -> Option<bool> {
         _ => None,
     }
 }
-
 
 impl Scan<'_, '_> {
     fn text(&self, span: Span) -> &str {
@@ -101,17 +112,26 @@ impl Scan<'_, '_> {
         let [declarator] = declaration.declarations.as_slice() else {
             return false;
         };
-        let (BindingPattern::BindingIdentifier(id), Some(value)) = (&declarator.id, &declarator.init) else {
+        let (BindingPattern::BindingIdentifier(id), Some(value)) =
+            (&declarator.id, &declarator.init)
+        else {
             return false;
         };
         let Some(optional) = path(value) else {
             return false;
         };
-        if declaration.kind == VariableDeclarationKind::Var || !self.source[statement.span().end as usize..next.span().start as usize].trim().is_empty() {
+        if declaration.kind == VariableDeclarationKind::Var
+            || !self.source[statement.span().end as usize..next.span().start as usize]
+                .trim()
+                .is_empty()
+        {
             return false;
         }
         let symbol = id.symbol_id();
-        let member_path = !matches!(value.without_parentheses(), Expression::Identifier(_) | Expression::ThisExpression(_));
+        let member_path = !matches!(
+            value.without_parentheses(),
+            Expression::Identifier(_) | Expression::ThisExpression(_)
+        );
         // `x = E;` storing the variable again, E holding the reads.
         let restore = match next {
             Statement::ExpressionStatement(expression) => match &expression.expression {
@@ -178,8 +198,14 @@ impl Scan<'_, '_> {
                     }
                     path_text.clone()
                 }
-                AstKind::NewExpression(new) if new.callee.span() == *span && member_path => return false,
-                AstKind::StaticMemberExpression(_) | AstKind::ComputedMemberExpression(_) if optional => format!("({path_text})"),
+                AstKind::NewExpression(new) if new.callee.span() == *span && member_path => {
+                    return false
+                }
+                AstKind::StaticMemberExpression(_) | AstKind::ComputedMemberExpression(_)
+                    if optional =>
+                {
+                    format!("({path_text})")
+                }
                 _ => path_text.clone(),
             };
             replaced.push((*span, text));
@@ -188,13 +214,22 @@ impl Scan<'_, '_> {
             Some((right, store)) => {
                 let mut merged = self.text(right).to_string();
                 for (span, text) in replaced.iter().rev() {
-                    merged.replace_range((span.start - right.start) as usize..(span.end - right.start) as usize, text);
+                    merged.replace_range(
+                        (span.start - right.start) as usize..(span.end - right.start) as usize,
+                        text,
+                    );
                 }
                 let kind = declaration.kind.as_str();
-                self.edits.push(analysis::Edit::replace(Span::new(statement.span().start, store.end), format!("{kind} {} = {merged};", id.name)));
+                self.edits.push(analysis::Edit::replace(
+                    Span::new(statement.span().start, store.end),
+                    format!("{kind} {} = {merged};", id.name),
+                ));
             }
             None => {
-                self.edits.push(analysis::Edit::delete(whole_line(self.source, statement.span())));
+                self.edits.push(analysis::Edit::delete(whole_line(
+                    self.source,
+                    statement.span(),
+                )));
                 for (span, text) in replaced {
                     self.edits.push(analysis::Edit::replace(span, text));
                 }
@@ -207,10 +242,15 @@ impl Scan<'_, '_> {
     /// A bare name no store reaches after its declaration, or a global.
     fn fixed_name(&self, value: &Expression<'_>) -> bool {
         match value.without_parentheses() {
-            Expression::Identifier(name) => match self.scoping.get_reference(name.reference_id()).symbol_id() {
-                None => true,
-                Some(symbol) => self.scoping.get_resolved_references(symbol).all(|reference| !reference.is_write()),
-            },
+            Expression::Identifier(name) => {
+                match self.scoping.get_reference(name.reference_id()).symbol_id() {
+                    None => true,
+                    Some(symbol) => self
+                        .scoping
+                        .get_resolved_references(symbol)
+                        .all(|reference| !reference.is_write()),
+                }
+            }
             _ => false,
         }
     }
@@ -255,16 +295,26 @@ impl Scan<'_, '_> {
             fn visit_function(&mut self, _: &Function<'b>, _: oxc_syntax::scope::ScopeFlags) {}
             fn visit_arrow_function_expression(&mut self, _: &ArrowFunctionExpression<'b>) {}
         }
-        let mut effects = Effects { scope, before, found: false };
+        let mut effects = Effects {
+            scope,
+            before,
+            found: false,
+        };
         effects.visit_statement(statement);
         effects.found
     }
 
     /// The read sits in a function created inside `statement`.
     fn in_function(&self, node: oxc_semantic::NodeId, statement: Span) -> bool {
-        self.nodes.ancestor_ids(node).take_while(|&ancestor| statement.start <= self.nodes.kind(ancestor).span().start).any(|ancestor| {
-            matches!(self.nodes.kind(ancestor), AstKind::Function(_) | AstKind::ArrowFunctionExpression(_))
-        })
+        self.nodes
+            .ancestor_ids(node)
+            .take_while(|&ancestor| statement.start <= self.nodes.kind(ancestor).span().start)
+            .any(|ancestor| {
+                matches!(
+                    self.nodes.kind(ancestor),
+                    AstKind::Function(_) | AstKind::ArrowFunctionExpression(_)
+                )
+            })
     }
 }
 

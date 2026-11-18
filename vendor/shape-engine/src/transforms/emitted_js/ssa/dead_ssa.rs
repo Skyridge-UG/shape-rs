@@ -33,8 +33,8 @@ use oxc_syntax::scope::ScopeFlags;
 use crate::analysis;
 
 use super::super::purity::expression_is_pure;
-use super::super::tuple_unpack::fresh_tuple_helper;
 use super::super::support::whole_line;
+use super::super::tuple_unpack::fresh_tuple_helper;
 
 #[derive(Debug)]
 pub(crate) struct DeadSsaResult {
@@ -85,11 +85,7 @@ pub(crate) fn remove_dead_ssa(source: &str) -> Result<DeadSsaResult, String> {
             .iter()
             .map(|slot| {
                 slot.is_some_and(|(_, symbol, generated)| {
-                    !generated
-                        || scoping
-                            .get_resolved_references(symbol)
-                            .next()
-                            .is_some()
+                    !generated || scoping.get_resolved_references(symbol).next().is_some()
                 })
             })
             .collect();
@@ -105,8 +101,12 @@ pub(crate) fn remove_dead_ssa(source: &str) -> Result<DeadSsaResult, String> {
         removed += dead;
         let Some(last_live) = live.iter().rposition(|live| *live) else {
             if tuple.fresh {
-                let value = &source[tuple.initializer.start as usize..tuple.initializer.end as usize];
-                edits.push(analysis::Edit::replace(tuple.statement, format!("{value};")));
+                let value =
+                    &source[tuple.initializer.start as usize..tuple.initializer.end as usize];
+                edits.push(analysis::Edit::replace(
+                    tuple.statement,
+                    format!("{value};"),
+                ));
             } else {
                 edits.push(analysis::Edit::replace(
                     tuple.pattern,
@@ -115,7 +115,11 @@ pub(crate) fn remove_dead_ssa(source: &str) -> Result<DeadSsaResult, String> {
             }
             continue;
         };
-        let length = if tuple.fresh { last_live + 1 } else { tuple.slots.len() };
+        let length = if tuple.fresh {
+            last_live + 1
+        } else {
+            tuple.slots.len()
+        };
         edits.push(analysis::Edit::replace(
             tuple.pattern,
             pattern_text(source, &tuple.slots, &live, length),
@@ -591,7 +595,11 @@ impl Scan<'_> {
         if member.optional || index.value < 0.0 || index.value.fract() != 0.0 {
             return false;
         }
-        let Some(tuple) = self.scoping.get_reference(object.reference_id()).symbol_id() else {
+        let Some(tuple) = self
+            .scoping
+            .get_reference(object.reference_id())
+            .symbol_id()
+        else {
             return false;
         };
         if self.scoping.symbol_is_mutated(tuple) {
@@ -733,9 +741,21 @@ mod tests {
         );
         let result = remove_dead_ssa(&source).unwrap();
         assert_eq!(result.removed, 6, "{}", result.code);
-        assert!(result.code.contains("let [, $SSA_2] = $VMHELPER_1(x, 1);"), "{}", result.code);
-        assert!(result.code.contains("\n  $VMHELPER_1(x, 2);\n"), "{}", result.code);
-        assert!(result.code.contains("let [, $SSA_7] = $VMHELPER_1(x, 3);"), "{}", result.code);
+        assert!(
+            result.code.contains("let [, $SSA_2] = $VMHELPER_1(x, 1);"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("\n  $VMHELPER_1(x, 2);\n"),
+            "{}",
+            result.code
+        );
+        assert!(
+            result.code.contains("let [, $SSA_7] = $VMHELPER_1(x, 3);"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -755,7 +775,11 @@ mod tests {
         let source = "function f(x) {\n  let [$SSA_1, $SSA_2, $SSA_3] = x;\n  let [$SSA_4, $SSA_5] = x;\n  let [y, $SSA_6] = x;\n  return $SSA_1 + y;\n}";
         let result = remove_dead_ssa(source).unwrap();
         assert_eq!(result.removed, 5, "{}", result.code);
-        assert!(result.code.contains("let [$SSA_1, , ,] = x;"), "{}", result.code);
+        assert!(
+            result.code.contains("let [$SSA_1, , ,] = x;"),
+            "{}",
+            result.code
+        );
         assert!(result.code.contains("let [, ,] = x;"), "{}", result.code);
         assert!(result.code.contains("let [y, ,] = x;"), "{}", result.code);
     }
@@ -764,7 +788,11 @@ mod tests {
     fn keeps_iterator_steps_when_the_code_replaces_the_array_iterator() {
         let source = "function $VMHELPER_1() {\n  return [1, 2, 3];\n}\nfunction f(g) {\n  Array.prototype[Symbol.iterator] = g;\n  let [$SSA_1, $SSA_2, $SSA_3] = $VMHELPER_1();\n  return $SSA_1;\n}";
         let result = remove_dead_ssa(source).unwrap();
-        assert!(result.code.contains("let [$SSA_1, , ,] = $VMHELPER_1();"), "{}", result.code);
+        assert!(
+            result.code.contains("let [$SSA_1, , ,] = $VMHELPER_1();"),
+            "{}",
+            result.code
+        );
     }
 
     #[test]
@@ -772,7 +800,11 @@ mod tests {
         let source = "function $VMHELPER_1() {\n  return [1, 2];\n}\nfunction f(x) {\n  $VMHELPER_1 = g;\n  let [$SSA_1, $SSA_2] = $VMHELPER_1();\n  let [$SSA_3 = 1, $SSA_4] = x;\n  let [$SSA_5, ...$SSA_6] = x;\n  return $SSA_1;\n}";
         let result = remove_dead_ssa(source).unwrap();
         assert_eq!(result.removed, 1, "{}", result.code);
-        assert!(result.code.contains("let [$SSA_1, ,] = $VMHELPER_1();"), "{}", result.code);
+        assert!(
+            result.code.contains("let [$SSA_1, ,] = $VMHELPER_1();"),
+            "{}",
+            result.code
+        );
         assert!(result.code.contains("let [$SSA_3 = 1, $SSA_4] = x;"));
         assert!(result.code.contains("let [$SSA_5, ...$SSA_6] = x;"));
     }

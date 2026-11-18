@@ -1,23 +1,29 @@
 //! `LocalStoragePersistentId`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView};
+use crate::signals::analysis::{described_fields::*, leaf_checks::*, value_facts};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, SignalLayout, SlotView,
+};
+use crate::signals::catalog::card::{Card, CardBody, CardField};
 use crate::signals::extract::contracts::SourceClass;
 use value_facts::slot_facts;
-use crate::signals::analysis::{value_facts, leaf_checks::*, described_fields::*};
-use crate::signals::catalog::card::{Card, CardBody, CardField};
-
 
 /// `LocalStoragePersistentId`. Card: [`CARD`].
-pub(crate) fn recognize_local_storage_persistent_id(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_local_storage_persistent_id(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     // One NUMBER status and the stored string (or its null tag) per message.
-    if !(per_emission_counts(view, 1, 1..=2) || split_null_tag_messages(view)) || view.has_repeat() {
+    if !(per_emission_counts(view, 1, 1..=2) || split_null_tag_messages(view)) || view.has_repeat()
+    {
         return None;
     }
     // The string is read back with `getItem` (the persistent-ID entry).
     let facts = slot_facts(view, ctx);
     let reads = facts.descs().any(|desc| desc.has_call("getItem"))
-        || leaf_transform(view, ".getItem()") && (leaf_transform(view, "context.persistentId") || leaf_transform(view, ".key"));
+        || leaf_transform(view, ".getItem()")
+            && (leaf_transform(view, "context.persistentId") || leaf_transform(view, ".key"));
     (reads && !facts.has_event(&["storage"]) && !facts.any_member("oldValue"))
         .then(|| Claim::new(["localStorage.getItem(persistent-ID key)", "status number"]))
 }
@@ -31,15 +37,29 @@ fn split_null_tag_messages(view: &SlotView) -> bool {
         emission.leaves.iter().filter(|leaf| leaf.op == op).count()
     };
     !view.emissions().is_empty()
-        && view.emissions().iter().any(|emission| count(emission, LeafOp::String) == 1)
+        && view
+            .emissions()
+            .iter()
+            .any(|emission| count(emission, LeafOp::String) == 1)
         && view.emissions().iter().all(|emission| {
             let tag = || {
-                emission.leaves.iter().filter(|leaf| leaf.op == LeafOp::Byte).all(|leaf| {
-                    leaf.transforms.is_empty() && leaf.classes.iter().all(|class| *class == SourceClass::Literal)
-                })
+                emission
+                    .leaves
+                    .iter()
+                    .filter(|leaf| leaf.op == LeafOp::Byte)
+                    .all(|leaf| {
+                        leaf.transforms.is_empty()
+                            && leaf
+                                .classes
+                                .iter()
+                                .all(|class| *class == SourceClass::Literal)
+                    })
             };
             (1..=2).contains(&count(emission, LeafOp::Number))
-                && match (count(emission, LeafOp::String), count(emission, LeafOp::Byte)) {
+                && match (
+                    count(emission, LeafOp::String),
+                    count(emission, LeafOp::Byte),
+                ) {
                     (1, 0) => true,
                     (0, 1) => tag(),
                     _ => false,
@@ -55,7 +75,9 @@ pub(crate) fn bind_local_storage_persistent_id(
     let mut binder = Binder::new(view, layout, ctx)?;
     binder.top(|field| match field.kind() {
         Some(LeafKind::Number) => Some("storageStatus"),
-        Some(LeafKind::String) | Some(LeafKind::Byte) if field.leaf_kinds().contains(&LeafKind::String) || field.is_tag() => {
+        Some(LeafKind::String) | Some(LeafKind::Byte)
+            if field.leaf_kinds().contains(&LeafKind::String) || field.is_tag() =>
+        {
             Some("storedId")
         }
         _ => None,

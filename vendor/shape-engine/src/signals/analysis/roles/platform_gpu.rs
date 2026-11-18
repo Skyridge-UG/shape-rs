@@ -49,20 +49,28 @@ use oxc_semantic::{AstNodes, NodeId, Scoping, SymbolId};
 use oxc_span::{GetSpan, Span};
 use oxc_syntax::operator::{AssignmentOperator, BinaryOperator, LogicalOperator, UnaryOperator};
 
+use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
+use crate::analysis;
 use crate::signals::extract::bindings::{
     binding_pattern_symbol, new_arguments, numeric_index, property_key_name, static_member_name,
     ParameterSlots,
 };
 use crate::signals::schema::Confidence;
-use super::{FinderClaim, FinderCtx, FinderRole, FinderRoleKind};
-use crate::analysis;
 
 const fn function(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::Function }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::Function,
+    }
 }
 
 const fn binding(role: &'static str, name: &'static str) -> FinderRole {
-    FinderRole { role, name, kind: FinderRoleKind::MainBinding }
+    FinderRole {
+        role,
+        name,
+        kind: FinderRoleKind::MainBinding,
+    }
 }
 
 /// Every role this package can claim, with the one name it receives.
@@ -70,11 +78,23 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     // WebRTC local-IP collection.
     function("webrtc_ice_candidate_collector", "collectLocalIpsViaWebRtc"),
     function("webrtc_ice_candidate_handler", "handleIceCandidate"),
-    function("ice_candidate_ip_match_predicate", "matchesStoredIceCandidateIp"),
-    function("ice_offer_local_description_applier", "applyLocalDescriptionFromOffer"),
+    function(
+        "ice_candidate_ip_match_predicate",
+        "matchesStoredIceCandidateIp",
+    ),
+    function(
+        "ice_offer_local_description_applier",
+        "applyLocalDescriptionFromOffer",
+    ),
     function("ice_offer_rejection_reporter", "reportIceOfferFailure"),
-    function("ice_offer_legacy_description_applier", "applyLocalDescriptionFromLegacyOffer"),
-    function("ice_offer_legacy_rejection_reporter", "reportLegacyIceOfferFailure"),
+    function(
+        "ice_offer_legacy_description_applier",
+        "applyLocalDescriptionFromLegacyOffer",
+    ),
+    function(
+        "ice_offer_legacy_rejection_reporter",
+        "reportLegacyIceOfferFailure",
+    ),
     binding("webrtc_results_ready", "resultsReady"),
     binding("webrtc_enumeration_started", "enumerationStarted"),
     binding("ice_gathering_failed", "iceGatheringFailed"),
@@ -83,37 +103,82 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     // MAIN aliases of `p10_browser_env`'s shared deferred settles. The roles
     // follow the aliased functions' proven p10 roles, not the ICE gatherer that
     // happens to call them.
-    binding("resolve_deferred_result_alias", "resolveDeferredResultAlias"),
+    binding(
+        "resolve_deferred_result_alias",
+        "resolveDeferredResultAlias",
+    ),
     binding("reject_deferred_result_alias", "rejectDeferredResultAlias"),
     // Memory-attribution formatting and measurement.
-    function("memory_attribution_formatter", "formatMemoryAttributionBreakdown"),
+    function(
+        "memory_attribution_formatter",
+        "formatMemoryAttributionBreakdown",
+    ),
     function("memory_breakdown_entry_mapper", "mapMemoryBreakdownEntry"),
     function("memory_attribution_mapper", "mapMemoryAttribution"),
     binding("memory_breakdown_formatter", "memoryBreakdownFormatter"),
-    function("memory_attribution_report_emitter", "emitMemoryAttributionReport"),
-    function("memory_breakdown_attribution_filter", "keepCurrentDocumentBreakdownEntry"),
-    function("memory_attribution_current_document_test", "isCurrentDocumentAttribution"),
-    function("memory_breakdown_attribution_scanner", "scanBreakdownEntryAttributions"),
-    function("memory_breakdown_entry_index_writer", "rememberCurrentDocumentEntryIndex"),
-    function("memory_measure_error_forwarder", "forwardMemoryMeasureError"),
+    function(
+        "memory_attribution_report_emitter",
+        "emitMemoryAttributionReport",
+    ),
+    function(
+        "memory_breakdown_attribution_filter",
+        "keepCurrentDocumentBreakdownEntry",
+    ),
+    function(
+        "memory_attribution_current_document_test",
+        "isCurrentDocumentAttribution",
+    ),
+    function(
+        "memory_breakdown_attribution_scanner",
+        "scanBreakdownEntryAttributions",
+    ),
+    function(
+        "memory_breakdown_entry_index_writer",
+        "rememberCurrentDocumentEntryIndex",
+    ),
+    function(
+        "memory_measure_error_forwarder",
+        "forwardMemoryMeasureError",
+    ),
     // Browser/platform detection.
     function("platform_detection_prober", "detectBrowserPlatform"),
     function("platform_detection_executor", "probeBrowserPlatform"),
-    function("indexed_db_blob_support_probe", "probeIndexedDbBlobStorageSupport"),
-    function("indexed_db_upgrade_blob_put", "onTempDatabaseUpgradePutBlob"),
+    function(
+        "indexed_db_blob_support_probe",
+        "probeIndexedDbBlobStorageSupport",
+    ),
+    function(
+        "indexed_db_upgrade_blob_put",
+        "onTempDatabaseUpgradePutBlob",
+    ),
     function("quota_usage_comparator", "compareQuotaToHeapLimit"),
     function("quota_usage_rejection_reporter", "rejectWithQuotaError"),
     function("file_system_granted_callback", "handleFileSystemGranted"),
     function("file_system_denied_callback", "handleFileSystemDenied"),
     function("platform_result_emitter", "emitEncodedPlatformResult"),
-    function("platform_result_error_forwarder", "forwardPlatformProbeError"),
+    function(
+        "platform_result_error_forwarder",
+        "forwardPlatformProbeError",
+    ),
     // MAIN aliases of p10's media-feature helpers.
-    binding("measure_max_media_feature_value_alias", "measureMaxMediaFeatureValueAlias"),
-    binding("evaluate_media_feature_values_alias", "evaluateMediaFeatureValuesAlias"),
+    binding(
+        "measure_max_media_feature_value_alias",
+        "measureMaxMediaFeatureValueAlias",
+    ),
+    binding(
+        "evaluate_media_feature_values_alias",
+        "evaluateMediaFeatureValuesAlias",
+    ),
     // Media-feature range probes handed to the shared prober.
     function("media_feature_range_prober", "probeMediaFeatureRanges"),
-    function("media_feature_range_serializer", "serializeMediaFeatureRangeProbe"),
-    function("media_feature_probe_completion", "completeMediaFeatureRangeProbe"),
+    function(
+        "media_feature_range_serializer",
+        "serializeMediaFeatureRangeProbe",
+    ),
+    function(
+        "media_feature_probe_completion",
+        "completeMediaFeatureRangeProbe",
+    ),
     // WebGL report collection and the worker protocol.
     function("webgl_parameter_map_builder", "buildWebglParameterMap"),
     function("webgl_parameter_map_writer", "assignParameterValueByName"),
@@ -121,7 +186,10 @@ pub(crate) const VOCABULARY: &[FinderRole] = &[
     function("webgl_dimension_values_joiner", "joinWebglDimensions"),
     function("webgl_precision_range_joiner", "formatShaderPrecisionRange"),
     function("webgl_worker_message_handler", "handleWebglWorkerMessage"),
-    function("webgl_worker_dimension_joiner", "joinWorkerMessageDimensions"),
+    function(
+        "webgl_worker_dimension_joiner",
+        "joinWorkerMessageDimensions",
+    ),
     function("webgl_worker_error_handler", "handleWebglWorkerError"),
     function("webgl_worker_cleanup", "stopWebglWorkerAndCompleteStream"),
 ];
@@ -144,11 +212,16 @@ fn member<'e, 'a>(expression: &'e Expression<'a>) -> Option<(&'e Expression<'a>,
 }
 
 fn args<'e, 'a>(call: &'e CallExpression<'a>) -> Vec<&'e Expression<'a>> {
-    call.arguments.iter().filter_map(Argument::as_expression).collect()
+    call.arguments
+        .iter()
+        .filter_map(Argument::as_expression)
+        .collect()
 }
 
 /// The member an assignment target names, with its object.
-fn target_member<'e, 'a>(target: &'e AssignmentTarget<'a>) -> Option<(&'e Expression<'a>, &'e str)> {
+fn target_member<'e, 'a>(
+    target: &'e AssignmentTarget<'a>,
+) -> Option<(&'e Expression<'a>, &'e str)> {
     match target {
         AssignmentTarget::StaticMemberExpression(found) => {
             Some((&found.object, found.property.name.as_str()))
@@ -161,7 +234,9 @@ fn target_member<'e, 'a>(target: &'e AssignmentTarget<'a>) -> Option<(&'e Expres
     }
 }
 
-fn target_identifier<'e, 'a>(target: &'e AssignmentTarget<'a>) -> Option<&'e IdentifierReference<'a>> {
+fn target_identifier<'e, 'a>(
+    target: &'e AssignmentTarget<'a>,
+) -> Option<&'e IdentifierReference<'a>> {
     match target {
         AssignmentTarget::AssignmentTargetIdentifier(identifier) => Some(identifier),
         _ => None,
@@ -254,19 +329,24 @@ impl<'c, 'a> Ix<'c, 'a> {
             let owner = if parent == id {
                 None
             } else {
-                self.fn_of_node.get(&parent).copied().or(self.owner[parent.index()])
+                self.fn_of_node
+                    .get(&parent)
+                    .copied()
+                    .or(self.owner[parent.index()])
             };
             self.owner[id.index()] = owner;
             let func = match node.kind() {
                 AstKind::Function(found) => Some((found.span, FnNode::Function(found))),
-                AstKind::ArrowFunctionExpression(found) => {
-                    Some((found.span, FnNode::Arrow(found)))
-                }
+                AstKind::ArrowFunctionExpression(found) => Some((found.span, FnNode::Arrow(found))),
                 _ => None,
             };
             if let Some((span, func)) = func {
                 let index = self.fns.len();
-                self.fns.push(FnEntry { span, func, parent: owner });
+                self.fns.push(FnEntry {
+                    span,
+                    func,
+                    parent: owner,
+                });
                 self.own.push(Own::default());
                 self.fn_of_node.insert(id, index);
                 if let Some(owner) = owner {
@@ -464,7 +544,10 @@ impl<'c, 'a> Ix<'c, 'a> {
         let symbol = self.symbol(expression)?;
         if let Some(index) = self.decl_fn.get(&symbol).copied() {
             let immutable = self.scoping.symbol_declarations(symbol).count() == 1
-                && !self.scoping.get_resolved_references(symbol).any(|r| r.is_write());
+                && !self
+                    .scoping
+                    .get_resolved_references(symbol)
+                    .any(|r| r.is_write());
             return immutable.then_some(index);
         }
         self.resolve_fn_depth(self.single_origin(symbol)?, depth - 1)
@@ -491,10 +574,7 @@ impl<'c, 'a> Ix<'c, 'a> {
         }
     }
 
-    fn method<'e>(
-        &self,
-        call: &'e CallExpression<'a>,
-    ) -> Option<(&'e Expression<'a>, &'e str)> {
+    fn method<'e>(&self, call: &'e CallExpression<'a>) -> Option<(&'e Expression<'a>, &'e str)> {
         member(self.invocation(call).0)
     }
 
@@ -777,14 +857,19 @@ fn is_rtc_constructor(ix: &Ix<'_, '_>, expression: &Expression<'_>) -> bool {
 fn is_rtc_constructor_depth(ix: &Ix<'_, '_>, expression: &Expression<'_>, depth: u8) -> bool {
     match strip(expression) {
         Expression::LogicalExpression(logical)
-            if matches!(logical.operator, LogicalOperator::Or | LogicalOperator::Coalesce) =>
+            if matches!(
+                logical.operator,
+                LogicalOperator::Or | LogicalOperator::Coalesce
+            ) =>
         {
             is_rtc_constructor_depth(ix, &logical.left, depth)
                 || is_rtc_constructor_depth(ix, &logical.right, depth)
         }
         other => {
             if static_member_name(other).is_some_and(|name| RTC_CONSTRUCTORS.contains(&name))
-                || ix.path(other).is_some_and(|path| RTC_CONSTRUCTORS.contains(&path.as_str()))
+                || ix
+                    .path(other)
+                    .is_some_and(|path| RTC_CONSTRUCTORS.contains(&path.as_str()))
             {
                 return true;
             }
@@ -812,7 +897,10 @@ fn rtc_constructor_host_depth(
 ) -> Option<SymbolId> {
     match strip(expression) {
         Expression::LogicalExpression(logical)
-            if matches!(logical.operator, LogicalOperator::Or | LogicalOperator::Coalesce) =>
+            if matches!(
+                logical.operator,
+                LogicalOperator::Or | LogicalOperator::Coalesce
+            ) =>
         {
             let left = rtc_constructor_host_depth(ix, &logical.left, depth)?;
             let right = rtc_constructor_host_depth(ix, &logical.right, depth)?;
@@ -894,14 +982,14 @@ fn webrtc(ix: &Ix<'_, '_>, out: &mut Out) {
             is_rtc_constructor(ix, &new.callee)
                 || is_rtc_constructor_branch_fallback(ix, *index, *new)
         });
-        let opens_channel = own
-            .calls
-            .iter()
-            .any(|call| ix.method(call).is_some_and(|(_, name)| name == "createDataChannel"));
-        let starts_offer = own
-            .calls
-            .iter()
-            .any(|call| ix.method(call).is_some_and(|(_, name)| name == "createOffer"));
+        let opens_channel = own.calls.iter().any(|call| {
+            ix.method(call)
+                .is_some_and(|(_, name)| name == "createDataChannel")
+        });
+        let starts_offer = own.calls.iter().any(|call| {
+            ix.method(call)
+                .is_some_and(|(_, name)| name == "createOffer")
+        });
         creates_peer
             && opens_channel
             && starts_offer
@@ -974,7 +1062,9 @@ fn is_waiter_resolver(ix: &Ix<'_, '_>, function: usize) -> bool {
         }
         ix.callbacks(call).into_iter().any(|callback| {
             ix.own[callback].calls.iter().any(|call| {
-                ix.method(call).is_some_and(|(_, name)| name == "setTimeout") && args(call).len() >= 2
+                ix.method(call)
+                    .is_some_and(|(_, name)| name == "setTimeout")
+                    && args(call).len() >= 2
             })
         })
     })
@@ -993,7 +1083,8 @@ fn candidate_handler(ix: &Ix<'_, '_>, out: &mut Out, collector: usize) {
         };
         let own = &ix.own[handler];
         let parses_candidate = own.members.contains("candidate")
-            && own.calls
+            && own
+                .calls
                 .iter()
                 .any(|call| ix.method(call).is_some_and(|(_, name)| name == "exec"))
             && own.written_keys.contains("ip")
@@ -1053,9 +1144,9 @@ fn candidate_patterns(ix: &Ix<'_, '_>, out: &mut Out, handler: usize) {
             continue;
         };
         if ix.declared_outside(regex, handler)
-            && ix.origins(regex).is_some_and(|origins| {
-                origins.len() == 1 && ix.is_regexp_value(origins[0])
-            })
+            && ix
+                .origins(regex)
+                .is_some_and(|origins| origins.len() == 1 && ix.is_regexp_value(origins[0]))
         {
             let Some(result) = ix.initialized_from(handler, call) else {
                 continue;
@@ -1092,7 +1183,9 @@ fn offer_callbacks(ix: &Ix<'_, '_>, out: &mut Out) {
                 let Expression::CallExpression(offer) = strip(receiver) else {
                     continue;
                 };
-                let promise_form = ix.method(offer).is_some_and(|(_, inner)| inner == "createOffer")
+                let promise_form = ix
+                    .method(offer)
+                    .is_some_and(|(_, inner)| inner == "createOffer")
                     && args(offer).is_empty();
                 if !promise_form {
                     continue;
@@ -1149,10 +1242,10 @@ fn claim_description_applier(
     role: &'static str,
     evidence: &str,
 ) {
-    let applies = ix.own[callback]
-        .calls
-        .iter()
-        .any(|call| ix.method(call).is_some_and(|(_, name)| name == "setLocalDescription"));
+    let applies = ix.own[callback].calls.iter().any(|call| {
+        ix.method(call)
+            .is_some_and(|(_, name)| name == "setLocalDescription")
+    });
     if applies {
         out.function(ix, role, callback, evidence);
     }
@@ -1189,7 +1282,8 @@ fn collector_guards(ix: &Ix<'_, '_>, out: &mut Out, collector: usize) -> Option<
         }
         let consequent = statement.consequent.span();
         let schedules = ix.own[collector].calls.iter().any(|call| {
-            ix.method(call).is_some_and(|(_, name)| name == "setTimeout")
+            ix.method(call)
+                .is_some_and(|(_, name)| name == "setTimeout")
                 && contains(consequent, call.span)
         });
         if schedules {
@@ -1429,18 +1523,16 @@ fn indexed_db_probe(ix: &Ix<'_, '_>, out: &mut Out, executor: usize) {
                 continue;
             };
             let upgrade_own = &ix.own[upgrade];
-            let puts_blob = upgrade_own
+            let puts_blob = upgrade_own.calls.iter().any(|call| {
+                ix.method(call)
+                    .is_some_and(|(_, name)| name == "createObjectStore")
+            }) && upgrade_own
                 .calls
                 .iter()
-                .any(|call| ix.method(call).is_some_and(|(_, name)| name == "createObjectStore"))
-                && upgrade_own
-                    .calls
-                    .iter()
-                    .any(|call| ix.method(call).is_some_and(|(_, name)| name == "put"))
-                && upgrade_own
-                    .news
-                    .iter()
-                    .any(|new| matches!(&new.callee, Expression::Identifier(id) if id.name == "Blob"));
+                .any(|call| ix.method(call).is_some_and(|(_, name)| name == "put"))
+                && upgrade_own.news.iter().any(
+                    |new| matches!(&new.callee, Expression::Identifier(id) if id.name == "Blob"),
+                );
             if puts_blob {
                 out.function(
                     ix,
@@ -1455,7 +1547,10 @@ fn indexed_db_probe(ix: &Ix<'_, '_>, out: &mut Out, executor: usize) {
 
 fn quota_probes(ix: &Ix<'_, '_>, out: &mut Out, executor: usize) {
     for call in &ix.own[executor].calls {
-        if ix.method(call).is_some_and(|(_, name)| name == "queryUsageAndQuota") {
+        if ix
+            .method(call)
+            .is_some_and(|(_, name)| name == "queryUsageAndQuota")
+        {
             let arguments = ix.invocation(call).1;
             if let Some(callback) = arguments.first().and_then(|value| ix.resolve_fn(value)) {
                 if ix.own[callback].members.contains("jsHeapSizeLimit") {
@@ -1468,10 +1563,9 @@ fn quota_probes(ix: &Ix<'_, '_>, out: &mut Out, executor: usize) {
                 }
             }
             if let Some(callback) = arguments.get(1).and_then(|value| ix.resolve_fn(value)) {
-                let reports = ix.own[callback]
-                    .news
-                    .iter()
-                    .any(|new| matches!(&new.callee, Expression::Identifier(id) if id.name == "Error"));
+                let reports = ix.own[callback].news.iter().any(
+                    |new| matches!(&new.callee, Expression::Identifier(id) if id.name == "Error"),
+                );
                 if reports {
                     out.function(
                         ix,
@@ -1642,7 +1736,11 @@ fn is_measure_result(ix: &Ix<'_, '_>, expression: &Expression<'_>) -> bool {
 
 fn emits_memory_report(ix: &Ix<'_, '_>, emitter: usize) -> bool {
     let own = &ix.own[emitter];
-    let has = |wanted: &str| own.calls.iter().any(|call| ix.method(call).is_some_and(|(_, name)| name == wanted));
+    let has = |wanted: &str| {
+        own.calls
+            .iter()
+            .any(|call| ix.method(call).is_some_and(|(_, name)| name == wanted))
+    };
     has("next") && has("complete") && has("filter") && has("unshift") && has("splice")
 }
 
@@ -1663,7 +1761,8 @@ fn memory_report_helpers(ix: &Ix<'_, '_>, out: &mut Out, emitter: usize) {
                     };
                     if ix.method(some).is_none_or(|(receiver, name)| {
                         name != "some"
-                            || member(receiver).is_none_or(|(_, member_name)| member_name != "attribution")
+                            || member(receiver)
+                                .is_none_or(|(_, member_name)| member_name != "attribution")
                     }) {
                         continue;
                     }
@@ -1740,7 +1839,10 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
             .calls
             .iter()
             .copied()
-            .filter(|call| ix.method(call).is_some_and(|(_, name)| name == "matchMedia"))
+            .filter(|call| {
+                ix.method(call)
+                    .is_some_and(|(_, name)| name == "matchMedia")
+            })
             .collect();
         if match_media.len() != 1 {
             continue;
@@ -1748,7 +1850,10 @@ fn media_features(ix: &Ix<'_, '_>, out: &mut Out) {
         let Some(serializer) = own
             .calls
             .iter()
-            .filter(|call| ix.method(call).is_some_and(|(_, name)| name == "setTimeout"))
+            .filter(|call| {
+                ix.method(call)
+                    .is_some_and(|(_, name)| name == "setTimeout")
+            })
             .flat_map(|call| ix.callbacks(call))
             .find(|callback| {
                 let inner = &ix.own[*callback];
@@ -1797,10 +1902,10 @@ fn media_aliases(ix: &Ix<'_, '_>, out: &mut Out) {
             .calls
             .iter()
             .any(|call| ix.method(call).is_some_and(|(_, name)| name == "floor"));
-        let probes = own
-            .calls
-            .iter()
-            .any(|call| ix.method(call).is_some_and(|(_, name)| name == "matchMedia"));
+        let probes = own.calls.iter().any(|call| {
+            ix.method(call)
+                .is_some_and(|(_, name)| name == "matchMedia")
+        });
         if probes && bisects {
             if let Some(alias) = ix.main_alias(function) {
                 out.binding(
@@ -1969,13 +2074,16 @@ fn webgl_collector(ix: &Ix<'_, '_>, out: &mut Out) -> Option<usize> {
         let context = own.calls.iter().any(|call| {
             ix.call_name(call).as_deref() == Some("getContext")
                 && args(call).iter().any(|argument| {
-                    matches!(string_value(argument), Some("webgl") | Some("experimental-webgl"))
+                    matches!(
+                        string_value(argument),
+                        Some("webgl") | Some("experimental-webgl")
+                    )
                 })
         });
-        let parameters = own
-            .calls
-            .iter()
-            .any(|call| ix.method(call).is_some_and(|(_, name)| name == "getParameter"));
+        let parameters = own.calls.iter().any(|call| {
+            ix.method(call)
+                .is_some_and(|(_, name)| name == "getParameter")
+        });
         let emits = own
             .calls
             .iter()

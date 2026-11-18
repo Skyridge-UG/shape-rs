@@ -1,11 +1,13 @@
 //! `WebGlRenderHash`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::extract::contracts::SourceClass;
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, SignalLayout, SlotView};
 use crate::signals::analysis::{layout_nodes::*, render_probes::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LayoutNode, LeafKind, LeafOp, SignalLayout,
+    SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use crate::signals::extract::contracts::SourceClass;
 
 /// `WebGlRenderHash`. Card: [`CARD`].
 ///
@@ -46,9 +48,13 @@ pub(crate) fn bind_webgl_render_hash(
         .collect();
     for (message, layout_message) in layout.messages.iter().enumerate() {
         let fields = &layout_message.fields;
-        let leaves = field_leaves(view, layout, message).ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
+        let leaves = field_leaves(view, layout, message)
+            .ok_or_else(|| refuse(SIGNAL, "leaf alignment failed"))?;
         if fields.len() != 3 {
-            return Err(refuse(SIGNAL, format!("message {message}: expected three fields")));
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected three fields"),
+            ));
         }
         // A byte at or above 128 is a null marker; any other byte is the
         // record kind (a literal tag, or a computed one).
@@ -56,30 +62,55 @@ pub(crate) fn bind_webgl_render_hash(
             LayoutNode::Leaf(leaf) if leaf.kind == LeafKind::Byte => Some(leaf.byte),
             _ => None,
         };
-        let mut kinds: Vec<usize> = (0..3).filter(|i| byte_of(*i).is_some_and(|b| b.map_or(true, |b| b < 128))).collect();
-        let mut nulls: Vec<usize> = (0..3).filter(|i| byte_of(*i).is_some_and(|b| b.is_some_and(|b| b >= 128))).collect();
+        let mut kinds: Vec<usize> = (0..3)
+            .filter(|i| byte_of(*i).is_some_and(|b| b.map_or(true, |b| b < 128)))
+            .collect();
+        let mut nulls: Vec<usize> = (0..3)
+            .filter(|i| byte_of(*i).is_some_and(|b| b.is_some_and(|b| b >= 128)))
+            .collect();
         let values: Vec<usize> = (0..3).filter(|i| byte_of(*i).is_none()).collect();
         // A kind tag at or above 128 looks like a null marker: take the kind
         // position another message proves.
         if kinds.is_empty() && nulls.len() == 2 {
-            if let Some(kind) = kind_positions.iter().copied().find(|position| nulls.contains(position)) {
+            if let Some(kind) = kind_positions
+                .iter()
+                .copied()
+                .find(|position| nulls.contains(position))
+            {
                 kinds = vec![kind];
                 nulls.retain(|index| *index != kind);
             }
         }
-        let ([kind], [null], [value]) = (kinds.as_slice(), nulls.as_slice(), values.as_slice()) else {
-            return Err(refuse(SIGNAL, format!("message {message}: expected a kind byte, a null byte and a value")));
+        let ([kind], [null], [value]) = (kinds.as_slice(), nulls.as_slice(), values.as_slice())
+        else {
+            return Err(refuse(
+                SIGNAL,
+                format!("message {message}: expected a kind byte, a null byte and a value"),
+            ));
         };
         let literal = leaves[*value]
             .iter()
             .filter(|leaf| leaf.op != LeafOp::Byte)
-            .all(|leaf| leaf.classes.iter().all(|class| *class == SourceClass::Literal));
+            .all(|leaf| {
+                leaf.classes
+                    .iter()
+                    .all(|class| *class == SourceClass::Literal)
+            });
         let status_record = literal && is_scalar(&fields[*value].node);
-        let (status, digest) = if status_record { (*value, *null) } else { (*null, *value) };
+        let (status, digest) = if status_record {
+            (*value, *null)
+        } else {
+            (*null, *value)
+        };
         match positions {
             None => positions = Some((*kind, status, digest)),
             Some(known) if known == (*kind, status, digest) => {}
-            Some(_) => return Err(refuse(SIGNAL, "kind/status/digest positions differ between messages")),
+            Some(_) => {
+                return Err(refuse(
+                    SIGNAL,
+                    "kind/status/digest positions differ between messages",
+                ))
+            }
         }
         binding.insert(message, fields[*kind].key.clone(), "kind");
         binding.insert(message, fields[status].key.clone(), "status");

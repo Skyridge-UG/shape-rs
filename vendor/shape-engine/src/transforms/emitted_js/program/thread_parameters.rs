@@ -35,7 +35,10 @@ fn parameters(source: &str) -> Result<(String, usize), String> {
         let AstKind::Function(function) = node.kind() else {
             continue;
         };
-        if !function.params.items.is_empty() || function.params.rest.is_some() || function.body.is_none() {
+        if !function.params.items.is_empty()
+            || function.params.rest.is_some()
+            || function.body.is_none()
+        {
             continue;
         }
         let mut uses = Uses::default();
@@ -43,9 +46,17 @@ fn parameters(source: &str) -> Result<(String, usize), String> {
         if uses.other || uses.indexed.is_empty() {
             continue;
         }
-        let last = uses.indexed.iter().map(|(_, index)| *index).max().unwrap_or(0);
+        let last = uses
+            .indexed
+            .iter()
+            .map(|(_, index)| *index)
+            .max()
+            .unwrap_or(0);
         let names: Vec<String> = (0..=last).map(|index| format!("$PARAM_{index}")).collect();
-        edits.push(analysis::Edit::replace(function.params.span, format!("({})", names.join(", "))));
+        edits.push(analysis::Edit::replace(
+            function.params.span,
+            format!("({})", names.join(", ")),
+        ));
         for (span, index) in uses.indexed {
             edits.push(analysis::Edit::replace(span, format!("$PARAM_{index}")));
         }
@@ -59,7 +70,8 @@ fn parameters(source: &str) -> Result<(String, usize), String> {
         return Err("thread parameter edits overlap".into());
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("thread parameter output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("thread parameter output: {error}"))?;
     Ok((applied.output, count))
 }
 
@@ -81,8 +93,14 @@ impl<'a> Visit<'a> for Uses {
     }
     fn visit_computed_member_expression(&mut self, member: &ComputedMemberExpression<'a>) {
         if self.depth == 0 {
-            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) = (&member.object, &member.expression) {
-                if object.name == "arguments" && index.value.fract() == 0.0 && index.value >= 0.0 && index.value < 64.0 {
+            if let (Expression::Identifier(object), Expression::NumericLiteral(index)) =
+                (&member.object, &member.expression)
+            {
+                if object.name == "arguments"
+                    && index.value.fract() == 0.0
+                    && index.value >= 0.0
+                    && index.value < 64.0
+                {
                     self.indexed.push((member.span, index.value as usize));
                     return;
                 }
@@ -109,7 +127,10 @@ fn direct_calls(source: &str) -> Result<(String, usize), String> {
     }
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
-    let mut calls = Calls { source, edits: Vec::new() };
+    let mut calls = Calls {
+        source,
+        edits: Vec::new(),
+    };
     calls.visit_program(&program);
     let count = calls.edits.len();
     if count == 0 {
@@ -121,7 +142,8 @@ fn direct_calls(source: &str) -> Result<(String, usize), String> {
         return Ok((source.into(), 0));
     }
     let check = Allocator::default();
-    analysis::check_program(&check, &applied.output).map_err(|error| format!("direct call output: {error}"))?;
+    analysis::check_program(&check, &applied.output)
+        .map_err(|error| format!("direct call output: {error}"))?;
     Ok((applied.output, count))
 }
 
@@ -134,7 +156,9 @@ impl<'a> Visit<'a> for Calls<'_> {
     fn visit_call_expression(&mut self, call: &CallExpression<'a>) {
         walk::walk_call_expression(self, call);
         let (optional, object) = match &call.callee {
-            Expression::StaticMemberExpression(member) if member.property.name == "call" => (member.optional, &member.object),
+            Expression::StaticMemberExpression(member) if member.property.name == "call" => {
+                (member.optional, &member.object)
+            }
             Expression::ComputedMemberExpression(member) if matches!(&member.expression, Expression::StringLiteral(key) if key.value == "call") => {
                 (member.optional, &member.object)
             }
@@ -149,15 +173,30 @@ impl<'a> Visit<'a> for Calls<'_> {
         let Some(Argument::UnaryExpression(receiver)) = call.arguments.first() else {
             return;
         };
-        if receiver.operator != oxc_syntax::operator::UnaryOperator::Void || !matches!(receiver.argument, Expression::NumericLiteral(_)) {
+        if receiver.operator != oxc_syntax::operator::UnaryOperator::Void
+            || !matches!(receiver.argument, Expression::NumericLiteral(_))
+        {
             return;
         }
-        let rest: Vec<&str> = call.arguments.iter().skip(1).map(|argument| &self.source[argument.span().start as usize..argument.span().end as usize]).collect();
+        let rest: Vec<&str> = call
+            .arguments
+            .iter()
+            .skip(1)
+            .map(|argument| {
+                &self.source[argument.span().start as usize..argument.span().end as usize]
+            })
+            .collect();
         // Keep edits that do not nest; nested ones fail the whole run.
-        if self.edits.iter().any(|edit| edit.start <= call.span.start && call.span.end <= edit.end || call.span.start <= edit.start && edit.end <= call.span.end) {
+        if self.edits.iter().any(|edit| {
+            edit.start <= call.span.start && call.span.end <= edit.end
+                || call.span.start <= edit.start && edit.end <= call.span.end
+        }) {
             return;
         }
-        self.edits.push(analysis::Edit::replace(call.span, format!("{}({})", callee.name, rest.join(", "))));
+        self.edits.push(analysis::Edit::replace(
+            call.span,
+            format!("{}({})", callee.name, rest.join(", ")),
+        ));
     }
 }
 

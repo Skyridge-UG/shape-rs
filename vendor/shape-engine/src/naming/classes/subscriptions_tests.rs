@@ -1,5 +1,5 @@
-use crate::signals::schema::ProgramPropertiesLimits;
 use super::*;
+use crate::signals::schema::ProgramPropertiesLimits;
 
 const PREFIX: &str = "function bootstrap() {\n";
 
@@ -1993,48 +1993,86 @@ fn readonly_prototype_is_independently_exact_and_global() {
     refuses(&format!("let Object = foreign; {SUBSCRIPTION}\nObject.defineProperty(Subscription, 'prototype', {{writable:false}});"));
 }
 
-const DIRECT_INSTALLER_SOURCE: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-direct.js");
+const DIRECT_INSTALLER_SOURCE: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-direct.js");
 
 fn native_sites(source: &str) -> Vec<(u32, u32, &'static str)> {
-    prove(source).into_iter().map(|claim| {
-        let FinderClaim::ClassBinding { class_span, role, .. } = claim else {
-            panic!("lifecycle proof must not produce function gains")
-        };
-        (class_span.start - PREFIX.len() as u32, class_span.end - PREFIX.len() as u32, role)
-    }).collect()
+    prove(source)
+        .into_iter()
+        .map(|claim| {
+            let FinderClaim::ClassBinding {
+                class_span, role, ..
+            } = claim
+            else {
+                panic!("lifecycle proof must not produce function gains")
+            };
+            (
+                class_span.start - PREFIX.len() as u32,
+                class_span.end - PREFIX.len() as u32,
+                role,
+            )
+        })
+        .collect()
 }
 
 #[test]
 fn current_direct_installer_source_installer_retains_bootstrap_aliases_and_consumers() {
-    assert_eq!(native_sites(DIRECT_INSTALLER_SOURCE), vec![
-        (140159, 140657, "subscription_class"),
-        (141225, 143041, "subscription_observer_class"),
-    ]);
+    assert_eq!(
+        native_sites(DIRECT_INSTALLER_SOURCE),
+        vec![
+            (140159, 140657, "subscription_class"),
+            (141225, 143041, "subscription_observer_class"),
+        ]
+    );
 }
 
 #[test]
 fn direct_installer_refuses_mutation_escape_wrong_receiver_and_flags() {
     let expected = (140159, 140657, "subscription_class");
     for (old, new) in [
-        ("let $Q = { key: \"closed\" };", "let $Q = { key: \"unsubscribe\" };"),
+        (
+            "let $Q = { key: \"closed\" };",
+            "let $Q = { key: \"unsubscribe\" };",
+        ),
         ("$Q.get = $THREAD_0_48614;", "$Q.get = foreign;"),
         ("$Q = [$Q];", "$Q = [foreign];"),
         ("$Q[i].configurable = true;", "$Q[i].configurable = false;"),
-        ("$Q[i].configurable = true;", "$Q[i].configurable = true; $Q[i].key = 'other';"),
+        (
+            "$Q[i].configurable = true;",
+            "$Q[i].configurable = true; $Q[i].key = 'other';",
+        ),
         ("$Q[i].key, $Q[i]", "$Q[i].key, foreign"),
-        ("$THREAD_1_67028.prototype, $Q[i].key", "Foreign.prototype, $Q[i].key"),
-        ("$Q.get = $THREAD_0_48614;", "$Q.get = $THREAD_0_48614; escape($Q);"),
-        ("let $KEY_284 = $THREAD_1_67028;", "let $KEY_284 = $THREAD_1_67028; $KEY_284 = foreign;"),
+        (
+            "$THREAD_1_67028.prototype, $Q[i].key",
+            "Foreign.prototype, $Q[i].key",
+        ),
+        (
+            "$Q.get = $THREAD_0_48614;",
+            "$Q.get = $THREAD_0_48614; escape($Q);",
+        ),
+        (
+            "let $KEY_284 = $THREAD_1_67028;",
+            "let $KEY_284 = $THREAD_1_67028; $KEY_284 = foreign;",
+        ),
     ] {
-        assert!(DIRECT_INSTALLER_SOURCE.contains(old), "missing mutation: {old}");
+        assert!(
+            DIRECT_INSTALLER_SOURCE.contains(old),
+            "missing mutation: {old}"
+        );
         let changed = DIRECT_INSTALLER_SOURCE.replacen(old, new, 1);
         // native_sites always parses and constructs a valid Model before refusal.
         // Compare roles because mutations can change subsequent UTF8 offsets.
-        assert!(native_sites(&changed).iter().all(|site| site.2 != expected.2), "accepted mutation: {old} -> {new}");
+        assert!(
+            native_sites(&changed)
+                .iter()
+                .all(|site| site.2 != expected.2),
+            "accepted mutation: {old} -> {new}"
+        );
     }
 }
 
-const CLOSED_STRING_SOURCE: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-finite.js");
+const CLOSED_STRING_SOURCE: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-finite.js");
 
 #[test]
 fn current_closed_string_closed_string_proves_coercion_and_symbol_arms_unreachable() {
@@ -2042,28 +2080,49 @@ fn current_closed_string_closed_string_proves_coercion_and_symbol_arms_unreachab
     // Scratch writes in these arms are safe only because the whole installer
     // proves the key remains the private literal string, including its order.
     for (old, new) in [
-        ("let $N = { key: \"closed\" };", "let $N = { key: dynamicKey };"),
+        (
+            "let $N = { key: \"closed\" };",
+            "let $N = { key: dynamicKey };",
+        ),
         ("$O = $N[i].key;", "$O = Symbol('closed');"),
         ("$O = $N[i].key;", "$O = $N[i].key; $O = Symbol('closed');"),
-        ("$N[i].configurable = true;", "$N[i].configurable = true; escape($N);"),
+        (
+            "$N[i].configurable = true;",
+            "$N[i].configurable = true; escape($N);",
+        ),
         ("$O = $O + \"\";", "$O = 'unsubscribe';"),
         ("$THREAD_0_334.prototype, $O", "Foreign.prototype, $O"),
     ] {
-        assert!(CLOSED_STRING_SOURCE.contains(old), "missing mutation: {old}");
+        assert!(
+            CLOSED_STRING_SOURCE.contains(old),
+            "missing mutation: {old}"
+        );
         let changed = CLOSED_STRING_SOURCE.replacen(old, new, 1);
-        assert!(native_sites(&changed).iter().all(|site| site.2 != "subscription_class"), "accepted mutation: {old}");
+        assert!(
+            native_sites(&changed)
+                .iter()
+                .all(|site| site.2 != "subscription_class"),
+            "accepted mutation: {old}"
+        );
     }
 }
 
-const SEPARATE_LIST: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-separate-list.js");
-const SAVED_SYMBOL: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-saved-symbol.js");
-const WHILE_INSTALLER: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-while-installer.js");
-const TUPLE_KEY: &str = include_str!("../../../tests/fixtures/program/thread-lifecycle-tuple-key.js");
+const SEPARATE_LIST: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-separate-list.js");
+const SAVED_SYMBOL: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-saved-symbol.js");
+const WHILE_INSTALLER: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-while-installer.js");
+const TUPLE_KEY: &str =
+    include_str!("../../../tests/fixtures/program/thread-lifecycle-tuple-key.js");
 
 #[test]
 fn current_installer_variants_keep_separate_class_identities_and_consumers() {
     for source in [SEPARATE_LIST, SAVED_SYMBOL, WHILE_INSTALLER, TUPLE_KEY] {
-        let roles: Vec<_> = native_sites(source).into_iter().map(|site| site.2).collect();
+        let roles: Vec<_> = native_sites(source)
+            .into_iter()
+            .map(|site| site.2)
+            .collect();
         assert_eq!(roles, ["subscription_class", "subscription_observer_class"]);
     }
 }
@@ -2071,19 +2130,67 @@ fn current_installer_variants_keep_separate_class_identities_and_consumers() {
 #[test]
 fn variant_installers_refuse_foreign_lists_receivers_indices_and_effect_order() {
     for (source, role, old, new) in [
-        (SEPARATE_LIST, "subscription_class", "let $KEY_4 = [$R];", "let $KEY_4 = [foreign];"),
-        (SEPARATE_LIST, "subscription_class", "$THREAD_9_130851.prototype,", "$THREAD_3_39152.prototype,"),
-        (SEPARATE_LIST, "subscription_class", "let $KEY_4 = [$R];", "let $KEY_4 = [$R]; escape($KEY_4);"),
-        (SAVED_SYMBOL, "subscription_observer_class", "$X ? $Y : String($Y)", "$X ? $Y : String($W)"),
-        (SAVED_SYMBOL, "subscription_observer_class", "$X = typeof $W[j].key == \"symbol\";", "$X = true;"),
+        (
+            SEPARATE_LIST,
+            "subscription_class",
+            "let $KEY_4 = [$R];",
+            "let $KEY_4 = [foreign];",
+        ),
+        (
+            SEPARATE_LIST,
+            "subscription_class",
+            "$THREAD_9_130851.prototype,",
+            "$THREAD_3_39152.prototype,",
+        ),
+        (
+            SEPARATE_LIST,
+            "subscription_class",
+            "let $KEY_4 = [$R];",
+            "let $KEY_4 = [$R]; escape($KEY_4);",
+        ),
+        (
+            SAVED_SYMBOL,
+            "subscription_observer_class",
+            "$X ? $Y : String($Y)",
+            "$X ? $Y : String($W)",
+        ),
+        (
+            SAVED_SYMBOL,
+            "subscription_observer_class",
+            "$X = typeof $W[j].key == \"symbol\";",
+            "$X = true;",
+        ),
         (WHILE_INSTALLER, "subscription_class", "++$S;", "--$S;"),
-        (WHILE_INSTALLER, "subscription_class", "$THREAD_7_59971.prototype,", "Foreign.prototype,"),
-        (WHILE_INSTALLER, "subscription_class", "$R[$S].configurable = true;", "++$S; $R[$S].configurable = true;"),
-        (TUPLE_KEY, "subscription_class", "$M = [$M, $M];", "$M = [$M, foreign];"),
-        (TUPLE_KEY, "subscription_class", "$M[0] + \"\"", "$M[1] + \"\""),
+        (
+            WHILE_INSTALLER,
+            "subscription_class",
+            "$THREAD_7_59971.prototype,",
+            "Foreign.prototype,",
+        ),
+        (
+            WHILE_INSTALLER,
+            "subscription_class",
+            "$R[$S].configurable = true;",
+            "++$S; $R[$S].configurable = true;",
+        ),
+        (
+            TUPLE_KEY,
+            "subscription_class",
+            "$M = [$M, $M];",
+            "$M = [$M, foreign];",
+        ),
+        (
+            TUPLE_KEY,
+            "subscription_class",
+            "$M[0] + \"\"",
+            "$M[1] + \"\"",
+        ),
     ] {
         assert!(source.contains(old), "missing mutation: {old}");
         let changed = source.replacen(old, new, 1);
-        assert!(native_sites(&changed).iter().all(|site| site.2 != role), "accepted mutation: {old}");
+        assert!(
+            native_sites(&changed).iter().all(|site| site.2 != role),
+            "accepted mutation: {old}"
+        );
     }
 }

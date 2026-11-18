@@ -1,13 +1,17 @@
 //! `OuterArgsGlobalProcess`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView};
-use crate::signals::analysis::{shape_text::*, leaf_checks::*, field_solver::*};
+use crate::signals::analysis::{field_solver::*, leaf_checks::*, shape_text::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, LeafKind, LeafOp, LeafView, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField};
 
-
 /// `OuterArgsGlobalProcess`. Card: [`CARD`].
-pub(crate) fn recognize_outer_args_global_process(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_outer_args_global_process(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     let leaves = leaves_of(view);
     let json = leaves.iter().any(|leaf| {
         leaf.op == LeafOp::String
@@ -19,16 +23,24 @@ pub(crate) fn recognize_outer_args_global_process(view: &SlotView, ctx: &FinderC
     }
     // A string computed inside a `try` reaches the contract opaque; its
     // write-site slice still stringifies the outer arguments.
-    if top_count_is(&view.shapes(), 2) && leaves.iter().any(|leaf| leaf.op == LeafOp::String && outer_args_json(ctx, leaf)) {
-        return claim(&["string's write-site slice is JSON.stringify(outerArgs)", "two fields"]);
+    if top_count_is(&view.shapes(), 2)
+        && leaves
+            .iter()
+            .any(|leaf| leaf.op == LeafOp::String && outer_args_json(ctx, leaf))
+    {
+        return claim(&[
+            "string's write-site slice is JSON.stringify(outerArgs)",
+            "two fields",
+        ]);
     }
     None
 }
 
 /// The leaf's write-site slice calls `JSON.stringify` on `.outerArgs`.
 fn outer_args_json(ctx: &FinderCtx, leaf: &LeafView) -> bool {
-    ctx.value_slice(leaf, 6)
-        .is_some_and(|slice| slice.calls_method("stringify") && slice.members.contains_key("outerArgs"))
+    ctx.value_slice(leaf, 6).is_some_and(|slice| {
+        slice.calls_method("stringify") && slice.members.contains_key("outerArgs")
+    })
 }
 
 pub(crate) fn bind_outer_args_global_process(
@@ -39,7 +51,9 @@ pub(crate) fn bind_outer_args_global_process(
     let json = |f: &Field| {
         f.writes(LeafKind::String)
             && (f.tr("JSON.stringify")
-                || f.leaves.iter().any(|leaf| leaf.op == LeafOp::String && outer_args_json(ctx, leaf)))
+                || f.leaves
+                    .iter()
+                    .any(|leaf| leaf.op == LeafOp::String && outer_args_json(ctx, leaf)))
     };
     let flags = |f: &Field| f.is_plain(LeafKind::Byte);
     solve_all_messages(view, layout, &[("outerArgsJson", &json), ("flags", &flags)])

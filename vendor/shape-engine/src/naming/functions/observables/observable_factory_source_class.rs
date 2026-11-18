@@ -1072,7 +1072,11 @@ fn result_reads_are_closed(m: &Model<'_, '_>, s: Symbol) -> bool {
 /// class can publish/execute its operator methods. Future writes must preserve
 /// this same independently proved contract; an unknown late writer refuses.
 pub(super) fn prove(m: &Model<'_, '_>, site: FunctionSite) -> Option<(Span, Symbol)> {
-    if m.nodes.iter().any(|n|matches!(n.kind(),AstKind::Program(p) if crate::naming::program::has_dynamic_scope(p))) { return None; }
+    if m.nodes.iter().any(
+        |n| matches!(n.kind(),AstKind::Program(p) if crate::naming::program::has_dynamic_scope(p)),
+    ) {
+        return None;
+    }
     let own = body_proof(m, site)?;
     let result = own.constructor_input;
     if !m.scoping.symbol_redeclarations(result).is_empty() || !result_reads_are_closed(m, result) {

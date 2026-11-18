@@ -1,21 +1,26 @@
 //! `NativeApiIntegrityFlags`: the slot recognizer and the field binder.
 
 #![allow(unused_variables)]
-use crate::signals::analysis::{BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView};
-use buffer_writes::slot_info;
-use crate::signals::analysis::{buffer_writes, leaf_checks::*, native_checks::*, flag_bytes::*};
+use crate::signals::analysis::{buffer_writes, flag_bytes::*, leaf_checks::*, native_checks::*};
+use crate::signals::analysis::{
+    BindRefusal, Claim, FieldBinding, FinderCtx, SignalLayout, SlotView,
+};
 use crate::signals::catalog::card::{Card, CardBody, CardField, CardMessage};
-
+use buffer_writes::slot_info;
 
 /// `NativeApiIntegrityFlags`. Card: [`CARD`].
-pub(crate) fn recognize_native_api_integrity_flags(view: &SlotView, ctx: &FinderCtx) -> Option<Claim> {
+pub(crate) fn recognize_native_api_integrity_flags(
+    view: &SlotView,
+    ctx: &FinderCtx,
+) -> Option<Claim> {
     if !only_bytes(view) {
         return None;
     }
     let info = slot_info(view, ctx);
-    (integrity_kind(&top_field_counts(view), hash_slots(view), &info.facts) == Some(IntegrityKind::ThreeBytes))
-        .then(|| claim(&["three flag bytes of native-getter and class-tag checks"]))
-        .flatten()
+    (integrity_kind(&top_field_counts(view), hash_slots(view), &info.facts)
+        == Some(IntegrityKind::ThreeBytes))
+    .then(|| claim(&["three flag bytes of native-getter and class-tag checks"]))
+    .flatten()
 }
 
 pub(crate) fn bind_native_api_integrity_flags(
@@ -23,7 +28,10 @@ pub(crate) fn bind_native_api_integrity_flags(
     layout: &SignalLayout,
     ctx: &FinderCtx,
 ) -> Result<FieldBinding, BindRefusal> {
-    bind_bytes_in_order(layout, &["integrityFlags1", "integrityFlags2", "integrityFlags3"])
+    bind_bytes_in_order(
+        layout,
+        &["integrityFlags1", "integrityFlags2", "integrityFlags3"],
+    )
 }
 
 // ===========================================================================

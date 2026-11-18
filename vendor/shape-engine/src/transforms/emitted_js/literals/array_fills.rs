@@ -59,7 +59,14 @@ pub(crate) fn fold_array_fills(source: &str) -> Result<(String, usize), String> 
     let allocator = Allocator::default();
     let program = analysis::parse_program(&allocator, source)?;
     let (scoping, nodes) = analysis::analyze(&program);
-    let mut scan = Scan { source, scoping: &scoping, nodes: &nodes, comments: &program.comments, edits: Vec::new(), folded: 0 };
+    let mut scan = Scan {
+        source,
+        scoping: &scoping,
+        nodes: &nodes,
+        comments: &program.comments,
+        edits: Vec::new(),
+        folded: 0,
+    };
     super::super::support::for_each_list(&program, |list| scan.list(list));
     if scan.folded == 0 {
         return Ok((source.into(), 0));
@@ -77,9 +84,12 @@ struct Scan<'s, 'a> {
     folded: usize,
 }
 
-
 /// `A[k] = v;` with a whole-number literal `k`: (k, v).
-fn store<'e, 'a>(statement: &'e Statement<'a>, symbol: SymbolId, scoping: &Scoping) -> Option<(usize, &'e Expression<'a>)> {
+fn store<'e, 'a>(
+    statement: &'e Statement<'a>,
+    symbol: SymbolId,
+    scoping: &Scoping,
+) -> Option<(usize, &'e Expression<'a>)> {
     let Statement::ExpressionStatement(statement) = statement else {
         return None;
     };
@@ -89,7 +99,9 @@ fn store<'e, 'a>(statement: &'e Statement<'a>, symbol: SymbolId, scoping: &Scopi
     let AssignmentTarget::ComputedMemberExpression(member) = &assignment.left else {
         return None;
     };
-    let (Expression::Identifier(array), Expression::NumericLiteral(index)) = (&member.object, &member.expression) else {
+    let (Expression::Identifier(array), Expression::NumericLiteral(index)) =
+        (&member.object, &member.expression)
+    else {
         return None;
     };
     if assignment.operator != AssignmentOperator::Assign
@@ -105,7 +117,10 @@ fn store<'e, 'a>(statement: &'e Statement<'a>, symbol: SymbolId, scoping: &Scopi
 }
 
 /// `$T = value;` with a plain identifier target: (symbol, value).
-fn scratch_assignment<'e, 'a>(statement: &'e Statement<'a>, scoping: &Scoping) -> Option<(SymbolId, &'e Expression<'a>)> {
+fn scratch_assignment<'e, 'a>(
+    statement: &'e Statement<'a>,
+    scoping: &Scoping,
+) -> Option<(SymbolId, &'e Expression<'a>)> {
     let Statement::ExpressionStatement(statement) = statement else {
         return None;
     };
@@ -125,7 +140,9 @@ fn scratch_assignment<'e, 'a>(statement: &'e Statement<'a>, scoping: &Scoping) -
 /// `expression` is exactly a read of `symbol`.
 fn names(expression: &Expression<'_>, symbol: SymbolId, scoping: &Scoping) -> bool {
     match expression {
-        Expression::Identifier(identifier) => scoping.get_reference(identifier.reference_id()).symbol_id() == Some(symbol),
+        Expression::Identifier(identifier) => {
+            scoping.get_reference(identifier.reference_id()).symbol_id() == Some(symbol)
+        }
         _ => false,
     }
 }
@@ -173,7 +190,9 @@ impl Scan<'_, '_> {
                 }
             }
         }
-        smallest.map(|(_, unit)| unit).unwrap_or_else(|| "\t".to_owned())
+        smallest
+            .map(|(_, unit)| unit)
+            .unwrap_or_else(|| "\t".to_owned())
     }
 
     fn list(&mut self, statements: &[Statement<'_>]) {
@@ -189,13 +208,20 @@ impl Scan<'_, '_> {
     }
 
     /// `let $X = […];` or `$X = […];` with a plain identifier target.
-    fn array_start<'a>(&self, statement: &'a Statement<'a>) -> Option<(SymbolId, &'a ArrayExpression<'a>, String)> {
+    fn array_start<'a>(
+        &self,
+        statement: &'a Statement<'a>,
+    ) -> Option<(SymbolId, &'a ArrayExpression<'a>, String)> {
         match statement {
             Statement::VariableDeclaration(declaration) => {
                 let [declarator] = declaration.declarations.as_slice() else {
                     return None;
                 };
-                let (BindingPattern::BindingIdentifier(id), Some(Expression::ArrayExpression(array))) = (&declarator.id, &declarator.init) else {
+                let (
+                    BindingPattern::BindingIdentifier(id),
+                    Some(Expression::ArrayExpression(array)),
+                ) = (&declarator.id, &declarator.init)
+                else {
                     return None;
                 };
                 if declaration.kind == VariableDeclarationKind::Var {
@@ -211,40 +237,57 @@ impl Scan<'_, '_> {
                 let Expression::AssignmentExpression(assignment) = &expression.expression else {
                     return None;
                 };
-                let (AssignmentTarget::AssignmentTargetIdentifier(target), Expression::ArrayExpression(array)) =
-                    (&assignment.left, &assignment.right)
+                let (
+                    AssignmentTarget::AssignmentTargetIdentifier(target),
+                    Expression::ArrayExpression(array),
+                ) = (&assignment.left, &assignment.right)
                 else {
                     return None;
                 };
                 if assignment.operator != AssignmentOperator::Assign {
                     return None;
                 }
-                let symbol = self.scoping.get_reference(target.reference_id.get()?).symbol_id()?;
+                let symbol = self
+                    .scoping
+                    .get_reference(target.reference_id.get()?)
+                    .symbol_id()?;
                 Some((symbol, array, target.name.to_string()))
             }
             _ => None,
         }
     }
 
-    fn fold(&mut self, statements: &[Statement<'_>], index: usize, statement: &Statement<'_>) -> Option<usize> {
+    fn fold(
+        &mut self,
+        statements: &[Statement<'_>],
+        index: usize,
+        statement: &Statement<'_>,
+    ) -> Option<usize> {
         let (symbol, array, head) = self.array_start(statement)?;
         let indent = self.line_indent(statement.span()).to_owned();
         let mut elements: Vec<Option<&Expression<'_>>> = Vec::new();
         for element in &array.elements {
             match element {
-                ArrayExpressionElement::SpreadElement(_) | ArrayExpressionElement::Elision(_) => return None,
+                ArrayExpressionElement::SpreadElement(_) | ArrayExpressionElement::Elision(_) => {
+                    return None
+                }
                 element => elements.push(element.as_expression()),
             }
         }
         let calls_allowed = self.unclosed(symbol);
         // `at` can take the value without reordering a placeholder or the array.
-        let acceptable = |at: usize, value: &Expression<'_>, filled_len: usize, last_index: Option<usize>| {
-            last_index.is_none_or(|last| at > last)
-                && at <= filled_len
-                && (at >= elements.len() || elements[at].is_some_and(|element| expression_is_pure(element)))
-                && self.movable(value, symbol, calls_allowed)
-        };
-        let mut filled: Vec<String> = elements.iter().map(|element| element.map_or(String::new(), |e| self.element_text(e, &indent))).collect();
+        let acceptable =
+            |at: usize, value: &Expression<'_>, filled_len: usize, last_index: Option<usize>| {
+                last_index.is_none_or(|last| at > last)
+                    && at <= filled_len
+                    && (at >= elements.len()
+                        || elements[at].is_some_and(|element| expression_is_pure(element)))
+                    && self.movable(value, symbol, calls_allowed)
+            };
+        let mut filled: Vec<String> = elements
+            .iter()
+            .map(|element| element.map_or(String::new(), |e| self.element_text(e, &indent)))
+            .collect();
         let mut first_replaced = None;
         let mut last_index = None;
         let mut count = 0;
@@ -256,11 +299,15 @@ impl Scan<'_, '_> {
         let mut lookbehind: Option<(usize, SymbolId, String, String, u32)> = None;
         if index > 0 {
             if let Some((temp, value)) = scratch_assignment(&statements[index - 1], self.scoping) {
-                let position = elements.iter().position(|element| element.is_some_and(|element| names(element, temp, self.scoping)));
+                let position = elements.iter().position(|element| {
+                    element.is_some_and(|element| names(element, temp, self.scoping))
+                });
                 if let Some(position) = position {
                     // Moving the value into the element keeps its order
                     // relative to the other elements only when they run no code.
-                    let others_pure = elements.iter().enumerate().all(|(at, element)| at == position || element.is_some_and(|e| expression_is_pure(e)));
+                    let others_pure = elements.iter().enumerate().all(|(at, element)| {
+                        at == position || element.is_some_and(|e| expression_is_pure(e))
+                    });
                     if others_pure
                         && self.movable(value, symbol, true)
                         && self.adjacent(statements[index - 1].span().end, statement.span().start)
@@ -268,7 +315,13 @@ impl Scan<'_, '_> {
                         let text = self.element_text(value, &indent);
                         let original = filled[position].clone();
                         filled[position] = text.clone();
-                        lookbehind = Some((position, temp, original, text, statements[index - 1].span().start));
+                        lookbehind = Some((
+                            position,
+                            temp,
+                            original,
+                            text,
+                            statements[index - 1].span().start,
+                        ));
                     }
                 }
             }
@@ -314,7 +367,11 @@ impl Scan<'_, '_> {
 
         let first = first_replaced?;
         // Everything the stored values now run before has no effect.
-        if elements.iter().skip(first).any(|element| !element.is_some_and(|e| expression_is_pure(e))) {
+        if elements
+            .iter()
+            .skip(first)
+            .any(|element| !element.is_some_and(|e| expression_is_pure(e)))
+        {
             return None;
         }
         let end = statements[index + count].span().end;
@@ -341,7 +398,11 @@ impl Scan<'_, '_> {
         let one_line = filled.join(", ");
         let literal = if one_line.len() + indent.len() * 4 > WIDTH || multiline {
             let inner = format!("{indent}{}", self.indent_unit(&filled, &indent));
-            let body = filled.iter().map(|e| reindent(e, &inner)).collect::<Vec<_>>().join(",\n");
+            let body = filled
+                .iter()
+                .map(|e| reindent(e, &inner))
+                .collect::<Vec<_>>()
+                .join(",\n");
             format!("[\n{body}\n{indent}]")
         } else {
             format!("[{one_line}]")
@@ -385,21 +446,34 @@ impl Scan<'_, '_> {
     }
 
     fn has_comment(&self, span: Span) -> bool {
-        let at = self.comments.partition_point(|comment| comment.span.start < span.start);
-        self.comments.get(at).is_some_and(|comment| comment.span.start < span.end)
+        let at = self
+            .comments
+            .partition_point(|comment| comment.span.start < span.start);
+        self.comments
+            .get(at)
+            .is_some_and(|comment| comment.span.start < span.end)
     }
 
     /// Only the object and array literals of `expression` break lines.
     fn joinable(&self, expression: &Expression<'_>) -> bool {
         match expression {
-            Expression::ObjectExpression(object) => object.properties.iter().all(|property| match property {
-                ObjectPropertyKind::ObjectProperty(property) => self.on_one_line(property.key.span()) && self.joinable(&property.value),
-                ObjectPropertyKind::SpreadProperty(spread) => self.on_one_line(spread.span),
-            }),
-            Expression::ArrayExpression(array) => array.elements.iter().all(|element| match element.as_expression() {
-                Some(element) => self.joinable(element),
-                None => self.on_one_line(element.span()),
-            }),
+            Expression::ObjectExpression(object) => {
+                object.properties.iter().all(|property| match property {
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        self.on_one_line(property.key.span()) && self.joinable(&property.value)
+                    }
+                    ObjectPropertyKind::SpreadProperty(spread) => self.on_one_line(spread.span),
+                })
+            }
+            Expression::ArrayExpression(array) => {
+                array
+                    .elements
+                    .iter()
+                    .all(|element| match element.as_expression() {
+                        Some(element) => self.joinable(element),
+                        None => self.on_one_line(element.span()),
+                    })
+            }
             value => self.on_one_line(value.span()),
         }
     }
@@ -409,7 +483,12 @@ impl Scan<'_, '_> {
         let mut references: Vec<(u32, bool)> = self
             .scoping
             .get_resolved_references(symbol)
-            .map(|reference| (self.nodes.get_node(reference.node_id()).span().start, reference.is_read()))
+            .map(|reference| {
+                (
+                    self.nodes.get_node(reference.node_id()).span().start,
+                    reference.is_read(),
+                )
+            })
             .filter(|(start, _)| *start >= end)
             .collect();
         references.sort_unstable_by_key(|(start, _)| *start);
@@ -427,7 +506,8 @@ impl Scan<'_, '_> {
         }
         impl<'b> Visit<'b> for Check<'_> {
             fn visit_identifier_reference(&mut self, name: &IdentifierReference<'b>) {
-                if self.scoping.get_reference(name.reference_id()).symbol_id() == Some(self.symbol) {
+                if self.scoping.get_reference(name.reference_id()).symbol_id() == Some(self.symbol)
+                {
                     self.ok = false;
                 }
             }
@@ -449,7 +529,12 @@ impl Scan<'_, '_> {
         if regexp_literal(self.scoping, value).is_some() {
             return true;
         }
-        let mut check = Check { scoping: self.scoping, symbol, calls_allowed, ok: true };
+        let mut check = Check {
+            scoping: self.scoping,
+            symbol,
+            calls_allowed,
+            ok: true,
+        };
         check.visit_expression(value);
         check.ok
     }
@@ -532,7 +617,10 @@ mod tests {
         let (code, n) = fold_array_fills(source).unwrap();
         // `d` folds its first store only.
         assert_eq!(n, 1, "{code}");
-        assert!(code.contains("let d = [1, void 0, 2];\n\td[1] = 1;"), "{code}");
+        assert!(
+            code.contains("let d = [1, void 0, 2];\n\td[1] = 1;"),
+            "{code}"
+        );
     }
 
     #[test]
@@ -639,10 +727,16 @@ mod tests {
     #[test]
     fn keeps_the_lines_of_a_literal_it_cannot_join() {
         let comment = "function f() {\n\tlet a = [void 0];\n\ta[0] = {\n\t\t// why\n\t\tx: 1\n\t};\n\treturn a;\n}\n";
-        assert!(fold_array_fills(comment).unwrap().0.contains("// why\n\t\t\tx: 1\n"));
+        assert!(fold_array_fills(comment)
+            .unwrap()
+            .0
+            .contains("// why\n\t\t\tx: 1\n"));
 
         let wide = format!("function f() {{\n\tlet a = [void 0];\n\ta[0] = {{\n\t\tx: \"{0}\",\n\t\ty: 1\n\t}};\n\treturn a;\n}}\n", "z".repeat(120));
-        assert!(fold_array_fills(&wide).unwrap().0.contains("\",\n\t\t\ty: 1\n"));
+        assert!(fold_array_fills(&wide)
+            .unwrap()
+            .0
+            .contains("\",\n\t\t\ty: 1\n"));
     }
 
     #[test]

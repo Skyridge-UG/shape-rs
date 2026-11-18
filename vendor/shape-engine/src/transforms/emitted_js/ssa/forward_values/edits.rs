@@ -15,7 +15,8 @@ impl Plan<'_, '_> {
             };
             if self.forward_of(&symbol).is_some()
                 || self.scoping.symbol_is_mutated(symbol)
-                || types.binding_type(symbol) != Some(super::super::super::primitives::Prim::Boolean)
+                || types.binding_type(symbol)
+                    != Some(super::super::super::primitives::Prim::Boolean)
             {
                 continue;
             }
@@ -34,7 +35,9 @@ impl Plan<'_, '_> {
                 };
                 if self.owner_of(node) != *owner
                     || self.in_noop(span)
-                    || gone.iter().any(|g| g.start <= span.start && span.end <= g.end)
+                    || gone
+                        .iter()
+                        .any(|g| g.start <= span.start && span.end <= g.end)
                     || self.is_shorthand_or_delete(node)
                     || out.iter().any(|(other, _)| *other == span)
                 {
@@ -64,31 +67,43 @@ impl Plan<'_, '_> {
                 InitKind::Computed => false,
                 _ => true,
             };
-            if !stable || self.references_in(store.value).iter().any(|(reference, _)| {
-                self.scoping
-                    .get_reference(*reference)
-                    .symbol_id()
-                    .is_some_and(|symbol| self.forward_of(&symbol).is_some())
-            }) {
+            if !stable
+                || self
+                    .references_in(store.value)
+                    .iter()
+                    .any(|(reference, _)| {
+                        self.scoping
+                            .get_reference(*reference)
+                            .symbol_id()
+                            .is_some_and(|symbol| self.forward_of(&symbol).is_some())
+                    })
+            {
                 continue;
             }
             let list = &self.scan.lists[store.list];
             let owner = list[store.position].owner;
-            let later = Span::new(store.statement.end, list.last().map_or(store.statement.end, |s| s.span.end));
+            let later = Span::new(
+                store.statement.end,
+                list.last().map_or(store.statement.end, |s| s.span.end),
+            );
             // The next store of the slot after this one, anywhere.
             let next_write = self
                 .scoping
                 .get_resolved_references(store.slot)
                 .filter(|reference| reference.is_write())
                 .map(|reference| self.span_of(reference.node_id()).start)
-                .chain(self.scoping.symbol_declarations(store.slot).filter_map(|declaration| {
-                    match self.nodes.kind(declaration) {
-                        AstKind::VariableDeclarator(declarator) if declarator.init.is_some() => {
-                            Some(declarator.span.start)
-                        }
-                        _ => None,
-                    }
-                }))
+                .chain(
+                    self.scoping.symbol_declarations(store.slot).filter_map(
+                        |declaration| match self.nodes.kind(declaration) {
+                            AstKind::VariableDeclarator(declarator)
+                                if declarator.init.is_some() =>
+                            {
+                                Some(declarator.span.start)
+                            }
+                            _ => None,
+                        },
+                    ),
+                )
                 .filter(|at| *at >= store.statement.end)
                 .min()
                 .unwrap_or(u32::MAX);
@@ -104,19 +119,26 @@ impl Plan<'_, '_> {
                         && span.start < next_write
                         && self.owner_of(*node) == owner
                         && !self.in_noop(span)
-                        && !gone.iter().any(|g| g.start <= span.start && span.end <= g.end)
+                        && !gone
+                            .iter()
+                            .any(|g| g.start <= span.start && span.end <= g.end)
                         && !self.is_shorthand_or_delete(*node)
                 })
                 .collect();
-            if reads.is_empty() || !self.slot_unchanged(store.slot, store.statement, &reads, owner) {
+            if reads.is_empty() || !self.slot_unchanged(store.slot, store.statement, &reads, owner)
+            {
                 continue;
             }
             let text = &self.source[store.value.start as usize..store.value.end as usize];
             for read in reads {
                 let span = self.span_of(read);
                 let callee = matches!(self.nodes.parent_kind(read), AstKind::CallExpression(call) if call.callee.span() == span);
-                let member_object = matches!(self.nodes.parent_kind(read),
-                    AstKind::StaticMemberExpression(_) | AstKind::ComputedMemberExpression(_) | AstKind::PrivateFieldExpression(_));
+                let member_object = matches!(
+                    self.nodes.parent_kind(read),
+                    AstKind::StaticMemberExpression(_)
+                        | AstKind::ComputedMemberExpression(_)
+                        | AstKind::PrivateFieldExpression(_)
+                );
                 let placed = match store.kind {
                     InitKind::TupleSlot if callee && store.member => format!("(0, {text})"),
                     InitKind::Number if member_object => format!("({text})"),
@@ -126,10 +148,14 @@ impl Plan<'_, '_> {
                 // The value's own names must still resolve to the same
                 // bindings at the read.
                 let scope = self.nodes.get_node(read).scope_id();
-                let resolves = self.references_in(store.value).iter().all(|(reference, ident)| {
-                    let name = &self.source[ident.start as usize..ident.end as usize];
-                    self.scoping.find_binding(scope, name.into()) == self.scoping.get_reference(*reference).symbol_id()
-                });
+                let resolves = self
+                    .references_in(store.value)
+                    .iter()
+                    .all(|(reference, ident)| {
+                        let name = &self.source[ident.start as usize..ident.end as usize];
+                        self.scoping.find_binding(scope, name.into())
+                            == self.scoping.get_reference(*reference).symbol_id()
+                    });
                 if resolves {
                     out.push((span, placed));
                 }
@@ -150,8 +176,14 @@ impl Plan<'_, '_> {
     }
 
     pub(super) fn in_noop(&self, span: Span) -> bool {
-        let at = self.scan.noops.partition_point(|noop| noop.end <= span.start);
-        self.scan.noops.get(at).is_some_and(|noop| noop.start <= span.start && span.end <= noop.end)
+        let at = self
+            .scan
+            .noops
+            .partition_point(|noop| noop.end <= span.start);
+        self.scan
+            .noops
+            .get(at)
+            .is_some_and(|noop| noop.start <= span.start && span.end <= noop.end)
     }
 
     /// `span` reads a moved (rule 2) value: copying it would repeat that
@@ -164,15 +196,19 @@ impl Plan<'_, '_> {
             InitKind::Number | InitKind::UnaryLiteral => true,
             InitKind::Computed | InitKind::Identifier => {
                 candidate.pure
-                    && self.references_in(candidate.init).iter().all(|(reference, _)| {
-                        self.scoping
-                            .get_reference(*reference)
-                            .symbol_id()
-                            .and_then(|symbol| self.forward_of(&symbol))
-                            .is_some_and(|forward| {
-                                forward.stable && self.constant(&self.scan.candidates[forward.candidate])
-                            })
-                    })
+                    && self
+                        .references_in(candidate.init)
+                        .iter()
+                        .all(|(reference, _)| {
+                            self.scoping
+                                .get_reference(*reference)
+                                .symbol_id()
+                                .and_then(|symbol| self.forward_of(&symbol))
+                                .is_some_and(|forward| {
+                                    forward.stable
+                                        && self.constant(&self.scan.candidates[forward.candidate])
+                                })
+                        })
             }
             _ => false,
         }
@@ -235,7 +271,10 @@ impl Plan<'_, '_> {
     }
 
     pub(super) fn references_in(&self, span: Span) -> Vec<(ReferenceId, Span)> {
-        let start = self.scan.idents.partition_point(|(s, _, _)| *s < span.start);
+        let start = self
+            .scan
+            .idents
+            .partition_point(|(s, _, _)| *s < span.start);
         self.scan.idents[start..]
             .iter()
             .take_while(|(s, _, _)| *s < span.end)
@@ -398,7 +437,10 @@ impl Plan<'_, '_> {
                 if candidate.sequence {
                     value = format!("({value})");
                 }
-                edits.push(analysis::Edit::replace(candidate.statement, format!("{name} = {value};")));
+                edits.push(analysis::Edit::replace(
+                    candidate.statement,
+                    format!("{name} = {value};"),
+                ));
                 edits.push(if declared {
                     analysis::Edit::replace(store, format!("var {name};"))
                 } else {
@@ -474,7 +516,12 @@ impl Plan<'_, '_> {
     /// How many times the forwarded `symbol`'s text is written: once per
     /// read it replaces, where a read inside another forwarded value counts
     /// as often as that value is written.
-    fn copies(&self, symbol: SymbolId, holders: &[(u32, u32, SymbolId)], memo: &mut BTreeMap<SymbolId, usize>) -> usize {
+    fn copies(
+        &self,
+        symbol: SymbolId,
+        holders: &[(u32, u32, SymbolId)],
+        memo: &mut BTreeMap<SymbolId, usize>,
+    ) -> usize {
         if let Some(count) = memo.get(&symbol) {
             return *count;
         }
@@ -532,7 +579,8 @@ impl Plan<'_, '_> {
     }
 
     pub(super) fn owner_of(&self, node: NodeId) -> u32 {
-        self.function_of(node)
-            .map_or(PROGRAM_OWNER, |function| self.nodes.kind(function).span().start)
+        self.function_of(node).map_or(PROGRAM_OWNER, |function| {
+            self.nodes.kind(function).span().start
+        })
     }
 }
