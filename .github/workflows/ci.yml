@@ -27,6 +27,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Pin Rust 1.94 (repo rust-toolchain.toml; runner default emits newer-toolchain lints)
+        run: rustup show active-toolchain
+
       - name: Install builder deps (btls-sys cmake/clang chain)
         run: |
           sudo apt-get update -qq
