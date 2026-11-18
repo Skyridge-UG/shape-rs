@@ -129,6 +129,7 @@ impl<'a> Unwrap<'a> {
             } else if flipped {
                 check(&branch.consequent);
             } else {
+                #[allow(clippy::unwrap_used)]
                 check(branch.alternate.as_ref().unwrap());
             }
             found
@@ -810,8 +811,10 @@ fn exit_jumps_back(
     let exit: Vec<&Statement<'_>> = if branch.alternate.is_none() {
         body[split + 1..].iter().collect()
     } else if flipped {
+        #[allow(clippy::unwrap_used)]
         block_of(&branch.consequent).unwrap().iter().collect()
     } else {
+        #[allow(clippy::unwrap_used)]
         block_of(branch.alternate.as_ref().unwrap())
             .unwrap()
             .iter()

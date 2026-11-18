@@ -99,26 +99,12 @@ pub fn compose_reference_program_pub() -> String {
 /// The composer body (module level; shared by tests via the pub re-entry).
 #[cfg(feature = "engine")]
 fn compose_reference_program_impl() -> String {
-    let template = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../.qwen/tmp/shape-research/tests/fixtures/signal-wire-roundtrip/program.js"
-    ));
-    let hash = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../.qwen/tmp/shape-research/src/signals/wire/reference/hash.js"
-    ))
-    .replace("local0(", "tokenHash(");
-    let stream = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../.qwen/tmp/shape-research/src/signals/wire/reference/stream.js"
-    ))
-    .replace("local0(", "streamFactory(")
-    .replace("local9", "tokenState");
-    let number = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../../.qwen/tmp/shape-research/src/signals/wire/reference/number.js"
-    ))
-    .replace("local0(", "integerWriter(");
+    let template = include_str!("../assets/program.js");
+    let hash = include_str!("../assets/reference/hash.js").replace("local0(", "tokenHash(");
+    let stream = include_str!("../assets/reference/stream.js")
+        .replace("local0(", "streamFactory(")
+        .replace("local9", "tokenState");
+    let number = include_str!("../assets/reference/number.js").replace("local0(", "integerWriter(");
 
     template
         .replace("__HASH__", &hash)

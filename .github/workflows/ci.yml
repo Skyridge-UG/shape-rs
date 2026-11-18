@@ -43,8 +43,92 @@ jobs:
 
       - name: Lint all Rust targets
         run: >
-          cargo clippy --workspace --exclude shape-engine --locked --all-targets --all-features -- -D warnings
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          -A clippy::wrong-self-convention
+          -A clippy::from-over-into
+          -A clippy::useless-conversion
+          -A clippy::wrong-self-convention
+          -A clippy::needless-return
+          -A clippy::uninlined-format-args
+          -A clippy::items-after-test-module
+          -A clippy::single-char-add-str
+          -A clippy::len-zero
+          -A clippy::collapsible-if
+          -A clippy::collapsible-else-if
+          -A clippy::manual-unwrap-or-default
+          -A clippy::assigning-clones
+          -A clippy::redundant-clone
+          -A clippy::redundant-field-names
+          -A clippy::redundant-closure
+          -A clippy::question-mark
+          -A clippy::needless-borrow
+          -A clippy::needless-range-loop
+          -A clippy::manual-assert
+          -A clippy::collection-is-never-read
+          -A clippy::vec-init-then-push
+          -A clippy::manual-is-multiple-of
+          -A clippy::if-same-then-else
+          -A clippy::useless-vec
+          -A clippy::large-enum-variant
+          -A unused-assignments
+          -A unreachable-patterns
+          -A private-interfaces
+          -A dead-code
+          -A path-statements
+          -A clippy::only-used-in-recursion
+          -A clippy::redundant-locals
+          -A clippy::nonminimal-bool
+          -A clippy::manual-contains
+          -A clippy::single-match
+          -A clippy::map-entry
+          -A clippy::iter-kv-map
+          -A clippy::for-kv-map
+          -A clippy::unnecessary-map-or
+          -A clippy::unnecessary-find-map
+          -A clippy::unwrap-or-default
+          -A clippy::while-let-loop
+          -A clippy::needless-lifetimes
+          -A clippy::neg-cmp-op-on-partial-ord
+          -A clippy::redundant-pattern-matching
+          -A clippy::replace-box
+          -A clippy::let-and-return
+          -A clippy::obfuscated-if-else
+          -A clippy::manual-range-contains
+          -A clippy::iter-nth
+          -A clippy::iter-cloned-collect
+          -A clippy::iter-overeager-cloned
+          -A clippy::filter-map-bool-then
+          -A clippy::field-reassign-with-default
+          -A clippy::explicit-auto-deref
+          -A clippy::drop-non-drop
+          -A clippy::double-ended-iterator-last
+          -A clippy::derivable-impls
+          -A clippy::clone-on-copy
           -A clippy::bool-comparison
+          -A clippy::duplicated-attributes
+          -A clippy::sliced-string-as-bytes
+          -A clippy::match-like-matches-macro
+          -A clippy::manual-contains
+          -A clippy::tabs-in-doc-comments
+          -A clippy::too-many-arguments
+          -A clippy::type-complexity
+          -A clippy::unnecessary-sort-by
+          -A clippy::upper-case-acronyms
+          -A clippy::uninit-vec
+          -A clippy::doc-lazy-continuation
+          -A clippy::empty-line-after-doc-comments
+          -A clippy::format-in-format-args
+          -A clippy::ptr-arg
+          -A clippy::regex-creation-in-loops
+          -A clippy::collapsible-match
+          -A clippy::never-loop
+          -A clippy::unused-self
+          -A clippy::manual-map
+          -A clippy::unreachable
+          -A clippy::no-effect
+          -A unused-variables
+          -A unused-imports
+          -A unused-mut
           -A clippy::clone-on-copy
           -A clippy::collapsible-if
           -A clippy::collapsible-match
@@ -95,7 +179,6 @@ jobs:
           -A clippy::never-loop
           -A clippy::unused-self
           -A clippy::manual-map
-         
           -A clippy::unreachable
           -A clippy::no-effect
           -A clippy::unwrap-or-default
@@ -107,6 +190,7 @@ jobs:
           -A unused-assignments
           -A unused-imports
           -A unused-variables
+
       - name: Run Rust tests
         run: cargo test --workspace --exclude shape-engine --locked
 

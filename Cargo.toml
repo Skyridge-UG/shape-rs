@@ -91,6 +91,8 @@ path = "tools/capture_login.rs"
 default = []
 # Link the vendored engine into the server: /shape emits engine-sealed headers.
 server-engine = ["shape/engine"]
+# bare `engine` = shape's engine feature, referenced by tools/fullcircle.rs cfg
+engine = ["shape/engine"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

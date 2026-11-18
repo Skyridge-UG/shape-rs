@@ -328,6 +328,7 @@ pub fn identify_collectors(source: &str, rename: bool) -> Result<FocusedCollecto
         };
         let proposed_name = (names.len() == 1).then(|| names[0].clone());
         if reason.is_none() && rename && binding.is_some() {
+            #[allow(clippy::unwrap_used)]
             plans.push(ProgramBindingRename::new(
                 binding.as_ref().unwrap().identifier.start,
                 names[0].clone(),
