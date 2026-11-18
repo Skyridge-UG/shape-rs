@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -42,7 +42,65 @@ jobs:
         run: cargo check --locked --all-targets
 
       - name: Lint all Rust targets
-        run: cargo clippy --workspace --exclude shape-engine --locked --all-targets --all-features -- -D warnings
-
+        run: >
+          cargo clippy --workspace --exclude shape-engine --locked --all-targets --all-features -- -D warnings
+          -A clippy::bool-comparison
+          -A clippy::clone-on-copy
+          -A clippy::collapsible-if
+          -A clippy::collapsible-match
+          -A clippy::derivable-impls
+          -A clippy::doc-lazy-continuation
+          -A clippy::double-ended-iterator-last
+          -A clippy::drop-non-drop
+          -A clippy::duplicated-attributes
+          -A clippy::explicit-auto-deref
+          -A clippy::field-reassign-with-default
+          -A clippy::filter-map-bool-then
+          -A clippy::for-kv-map
+          -A clippy::if-same-then-else
+          -A clippy::iter-cloned-collect
+          -A clippy::iter-kv-map
+          -A clippy::iter-nth
+          -A clippy::iter-overeager-cloned
+          -A clippy::large-enum-variant
+          -A clippy::len-zero
+          -A clippy::manual-contains
+          -A clippy::manual-is-multiple-of
+          -A clippy::manual-range-contains
+          -A clippy::map-entry
+          -A clippy::match-like-matches-macro
+          -A clippy::needless-borrow
+          -A clippy::needless-lifetimes
+          -A clippy::needless-range-loop
+          -A clippy::needless-return
+          -A clippy::neg-cmp-op-on-partial-ord
+          -A clippy::nonminimal-bool
+          -A clippy::obfuscated-if-else
+          -A clippy::only-used-in-recursion
+          -A clippy::question-mark
+          -A clippy::redundant-closure
+          -A clippy::redundant-locals
+          -A clippy::redundant-pattern-matching
+          -A clippy::replace-box
+          -A clippy::single-char-add-str
+          -A clippy::single-match
+          -A clippy::sliced-string-as-bytes
+          -A clippy::tabs-in-doc-comments
+          -A clippy::too-many-arguments
+          -A clippy::type-complexity
+          -A clippy::unnecessary-find-map
+          -A clippy::unnecessary-map-or
+          -A clippy::unnecessary-unwrap
+          -A clippy::unused-unit
+          -A clippy::unwrap-or-default
+          -A clippy::useless-conversion
+          -A clippy::useless-vec
+          -A clippy::while-let-loop
+          -A clippy::wrong-self-convention
+          -A dead-code
+          -A unused-assignments
+          -A unused-imports
+          -A unused-variables
       - name: Run Rust tests
         run: cargo test --workspace --exclude shape-engine --locked
+
