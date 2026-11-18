@@ -10,6 +10,7 @@ WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY src ./src
+COPY vendor ./vendor
 RUN --mount=type=cache,target=/src/target \
     cargo build --release --bin shapeserver \
  && cp target/release/shapeserver /usr/local/bin/shapeserver
