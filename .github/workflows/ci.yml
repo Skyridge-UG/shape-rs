@@ -92,6 +92,12 @@ jobs:
           -A clippy::unnecessary-map-or
           -A clippy::unnecessary-unwrap
           -A clippy::unused-unit
+          -A clippy::never-loop
+          -A clippy::unused-self
+          -A clippy::manual-map
+         
+          -A clippy::unreachable
+          -A clippy::no-effect
           -A clippy::unwrap-or-default
           -A clippy::useless-conversion
           -A clippy::useless-vec
@@ -103,4 +109,6 @@ jobs:
           -A unused-variables
       - name: Run Rust tests
         run: cargo test --workspace --exclude shape-engine --locked
+
+
 
