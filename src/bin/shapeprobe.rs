@@ -114,10 +114,10 @@ fn main() {
         match settings {
             Ok(r) if r.status().as_u16() == 200 => {
                 println!("GET  /us/api/frontend-settings -> 200");
-                if let Ok(v) = r.json::<serde_json::Value>() {
-                    if let Some(tok) = v["csrfToken"].as_str() {
-                        csrf = tok.to_owned();
-                    }
+                if let Ok(v) = r.json::<serde_json::Value>()
+                    && let Some(tok) = v["csrfToken"].as_str()
+                {
+                    csrf = tok.to_owned();
                 }
             }
             Ok(r) => println!("GET  frontend-settings -> {}", r.status().as_u16()),
@@ -174,12 +174,12 @@ fn main() {
             html.matches("p8kOmysnbc").count(),
             html.len()
         );
-        if csrf.is_empty() {
-            if let Some(start) = html.find("\"csrfToken\":\"") {
-                let rest = &html[start + 13..];
-                if let Some(end) = rest.find('"') {
-                    csrf = rest[..end].to_owned();
-                }
+        if csrf.is_empty()
+            && let Some(start) = html.find("\"csrfToken\":\"")
+        {
+            let rest = &html[start + 13..];
+            if let Some(end) = rest.find('"') {
+                csrf = rest[..end].to_owned();
             }
         }
         // 1b-3. Per-response LAYOUT SEED (recon 'seed mechanism'): the page

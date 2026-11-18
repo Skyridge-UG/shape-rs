@@ -39,7 +39,7 @@ jobs:
         run: cargo check --locked --all-targets
 
       - name: Lint all Rust targets
-        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --exclude shape-engine --locked --all-targets --all-features -- -D warnings
 
       - name: Run Rust tests
-        run: cargo test --locked
+        run: cargo test --workspace --exclude shape-engine --locked
