@@ -7,6 +7,11 @@ ARG RUST_VERSION=1.94
 FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /src
 
+# btls-sys (wreq's TLS) builds BoringSSL via cmake; the rust image ships without it.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends cmake \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY src ./src
