@@ -103,7 +103,7 @@ actix-web = { version = "4", default-features = false, features = ["macros"] }
 # Vendored reference engine (BottingRocks/Shape): pin/decode authority.
 # Path-linked from the local research clone; the `engine` feature gates it so
 # the default build stays light.
-shape-engine = { path = "C:/Users/Administrator/.qwen/tmp/shape-research" }
+shape-engine = { path = "vendor/shape-engine" }
 
 [profile.release]
 lto = "thin"
